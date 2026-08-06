@@ -1,0 +1,38 @@
+# Postgres for local development and for the server test suite.
+#
+# Only the database. The app itself runs from `npm run dev` and `npm run
+# dev:api` on the host, because a container in the way of Vite's HMR buys
+# nothing — this file exists so that the one thing which is awkward to install
+# and easy to get wrong is identical for everyone.
+#
+#   docker compose up -d      # bring it up
+#   npm run db:migrate        # apply migrations
+#   docker compose down       # stop it, keeping the data
+#   docker compose down -v    # stop it and throw the data away
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: ai-travel-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: aitravel
+      POSTGRES_PASSWORD: aitravel
+      POSTGRES_DB: aitravel
+    ports:
+      # 5433 on the host, deliberately. 5432 is claimed often enough — another
+      # project's database, a forwarded tunnel — that defaulting to it means
+      # the first `up` on a new machine fails or, worse, silently connects the
+      # app to somebody else's data.
+      - '5433:5432'
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      # `npm run db:migrate` straight after `up` would otherwise race the
+      # server's first-boot initialisation and fail on a refused connection.
+      test: ['CMD-SHELL', 'pg_isready -U aitravel -d aitravel']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  postgres-data:

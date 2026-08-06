@@ -9,6 +9,10 @@ import { defineConfig } from 'prisma/config';
 export default defineConfig({
   schema: 'prisma/schema.prisma',
   datasource: {
-    url: process.env.DATABASE_URL ?? 'file:./prisma/dev.db',
+    // The fallback matches `docker-compose.yml`, so a fresh clone that has
+    // brought the database up can migrate without writing an env file first.
+    // Port 5433 rather than 5432 deliberately — the default is too often
+    // already taken by another project's Postgres or a forwarded tunnel.
+    url: process.env.DATABASE_URL ?? 'postgresql://aitravel:aitravel@localhost:5433/aitravel',
   },
 });

@@ -8,7 +8,10 @@ needed — every screen except the landing and auth pages requires signing in.
 ```bash
 npm install
 
-# One-time: server configuration and the local database.
+# The database. Needs Docker running; nothing else to install.
+docker compose up -d
+
+# One-time: server configuration.
 cp server/.env.example server/.env
 # Put a JWT_SECRET in it. Generate one with:
 #   node -e "console.log(require('crypto').randomBytes(48).toString('base64url'))"
@@ -20,18 +23,29 @@ npm run dev        # SPA   → http://localhost:5173
 ```
 
 The SPA proxies `/api` to the API, which makes them same-origin — that is what
-lets the refresh cookie work with no CORS configuration at all.
+lets the refresh cookie work with no CORS configuration at all, and the shape
+production has to preserve.
 
-The database is SQLite (`server/prisma/dev.db`) so there is nothing to install.
-Moving to Postgres is a provider change in `server/prisma/schema.prisma`, a URL
-in `prisma.config.ts`, and a fresh migration.
+The database is Postgres, on host port **5433** rather than 5432 — the default
+is claimed too often for a first `docker compose up` to be reliable, and
+connecting to somebody else's database is a worse failure than a refused
+connection. `docker compose down -v` throws the data away.
+
+It was SQLite until deployment made that untenable: a SQLite database is a
+file, and a host gives you a fresh filesystem on every release, so accounts and
+sessions would not survive one.
 
 ```bash
 npm test          # SPA suite
-npm run test:api  # API suite
+npm run test:api  # API suite — needs `docker compose up -d`
 npm run typecheck
 npm run lint
 ```
+
+The API suite runs against a real Postgres, in its own `aitravel_test`
+database which it creates on demand. Not a mocked client: the unique
+constraint on `emailKey`, the cascade deletes and the family-wide token revoke
+are behaviours of the database, and a mock would assert only that we called it.
 
 ---
 

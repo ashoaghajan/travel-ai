@@ -16,8 +16,14 @@ export default defineConfig({
     include: ['src/**/*.test.ts'],
     setupFiles: ['./src/test/setup.ts'],
     restoreMocks: true,
-    // Each file gets its own database file, and they must not race over it.
+    // One database for the run, and the files must not race over it.
     fileParallelism: false,
+    /*
+     * The first hook creates the test database and applies every migration
+     * against a fresh Postgres, which comfortably outruns the 10-second
+     * default on a cold container.
+     */
+    hookTimeout: 60_000,
     /*
      * Well above the 5-second default.
      *
