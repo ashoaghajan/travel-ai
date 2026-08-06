@@ -6,6 +6,7 @@ import { authRouter } from './modules/auth/auth.routes';
 import { meRouter } from './modules/auth/me.routes';
 import { plannerRouter } from './modules/planner/planner.routes';
 import { travelRouter } from './modules/travel/travel.routes';
+import { serveSpa } from './static';
 
 /**
  * The application, without a listening socket.
@@ -38,6 +39,17 @@ export function createApp(): Express {
   // Same root-level mounting, same reason. Unlike the routes above it, this one
   // authenticates and streams — see the module docblock.
   app.use('/api', plannerRouter);
+
+  /*
+   * The SPA, after the API and before the 404.
+   *
+   * After, so no static file can ever shadow an endpoint. Before, so that
+   * `notFoundHandler` is left handling exactly what it should — an unknown
+   * `/api` route — while an unknown page address goes to the app shell and is
+   * routed by the client. A no-op when there is no build, which is every run
+   * in development and every run under test.
+   */
+  serveSpa(app);
 
   app.use(notFoundHandler);
   app.use(errorHandler);

@@ -10,6 +10,8 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "start": "npm run start --workspace @ai-travel/server",
+    "deploy:migrate": "npm run prisma:deploy --workspace @ai-travel/server",
     "lint": "oxlint",
     "typecheck": "tsc -b --noEmit && npm run typecheck --workspace @ai-travel/server",
     "test": "vitest run",

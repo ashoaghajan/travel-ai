@@ -5,12 +5,13 @@
   "type": "module",
   "scripts": {
     "dev": "NODE_OPTIONS=--use-system-ca tsx watch --env-file-if-exists=.env src/main.ts",
-    "start": "NODE_OPTIONS=--use-system-ca tsx --env-file-if-exists=.env src/main.ts",
+    "start": "tsx --env-file-if-exists=.env src/main.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
+    "prisma:deploy": "prisma migrate deploy",
     "prisma:studio": "prisma studio"
   },
   "dependencies": {
