@@ -1,0 +1,66 @@
+.bar {
+  background-color: var(--color-surface);
+  border-top: 1px solid var(--color-border);
+  box-shadow: var(--shadow-bar-top);
+  /* Clears the iOS home indicator. */
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+.list {
+  display: flex;
+  margin: 0;
+  padding: var(--space-sm) var(--space-xs);
+  list-style: none;
+}
+
+.item {
+  flex: 1;
+  min-width: 0;
+}
+
+.link {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: var(--space-xs) 0;
+  border-radius: var(--radius-md);
+  color: var(--color-text-muted);
+  transition: color var(--transition-fast);
+}
+
+.iconWrap {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 46px;
+  height: 30px;
+  border-radius: var(--radius-pill);
+  transition:
+    background-color var(--transition-fast),
+    color var(--transition-fast);
+}
+
+.label {
+  font-size: var(--font-xs);
+  font-weight: var(--font-weight-medium);
+  line-height: 1.2;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Active: purple icon on a soft purple pill, purple label (DESIGN_SPEC §4). */
+.active {
+  color: var(--color-primary);
+}
+
+.active .iconWrap {
+  background-color: var(--color-primary-soft);
+  color: var(--color-primary);
+}
+
+.active .label {
+  font-weight: var(--font-weight-semibold);
+}

@@ -1,0 +1,44 @@
+.chips {
+  display: flex;
+  gap: var(--space-sm);
+  overflow-x: auto;
+  /* Room for the focus ring inside the scroll container. */
+  padding: var(--space-xs);
+  margin: calc(var(--space-xs) * -1);
+  scrollbar-width: none;
+}
+
+.chips::-webkit-scrollbar {
+  display: none;
+}
+
+.chip {
+  flex: none;
+  min-height: 40px;
+  padding: 0 var(--space-xl);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+  background-color: var(--color-surface);
+  color: var(--color-text-muted);
+  font-size: var(--font-sm);
+  font-weight: var(--font-weight-medium);
+  white-space: nowrap;
+  transition:
+    background-color var(--transition-fast),
+    border-color var(--transition-fast),
+    color var(--transition-fast);
+}
+
+.chip:hover:not(.active) {
+  border-color: var(--color-primary);
+  color: var(--color-text-main);
+}
+
+/* Active chip is purple (DESIGN_SPEC Screen 6). */
+.active {
+  background-color: var(--color-primary);
+  border-color: var(--color-primary);
+  color: var(--color-text-light);
+  font-weight: var(--font-weight-semibold);
+  box-shadow: var(--shadow-primary);
+}

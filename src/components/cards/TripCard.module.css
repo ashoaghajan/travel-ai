@@ -1,0 +1,123 @@
+.card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  transition:
+    transform var(--transition-fast),
+    box-shadow var(--transition-fast);
+}
+
+.card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-card-hover);
+}
+
+.media {
+  position: relative;
+  aspect-ratio: 16 / 10;
+  background-image: linear-gradient(140deg, var(--color-primary-soft), var(--color-surface-muted));
+}
+
+.image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.dayBadge {
+  position: absolute;
+  bottom: var(--space-md);
+  left: var(--space-md);
+  padding: var(--space-xs) var(--space-md);
+  border-radius: var(--radius-pill);
+  background-color: var(--color-primary);
+  color: var(--color-text-light);
+  font-size: var(--font-xs);
+  font-weight: var(--font-weight-semibold);
+  box-shadow: var(--shadow-soft);
+}
+
+/* Sits above the stretched link so it stays clickable. */
+.delete {
+  position: absolute;
+  top: var(--space-md);
+  right: var(--space-md);
+  z-index: 2;
+}
+
+/* Sits above the title's stretched link so the buttons stay clickable. */
+.actions {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-sm);
+  margin-top: var(--space-sm);
+}
+
+/* To the far end, away from Edit. The two are one slipped click apart
+   otherwise, and only one of them is recoverable. */
+.delete {
+  margin-left: auto;
+  color: var(--color-text-muted);
+}
+
+.delete:hover:not(:disabled) {
+  color: var(--color-danger);
+}
+
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  padding: var(--space-lg);
+}
+
+.title {
+  font-size: var(--font-md);
+  font-weight: var(--font-weight-semibold);
+}
+
+/* Stretched link: the whole card opens the trip. */
+.link::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  border-radius: inherit;
+}
+
+.meta {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  font-size: var(--font-xs);
+  color: var(--color-text-muted);
+}
+
+.confirm {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  padding: var(--space-lg);
+  border-top: 1px solid var(--color-border);
+  background-color: var(--color-surface);
+}
+
+.confirmText {
+  font-size: var(--font-sm);
+  font-weight: var(--font-weight-medium);
+}
+
+.confirmActions {
+  display: flex;
+  gap: var(--space-sm);
+}
+
+.confirmActions > * {
+  flex: 1;
+}

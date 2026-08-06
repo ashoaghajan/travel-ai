@@ -1,0 +1,71 @@
+.row {
+  display: flex;
+  gap: var(--space-md);
+  max-width: 100%;
+}
+
+.column {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+  min-width: 0;
+}
+
+.bubble {
+  padding: var(--space-lg);
+  font-size: var(--font-sm);
+  line-height: var(--line-height-base);
+  border-radius: var(--radius-lg);
+}
+
+/* AI turn — left aligned, soft grey, dark text. */
+.ai {
+  justify-content: flex-start;
+}
+
+.ai .column {
+  /* Cards under an AI turn should be able to use the full width. */
+  flex: 1;
+}
+
+.ai .bubble {
+  align-self: flex-start;
+  max-width: 640px;
+  background-color: var(--color-surface-muted);
+  color: var(--color-text-main);
+  border-bottom-left-radius: var(--radius-sm);
+}
+
+.aiAvatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-pill);
+  background-color: var(--color-primary-soft);
+  color: var(--color-primary);
+}
+
+/* User turn — right aligned, purple, white text. */
+.user {
+  justify-content: flex-end;
+}
+
+.user .column {
+  align-items: flex-end;
+  max-width: 640px;
+}
+
+.user .bubble {
+  background-color: var(--color-primary);
+  color: var(--color-text-light);
+  border-bottom-right-radius: var(--radius-sm);
+}
+
+@media (min-width: 1024px) {
+  .bubble {
+    font-size: var(--font-md);
+  }
+}

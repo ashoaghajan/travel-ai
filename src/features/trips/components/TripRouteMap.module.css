@@ -1,0 +1,10 @@
+.wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.note {
+  font-size: var(--font-xs);
+  color: var(--color-text-muted);
+}

@@ -1,0 +1,62 @@
+.preview {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  min-width: 0;
+}
+
+.summary {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.title {
+  font-size: var(--font-md);
+  font-weight: var(--font-weight-semibold);
+}
+
+.meta {
+  font-size: var(--font-xs);
+  color: var(--color-text-muted);
+}
+
+/**
+ * Cards run horizontally (DESIGN_SPEC Screen 2) and scroll rather than wrap,
+ * so the strip behaves the same on a phone and a wide dashboard.
+ */
+.row {
+  display: flex;
+  gap: var(--space-lg);
+  margin: 0;
+  /* Room for the card shadow inside the scroll container. */
+  padding: var(--space-xs) var(--space-xs) var(--space-md);
+  list-style: none;
+  overflow-x: auto;
+  scroll-snap-type: x proximity;
+  scrollbar-width: thin;
+  overscroll-behavior-x: contain;
+}
+
+.card {
+  flex: 0 0 200px;
+  scroll-snap-align: start;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-md);
+}
+
+.savedNote {
+  font-size: var(--font-xs);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-success);
+}
+
+@media (min-width: 768px) {
+  .card {
+    flex-basis: 232px;
+  }
+}

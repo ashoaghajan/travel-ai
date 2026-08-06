@@ -1,0 +1,94 @@
+// Phase 1-2 schema: accounts and sessions only.
+//
+// Trips, saved activities, settings and conversations stay in the browser
+// until Phase 4 moves them; the relations for those are deliberately absent
+// rather than declared-and-unused, so the schema says what is actually true.
+//
+// SQLite for now. That rules out `enum` and every `@db.*` native type — keep
+// it portable, because the move to Postgres should be a provider swap and a
+// fresh migration, nothing more.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// Prisma 7 takes the connection URL from prisma.config.ts, not from here.
+datasource db {
+  provider = "sqlite"
+}
+
+model User {
+  id String @id @default(uuid())
+
+  /// As typed. Shown back to the user, never used for lookup.
+  email String
+  /// lower(trim(email)) — case-insensitive uniqueness without losing their casing.
+  emailKey String @unique
+  name     String
+
+  /// Null for an account that only ever signed in through a provider.
+  passwordHash String?
+
+  /// Set once the browser's local data has been claimed by this account (Phase 4).
+  localImportCompletedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  refreshTokens RefreshToken[]
+  identities    AuthIdentity[]
+}
+
+/// One external account someone can sign in with.
+///
+/// Keyed on the provider's own id rather than on email, which Google
+/// explicitly recommends: a Google account's email address can change, and
+/// following it would either lose the link or hand the account to whoever
+/// inherits the old address.
+model AuthIdentity {
+  id     String @id @default(uuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  /// 'google' today. A string rather than an enum — SQLite has none.
+  provider String
+  /// Google's `sub` claim.
+  providerUserId String
+
+  /// As the provider reported it, for display on the profile screen. Not used
+  /// for lookup, and not kept in step with the account's own email.
+  email String?
+
+  createdAt DateTime @default(now())
+
+  @@unique([provider, providerUserId])
+  @@index([userId])
+}
+
+/// One issued refresh token. Rotated on every use; never reused.
+model RefreshToken {
+  id     String @id @default(uuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  /// sha256 of the token. The raw value exists only in the client's cookie,
+  /// so a leaked database cannot be replayed against us.
+  tokenHash String @unique
+
+  /// Every token descended from one sign-in. Replaying any dead member kills
+  /// the whole family — that is the theft signal.
+  familyId String
+
+  expiresAt DateTime
+  revokedAt DateTime?
+  /// The token this one was rotated into, for tracing a family.
+  replacedById String?
+
+  userAgent String?
+  ip        String?
+
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([familyId])
+}

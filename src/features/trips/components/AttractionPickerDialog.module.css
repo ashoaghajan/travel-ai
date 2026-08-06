@@ -1,0 +1,268 @@
+/* Shell mirrors AddToTripDialog.module.css — CSS Modules cannot be shared —
+   widened for a list, and laid out as three regions: a fixed head, one
+   scrolling list, and a pinned footer. Only the list scrolls, so the actions
+   stay reachable at any window height. */
+
+.dialog {
+  width: min(38rem, calc(100vw - 2 * var(--space-lg)));
+  /* `dvh` so the mobile browser chrome appearing does not clip the footer. */
+  max-height: min(85dvh, 44rem);
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-lg);
+  background-color: var(--color-surface);
+  color: var(--color-text-main);
+  box-shadow: var(--shadow-card);
+  /* The dialog itself never scrolls — otherwise the page shows a second
+     scrollbar beside the list's own. */
+  overflow: hidden;
+}
+
+.dialog::backdrop {
+  background-color: var(--color-backdrop);
+}
+
+.body {
+  display: flex;
+  flex-direction: column;
+  /* Fills the dialog so `.results` has a definite height to flex into. */
+  max-height: inherit;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* Head — never scrolls */
+
+.head {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  flex: none;
+  padding: var(--space-lg) var(--space-lg) var(--space-md);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.title {
+  font-size: var(--font-lg);
+  font-weight: var(--font-weight-semibold);
+}
+
+.subtitle {
+  margin-top: calc(-1 * var(--space-xs));
+  font-size: var(--font-sm);
+  color: var(--color-text-muted);
+}
+
+.destination {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.filters {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+/* Fields */
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  min-width: 0;
+}
+
+.label {
+  font-size: var(--font-xs);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-muted);
+}
+
+.control {
+  width: 100%;
+  min-width: 0;
+  min-height: 2.5rem;
+  padding: var(--space-sm) var(--space-md);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background-color: var(--color-surface);
+  color: var(--color-text-main);
+  font-family: inherit;
+  font-size: var(--font-sm);
+}
+
+.control:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 1px;
+  border-color: var(--color-primary);
+}
+
+.control:disabled {
+  opacity: 0.6;
+}
+
+/* Results — the only scrolling region */
+
+.results {
+  flex: 1;
+  min-height: 6rem;
+  overflow-y: auto;
+  padding: var(--space-md) var(--space-lg);
+}
+
+.error {
+  padding: var(--space-sm) var(--space-md);
+  margin-bottom: var(--space-sm);
+  border-radius: var(--radius-md);
+  background-color: var(--color-danger-soft);
+  color: var(--color-danger);
+  font-size: var(--font-sm);
+}
+
+/* Stale results are still results — muted, not alarming. */
+.warning {
+  padding: var(--space-sm) var(--space-md);
+  margin-bottom: var(--space-sm);
+  border-radius: var(--radius-md);
+  background-color: var(--color-surface-muted);
+  color: var(--color-text-muted);
+  font-size: var(--font-sm);
+}
+
+.count {
+  margin-bottom: var(--space-sm);
+  font-size: var(--font-xs);
+  color: var(--color-text-muted);
+}
+
+.options {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  border: 0;
+  padding: 0;
+  margin: 0;
+  /* A fieldset defaults to min-content and would blow the dialog out sideways
+     on one long attraction title. */
+  min-inline-size: 0;
+}
+
+.option {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-sm);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+}
+
+.option:hover {
+  background-color: var(--color-surface-muted);
+}
+
+.option:has(input:checked) {
+  background-color: var(--color-primary-soft);
+  box-shadow: inset 0 0 0 1px var(--color-primary);
+}
+
+/* The radio is visually hidden, so the row has to wear its focus ring. */
+.option:has(input:focus-visible) {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 1px;
+}
+
+.optionAdded {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.optionImage {
+  flex: none;
+  width: 44px;
+  height: 44px;
+  object-fit: cover;
+  border-radius: var(--radius-md);
+}
+
+.optionBody {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+
+.optionTitle {
+  font-size: var(--font-sm);
+  font-weight: var(--font-weight-medium);
+}
+
+.optionDescription {
+  font-size: var(--font-xs);
+  color: var(--color-text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.optionMeta {
+  flex: none;
+  font-size: var(--font-xs);
+  color: var(--color-text-muted);
+}
+
+.skeletonOption {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-sm);
+}
+
+.skeletonText {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  flex: 1;
+}
+
+/* Footer — never scrolls */
+
+.footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--space-sm);
+  flex: none;
+  padding: var(--space-md) var(--space-lg) var(--space-lg);
+  border-top: 1px solid var(--color-border);
+}
+
+.timeField {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  flex: none;
+}
+
+.timeControl {
+  width: auto;
+  min-width: 8rem;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+  margin-left: auto;
+}
+
+@media (min-width: 768px) {
+  .destination {
+    display: grid;
+    grid-template-columns: 1fr 1fr auto;
+    align-items: end;
+  }
+}

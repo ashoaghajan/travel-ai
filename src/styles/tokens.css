@@ -1,0 +1,246 @@
+/**
+ * Design tokens — the single source of truth for the visual system.
+ * Values come straight from DESIGN_SPEC.md (sections 4, 5 and 6).
+ * Anything marked "extension" is derived from the spec, not invented styling:
+ * it exists so components never hard-code raw values.
+ */
+
+:root {
+  /*
+   * Stated rather than left at `normal`, so that a reader on a dark OS who has
+   * chosen the light theme still gets light scrollbars and form controls. The
+   * dark block states the opposite.
+   */
+  color-scheme: light;
+
+  /* ---------------------------------------------------------------
+   * Colour system — DESIGN_SPEC §4
+   * --------------------------------------------------------------- */
+  --color-primary: #6d3fef;
+  --color-primary-hover: #5b32d6;
+  --color-primary-soft: #efe9ff;
+
+  --color-background: #f7f8fc;
+  --color-surface: #ffffff;
+  --color-surface-muted: #f3f4f8;
+
+  --color-border: #e5e7ef;
+
+  --color-text-main: #111827;
+  --color-text-muted: #6b7280;
+  --color-text-light: #ffffff;
+
+  --color-success: #16a34a;
+  --color-warning: #f59e0b;
+  --color-danger: #dc2626;
+  /* Extension: tinted background for danger messages, matching -soft naming */
+  --color-danger-soft: #fef2f2;
+
+  /*
+   * One colour per kind of booking, so a trip's list is scannable by shape of
+   * colour before anything is read. Each pairs a text colour with the tint it
+   * sits on; both are stated per theme because a hue that reads on white is
+   * rarely the one that reads on #0f1117.
+   *
+   * Flights keep the brand purple — they are the spine of a trip, and giving
+   * them a fourth accent would leave nothing on screen wearing the brand.
+   */
+  --color-kind-flight: #6d3fef;
+  --color-kind-flight-soft: #efe9ff;
+  --color-kind-hotel: #0f766e;
+  --color-kind-hotel-soft: #ccfbf1;
+  --color-kind-activity: #b45309;
+  --color-kind-activity-soft: #fef3c7;
+  --color-kind-ticket: #be123c;
+  --color-kind-ticket-soft: #ffe4e6;
+
+  --color-map-route: #6d3fef;
+  /* Extensions: placeholder map surfaces — DESIGN_SPEC Screen 3 */
+  --color-map-land: #e6f0e4;
+  --color-map-land-alt: #dcead9;
+  --color-map-water: #dfeaf8;
+
+  /* Extension: scrim behind a modal dialog. */
+  --color-backdrop: rgb(0 0 0 / 45%);
+
+  /* Extensions: overlay + glass surfaces used on photographic backgrounds */
+  --color-overlay-top: rgba(12, 10, 25, 0.55);
+  --color-overlay-mid: rgba(12, 10, 25, 0.42);
+  --color-overlay-bottom: rgba(12, 10, 25, 0.82);
+  --color-glass-surface: rgba(255, 255, 255, 0.14);
+  --color-glass-surface-hover: rgba(255, 255, 255, 0.24);
+  --color-glass-border: rgba(255, 255, 255, 0.38);
+  --color-text-on-overlay-muted: rgba(255, 255, 255, 0.82);
+  /* Holds the frame while a hero photo decodes */
+  --color-photo-placeholder: #1b1730;
+  /* Legible chip over map or photo content */
+  --color-surface-translucent: rgba(255, 255, 255, 0.86);
+  --shadow-text-on-photo: 0 2px 20px rgba(9, 8, 20, 0.4);
+  --shadow-text-on-photo-soft: 0 1px 14px rgba(9, 8, 20, 0.35);
+
+  /* ---------------------------------------------------------------
+   * Typography — DESIGN_SPEC §5
+   * --------------------------------------------------------------- */
+  --font-family-base: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+
+  --font-xs: 12px;
+  --font-sm: 14px;
+  --font-md: 16px;
+  --font-lg: 20px;
+  --font-xl: 28px;
+  --font-2xl: 36px;
+
+  --font-weight-regular: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+
+  --line-height-tight: 1.15;
+  --line-height-snug: 1.35;
+  --line-height-base: 1.6;
+
+  /* ---------------------------------------------------------------
+   * Spacing — DESIGN_SPEC §6
+   * --------------------------------------------------------------- */
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 12px;
+  --space-lg: 16px;
+  --space-xl: 24px;
+  --space-2xl: 32px;
+  /* Extensions for hero-scale vertical rhythm */
+  --space-3xl: 48px;
+  --space-4xl: 64px;
+
+  /* ---------------------------------------------------------------
+   * Radius — DESIGN_SPEC §6
+   * --------------------------------------------------------------- */
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 18px;
+  --radius-xl: 24px;
+  --radius-pill: 999px;
+
+  /* ---------------------------------------------------------------
+   * Shadows — DESIGN_SPEC §6
+   * --------------------------------------------------------------- */
+  --shadow-card: 0 8px 24px rgba(17, 24, 39, 0.08);
+  --shadow-soft: 0 4px 14px rgba(17, 24, 39, 0.06);
+  /* Extensions: lifted card, upward bottom-bar shadow */
+  --shadow-card-hover: 0 12px 30px rgba(17, 24, 39, 0.12);
+  --shadow-bar-top: 0 -4px 16px rgba(17, 24, 39, 0.06);
+  /* Extension: lift for primary actions sitting on photography */
+  --shadow-primary: 0 10px 26px rgba(109, 63, 239, 0.42);
+
+  /* ---------------------------------------------------------------
+   * Layout — DESIGN_SPEC §7
+   * --------------------------------------------------------------- */
+  --layout-sidebar-width: 280px;
+  --layout-content-padding: 24px;
+  --layout-max-width: 1200px;
+
+  /* ---------------------------------------------------------------
+   * Motion + focus (extensions)
+   * --------------------------------------------------------------- */
+  --transition-fast: 150ms ease;
+  --transition-base: 220ms ease;
+  --focus-ring: 0 0 0 3px rgba(109, 63, 239, 0.45);
+  --focus-ring-on-dark: 0 0 0 3px rgba(255, 255, 255, 0.75);
+
+  /* ---------------------------------------------------------------
+   * Z-index scale (extension)
+   * --------------------------------------------------------------- */
+  --z-background: 0;
+  --z-content: 1;
+  --z-header: 10;
+  --z-overlay: 100;
+}
+
+/**
+ * Dark theme.
+ *
+ * Selected by `data-theme="dark"` on `<html>`, written by `theme.service.ts`
+ * and by the pre-paint script in `index.html`. Both always write a *resolved*
+ * value, never `system`, so this file never has to consult
+ * `prefers-color-scheme` and there is one place that decides.
+ *
+ * Two rules govern the values. Surfaces get *lighter* than the page rather
+ * than darker, so cards still lift. And saturated colours have to gain
+ * lightness — the spec's `#6d3fef` and `#dc2626` are both too dark to read
+ * against a near-black background.
+ *
+ * What is deliberately absent matters as much as what is here. Every token
+ * that paints *onto a photograph* — the overlays, the glass surfaces,
+ * `--color-text-light`, `--color-photo-placeholder`,
+ * `--color-text-on-overlay-muted` — keeps its light-theme value, because a
+ * photograph is dark in both themes and white text on it is right in both.
+ * The landing page is built entirely from those tokens and must look
+ * identical either way. The map surfaces stay light too, because the tiles do.
+ */
+:root[data-theme='dark'] {
+  color-scheme: dark;
+
+  /* Lifted, because #6d3fef against #0f1117 is too dim to read. */
+  --color-primary: #8b5cf6;
+  --color-primary-hover: #a78bfa;
+  /*
+   * The pale lavender inverted. This one earns its keep in three jobs — soft
+   * background tint, hover border, and half of the photo-placeholder gradient
+   * on six card components — so a light value here glows on every one of them.
+   */
+  --color-primary-soft: #2a1e4a;
+
+  --color-background: #0f1117;
+  /* Lighter than the page, not darker: this is what makes a card a card. */
+  --color-surface: #171a21;
+  --color-surface-muted: #1f232c;
+
+  --color-border: #2a2f3a;
+
+  --color-text-main: #e8eaf0;
+  --color-text-muted: #9aa1af;
+
+  --color-success: #22c55e;
+  --color-warning: #fbbf24;
+  --color-danger: #f87171;
+  --color-danger-soft: #3a1c1c;
+
+  /* Lifted and desaturated to sit on #171a21 — see the light set for why. */
+  --color-kind-flight: #a78bfa;
+  --color-kind-flight-soft: #2a1e4a;
+  --color-kind-hotel: #5eead4;
+  --color-kind-hotel-soft: #10322f;
+  --color-kind-activity: #fbbf24;
+  --color-kind-activity-soft: #3a2c10;
+  --color-kind-ticket: #fda4af;
+  --color-kind-ticket-soft: #3d1620;
+
+  /* Deeper, because 45% black over a dark app barely separates the dialog. */
+  --color-backdrop: rgb(0 0 0 / 68%);
+
+  /*
+   * Shadows are rebuilt rather than tuned. The light set is near-black at
+   * 6–12% alpha, which is literally invisible on a near-black page — every
+   * card would flatten into the background. Full black at much higher alpha
+   * restores the hierarchy.
+   */
+  --shadow-card: 0 8px 24px rgb(0 0 0 / 55%);
+  --shadow-soft: 0 4px 14px rgb(0 0 0 / 40%);
+  --shadow-card-hover: 0 12px 30px rgb(0 0 0 / 65%);
+  --shadow-bar-top: 0 -4px 16px rgb(0 0 0 / 45%);
+  /* A coloured glow, which reads better on dark than on light. Intensified. */
+  --shadow-primary: 0 10px 26px rgb(139 92 246 / 45%);
+
+  /* The purple ring needs more presence against a dark field. */
+  --focus-ring: 0 0 0 3px rgb(139 92 246 / 60%);
+}
+
+/**
+ * Breakpoints — DESIGN_SPEC §7.
+ * Custom properties cannot be used inside media queries, so these are kept
+ * here as the documented reference every stylesheet must follow:
+ *
+ *   Mobile   0px    – 767px   (base styles, mobile first)
+ *   Tablet   768px  – 1023px  (@media (min-width: 768px))
+ *   Desktop  1024px and above (@media (min-width: 1024px))
+ */

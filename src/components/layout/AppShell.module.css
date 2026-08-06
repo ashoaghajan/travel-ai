@@ -1,0 +1,63 @@
+/**
+ * Mobile: one scrolling column with the bottom bar underneath it.
+ * Desktop (>=1024px): sidebar column beside the scrolling main region.
+ *
+ * The bottom bar occupies a real grid row rather than floating over the page,
+ * so nothing is ever hidden behind it and sticky page footers (the planner
+ * composer) land directly above it.
+ */
+.shell {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  height: 100dvh;
+  background-color: var(--color-background);
+}
+
+/* Mobile and tablet: no sidebar (DESIGN_SPEC §7). */
+.sidebar {
+  display: none;
+}
+
+/**
+ * The main region owns the scrolling so pages can pin headers and composers
+ * with `position: sticky` without fighting the document scroll.
+ *
+ * `position: relative` is what stops a *second* scrollbar appearing beside
+ * this one. `.visually-hidden` is `position: absolute` with no offsets, so
+ * without a positioned ancestor its containing block is the document — and an
+ * absolutely positioned box whose containing block sits outside a scroll
+ * container is not clipped by it. Every screen-reader-only heading far down a
+ * long page therefore stretched the document itself. Making this the
+ * containing block brings them back inside the box that scrolls.
+ */
+.main {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+@media (min-width: 1024px) {
+  .shell {
+    grid-template-rows: minmax(0, 1fr);
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .sidebar {
+    display: flex;
+    position: sticky;
+    top: 0;
+  }
+
+  /* Sidebar replaces it from here up. */
+  .bottomNav {
+    display: none;
+  }
+}
+
+/* Focused programmatically after navigation; the page itself needs no ring. */
+.main:focus {
+  outline: none;
+}

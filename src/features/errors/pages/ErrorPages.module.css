@@ -1,0 +1,38 @@
+.page {
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+}
+
+/* Used when the shell itself could not render. */
+.standalone {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100dvh;
+  padding: var(--layout-content-padding);
+  background-color: var(--color-background);
+}
+
+.content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  width: 100%;
+  max-width: 560px;
+  margin: 0 auto;
+  padding: var(--space-xl) var(--layout-content-padding) var(--space-2xl);
+}
+
+.detail {
+  text-align: center;
+  font-size: var(--font-xs);
+  color: var(--color-text-muted);
+  overflow-wrap: anywhere;
+}
+
+@media (min-width: 1024px) {
+  .content {
+    padding: var(--space-2xl);
+  }
+}

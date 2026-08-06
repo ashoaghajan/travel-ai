@@ -1,0 +1,167 @@
+.page {
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+}
+
+.content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+  width: 100%;
+  max-width: 720px;
+  margin: 0 auto;
+  padding: var(--space-xl) var(--layout-content-padding) var(--space-2xl);
+}
+
+.intro {
+  font-size: var(--font-sm);
+  color: var(--color-text-muted);
+}
+
+.panel:focus-visible {
+  box-shadow: var(--focus-ring);
+  border-radius: var(--radius-lg);
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* Priced results, and the partner list below them ------------------------ */
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2xl);
+}
+
+.deals,
+.partners {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+.dealsHeader {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.dealsTitle {
+  font-size: var(--font-md);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-main);
+}
+
+/*
+ * Quieter than the fares above it. Once there are prices on this screen the
+ * partner list is a fallback, and it should not compete with the thing the
+ * reader came for.
+ */
+.partnersTitle {
+  font-size: var(--font-sm);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-muted);
+}
+
+.error {
+  font-size: var(--font-sm);
+  color: var(--color-danger);
+}
+
+.skeletonCard {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+.status {
+  min-height: 1.2em;
+  font-size: var(--font-xs);
+  color: var(--color-primary);
+}
+
+.disclaimer {
+  padding-top: var(--space-md);
+  border-top: 1px solid var(--color-border);
+  font-size: var(--font-xs);
+  color: var(--color-text-muted);
+}
+
+@media (min-width: 1024px) {
+  .content {
+    padding: var(--space-2xl);
+  }
+}
+
+/* ------------------------------------------------------- filling-for bar */
+.tripBar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  flex-wrap: wrap;
+  padding: var(--space-sm) var(--space-md);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background-color: var(--color-surface);
+}
+
+.tripField {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  min-width: 0;
+}
+
+.tripLabel {
+  font-size: var(--font-xs);
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.tripSelect {
+  min-width: 0;
+  min-height: 2.25rem;
+  padding: var(--space-xs) var(--space-sm);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background-color: var(--color-surface);
+  color: var(--color-text-main);
+  font-family: inherit;
+  font-size: var(--font-sm);
+  font-weight: var(--font-weight-semibold);
+}
+
+.tripSelect:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 1px;
+  border-color: var(--color-primary);
+}
+
+.tripMeta {
+  font-size: var(--font-xs);
+  color: var(--color-text-muted);
+}
+
+.tripLink {
+  margin-left: auto;
+  font-size: var(--font-xs);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-primary);
+}
+
+.added {
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-md);
+  background-color: var(--color-primary-soft);
+  color: var(--color-primary);
+  font-size: var(--font-sm);
+}

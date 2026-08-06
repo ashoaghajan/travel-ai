@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 72 72" width="72" height="72" role="img" aria-label="">
+  <defs>
+    <linearGradient id="flightSky" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#7c4dff" />
+      <stop offset="1" stop-color="#4c1fd7" />
+    </linearGradient>
+  </defs>
+
+  <rect width="72" height="72" fill="url(#flightSky)" />
+
+  <!-- Depth behind the plane, so the silhouette is not floating on flat colour. -->
+  <circle cx="36" cy="34" r="21" fill="#ffffff" opacity="0.12" />
+
+  <!-- Vapour trail, curving in from the lower left. -->
+  <path d="M12 55c8 1 14-2 19-7" stroke="#ffffff" stroke-opacity="0.42" stroke-width="2.4"
+        stroke-linecap="round" fill="none" stroke-dasharray="1 7" />
+
+  <!-- Filled paper plane, banking right. Solid rather than outlined: at 72px an
+       outline reads as a UI icon, which is what this replaces. -->
+  <g transform="rotate(-18 36 34)">
+    <path d="M51.5 24.2 20.8 34.9c-1.2.4-1.3 2.1-.1 2.6l7.1 3 11.9-7.6-9.1 9.4 1.2 8.3c.2 1.3 1.9 1.6 2.5.5l16.5-25.3c.6-1 -.3-2.1-1.3-1.6Z"
+          fill="#ffffff" />
+    <path d="M30.7 42.3l1 6.8 5.2-5.4Z" fill="#ffffff" opacity="0.72" />
+  </g>
+</svg>

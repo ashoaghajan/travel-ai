@@ -1,0 +1,123 @@
+/*
+ * Matches the other fields in `FlightSearchForm.module.css` — same label
+ * treatment, same 48px control — so the picker reads as one of the form's
+ * fields rather than as a component that landed in it.
+ */
+.field {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  min-width: 0;
+  flex: 1;
+}
+
+.label {
+  font-size: var(--font-xs);
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.control {
+  width: 100%;
+  min-height: 48px;
+  padding: 0 var(--space-lg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background-color: var(--color-surface);
+  font-size: var(--font-sm);
+  color: var(--color-text-main);
+  transition: border-color var(--transition-fast);
+}
+
+.control:hover {
+  border-color: var(--color-primary-soft);
+}
+
+.control:focus-visible {
+  border-color: var(--color-primary);
+  box-shadow: var(--focus-ring);
+  outline: none;
+}
+
+/* ---------------------------------------------------------------- listbox */
+.list {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + var(--space-xs));
+  left: 0;
+  right: 0;
+  max-height: 320px;
+  overflow-y: auto;
+  margin: 0;
+  padding: var(--space-xs);
+  list-style: none;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background-color: var(--color-surface);
+  box-shadow: var(--shadow-card);
+}
+
+.option {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-md);
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+/* One highlight, driven by keyboard and pointer alike — see `active` in the
+   component. A separate :hover rule would let two rows look chosen at once. */
+.active {
+  background-color: var(--color-primary-soft);
+}
+
+.code {
+  font-size: var(--font-xs);
+  font-weight: var(--font-weight-bold);
+  font-variant-numeric: tabular-nums;
+  color: var(--color-primary);
+}
+
+.place {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.city {
+  font-size: var(--font-sm);
+  color: var(--color-text-main);
+}
+
+.name {
+  font-size: var(--font-xs);
+  color: var(--color-text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.country {
+  font-size: var(--font-xs);
+  color: var(--color-text-muted);
+}
+
+.empty {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + var(--space-xs));
+  left: 0;
+  right: 0;
+  padding: var(--space-md) var(--space-lg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background-color: var(--color-surface);
+  box-shadow: var(--shadow-card);
+  font-size: var(--font-sm);
+  color: var(--color-text-muted);
+}

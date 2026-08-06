@@ -1,0 +1,43 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+node_modules
+dist
+dist-ssr
+*.local
+
+# Test output
+coverage
+
+# Secrets.
+#
+# Deny every env file at any depth, then let the two committed templates back
+# through. Listing `server/.env` alone was one `touch .env` away from putting
+# real keys in a public repo — the rule has to be the deny, not the allow.
+.env
+.env.*
+!.env.example
+
+# The local database. Never the deployed one, which is not a file.
+server/prisma/*.db
+server/prisma/*.db-journal
+
+# Machine-local tool state: permissions granted on this laptop only.
+.claude/settings.local.json
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?

@@ -1,0 +1,30 @@
+.card {
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xl);
+  color: var(--color-text-main);
+}
+
+.padding-none {
+  padding: 0;
+}
+
+.padding-md {
+  padding: var(--space-lg);
+}
+
+.padding-lg {
+  padding: var(--space-xl);
+}
+
+.elevation-none {
+  box-shadow: none;
+}
+
+.elevation-soft {
+  box-shadow: var(--shadow-soft);
+}
+
+.elevation-card {
+  box-shadow: var(--shadow-card);
+}

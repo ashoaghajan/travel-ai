@@ -1,0 +1,241 @@
+.page {
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+}
+
+.content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+  width: 100%;
+  max-width: var(--layout-max-width);
+  margin: 0 auto;
+  padding: var(--space-xl) var(--layout-content-padding) var(--space-2xl);
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+.sectionTitle {
+  margin: 0;
+  font-size: var(--font-sm);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-main);
+}
+
+/* Fields — mirrors EditTripModal.module.css, which CSS Modules cannot share. */
+
+.row {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  min-width: 0;
+  flex: 1;
+}
+
+.label {
+  font-size: var(--font-xs);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-muted);
+}
+
+.control {
+  width: 100%;
+  min-width: 0;
+  min-height: 2.75rem;
+  padding: var(--space-sm) var(--space-md);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background-color: var(--color-surface);
+  color: var(--color-text-main);
+  font-family: inherit;
+  font-size: var(--font-sm);
+}
+
+.control:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 1px;
+  border-color: var(--color-primary);
+}
+
+.control:disabled {
+  opacity: 0.6;
+}
+
+.fieldError {
+  font-size: var(--font-xs);
+  color: var(--color-danger);
+}
+
+.error {
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-md);
+  background-color: var(--color-danger-soft);
+  color: var(--color-danger);
+  font-size: var(--font-sm);
+}
+
+/* Cover picker */
+
+.covers {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  border: 0;
+  padding: 0;
+  margin: 0;
+  min-width: 0;
+}
+
+.coverGrid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--space-md);
+}
+
+.coverOption {
+  min-width: 0;
+}
+
+.coverTile {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  padding: var(--space-xs);
+  border: 2px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background-color: var(--color-surface);
+  cursor: pointer;
+  transition:
+    border-color var(--transition-fast),
+    background-color var(--transition-fast);
+}
+
+.coverTile:hover {
+  border-color: var(--color-primary-soft);
+}
+
+.coverImage {
+  width: 100%;
+  aspect-ratio: 3 / 2;
+  object-fit: cover;
+  border-radius: var(--radius-sm);
+}
+
+.coverLabel {
+  font-size: var(--font-xs);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-muted);
+}
+
+/* Selection and focus come from the hidden radio, so the tile carries no
+   second copy of the state to keep in step. */
+.coverOption input:checked + .coverTile {
+  border-color: var(--color-primary);
+  background-color: var(--color-primary-soft);
+}
+
+.coverOption input:checked + .coverTile .coverLabel {
+  color: var(--color-primary);
+}
+
+.coverOption input:focus-visible + .coverTile {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+.coverOption input:disabled + .coverTile {
+  opacity: 0.6;
+  cursor: default;
+}
+
+/* Day preview */
+
+.previewHeader {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-sm);
+}
+
+.previewCount {
+  font-size: var(--font-xs);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-primary);
+}
+
+.previewNote,
+.empty {
+  font-size: var(--font-sm);
+  color: var(--color-text-muted);
+}
+
+.days {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  /* Ninety days must not push the create button off the screen. */
+  max-height: 20rem;
+  overflow-y: auto;
+}
+
+.day {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-md);
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-md);
+  background-color: var(--color-surface-muted);
+}
+
+.dayNumber {
+  font-size: var(--font-sm);
+  font-weight: var(--font-weight-semibold);
+}
+
+.dayDate {
+  font-size: var(--font-xs);
+  color: var(--color-text-muted);
+}
+
+.footer {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-sm);
+}
+
+@media (min-width: 768px) {
+  .row {
+    flex-direction: row;
+  }
+
+  .coverGrid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+@media (min-width: 1024px) {
+  .content {
+    padding: var(--space-2xl);
+  }
+}

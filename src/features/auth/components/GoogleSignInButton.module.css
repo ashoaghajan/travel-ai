@@ -1,0 +1,24 @@
+.wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+/*
+ * Google renders its own markup in here and we do not restyle it — their
+ * branding terms cover the button's appearance. Centring is all we do.
+ */
+.button {
+  display: flex;
+  justify-content: center;
+  min-height: 2.75rem;
+}
+
+.button[inert] {
+  opacity: 0.6;
+}
+
+.error {
+  font-size: var(--font-xs);
+  color: var(--color-danger);
+}

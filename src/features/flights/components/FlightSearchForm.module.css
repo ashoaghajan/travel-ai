@@ -1,0 +1,94 @@
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xl);
+}
+
+.tabs {
+  align-self: stretch;
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+}
+
+/* Fields -------------------------------------------------------------- */
+.route,
+.details {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  min-width: 0;
+  flex: 1;
+}
+
+.label {
+  font-size: var(--font-xs);
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.control {
+  width: 100%;
+  min-height: 48px;
+  padding: 0 var(--space-lg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background-color: var(--color-surface);
+  font-size: var(--font-sm);
+  color: var(--color-text-main);
+  transition: border-color var(--transition-fast);
+}
+
+.control:hover {
+  border-color: var(--color-primary-soft);
+}
+
+.control:focus-visible {
+  border-color: var(--color-primary);
+}
+
+/* Swap sits between the two airport fields. */
+.swap {
+  align-self: flex-end;
+  transform: rotate(90deg);
+}
+
+.note {
+  padding: var(--space-sm) var(--space-lg);
+  border-radius: var(--radius-md);
+  background-color: var(--color-primary-soft);
+  color: var(--color-primary);
+  font-size: var(--font-xs);
+}
+
+.error {
+  padding: var(--space-sm) var(--space-lg);
+  border-radius: var(--radius-md);
+  background-color: var(--color-danger-soft);
+  color: var(--color-danger);
+  font-size: var(--font-xs);
+}
+
+@media (min-width: 768px) {
+  .route,
+  .details {
+    flex-direction: row;
+    align-items: flex-end;
+  }
+
+  .swap {
+    transform: none;
+    margin-bottom: 4px;
+  }
+}

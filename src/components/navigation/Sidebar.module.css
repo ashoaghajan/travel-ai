@@ -1,0 +1,94 @@
+.sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xl);
+  width: var(--layout-sidebar-width);
+  height: 100dvh;
+  padding: var(--space-xl) var(--space-lg);
+  overflow-y: auto;
+  background-color: var(--color-surface);
+  border-right: 1px solid var(--color-border);
+}
+
+.top {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+}
+
+/* The two ways to start a trip belong together — `.top`'s gap is the spacing
+   between blocks, which reads as too airy between a pair of buttons. */
+.cta {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.brand {
+  display: inline-flex;
+  align-self: flex-start;
+  padding: var(--space-xs);
+  margin-left: calc(var(--space-xs) * -1);
+  border-radius: var(--radius-md);
+}
+
+/* Navigation ---------------------------------------------------------- */
+.nav {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+.navList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.navLink {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  padding: var(--space-md);
+  border-radius: var(--radius-md);
+  font-size: var(--font-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-muted);
+  transition:
+    background-color var(--transition-fast),
+    color var(--transition-fast);
+}
+
+.navLink:hover {
+  background-color: var(--color-surface-muted);
+  color: var(--color-text-main);
+}
+
+/* DESIGN_SPEC §4: active nav item = soft purple background, purple text. */
+.active,
+.active:hover {
+  background-color: var(--color-primary-soft);
+  color: var(--color-primary);
+  font-weight: var(--font-weight-semibold);
+}
+
+.navIcon {
+  display: inline-flex;
+  flex: none;
+}
+
+.divider {
+  height: 1px;
+  margin: 0 var(--space-md);
+  border: 0;
+  background-color: var(--color-border);
+}
+
+/* Pins the upgrade promo to the bottom of the sidebar. */
+.footer {
+  margin-top: auto;
+  padding-top: var(--space-lg);
+}

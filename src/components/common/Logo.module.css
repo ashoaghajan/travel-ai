@@ -1,0 +1,49 @@
+.logo {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-md);
+}
+
+.mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background-color: var(--color-primary);
+  color: var(--color-text-light);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-primary);
+}
+
+.wordmark {
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: -0.01em;
+}
+
+/* Sizes -------------------------------------------------------------- */
+.md .mark {
+  width: 36px;
+  height: 36px;
+}
+
+.md .wordmark {
+  font-size: var(--font-md);
+}
+
+.lg .mark {
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radius-lg);
+}
+
+.lg .wordmark {
+  font-size: var(--font-lg);
+}
+
+/* Variants ----------------------------------------------------------- */
+.dark .wordmark {
+  color: var(--color-text-main);
+}
+
+.light .wordmark {
+  color: var(--color-text-light);
+}

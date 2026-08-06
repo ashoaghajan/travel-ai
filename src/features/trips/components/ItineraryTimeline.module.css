@@ -1,0 +1,283 @@
+.timeline {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.day {
+  position: relative;
+  padding: 0 0 var(--space-xl) var(--space-xl);
+}
+
+/* Connecting rail, stopping at the last day. */
+.day::before {
+  content: '';
+  position: absolute;
+  top: var(--space-md);
+  bottom: 0;
+  left: 5px;
+  width: 2px;
+  background-color: var(--color-border);
+}
+
+.day:last-child {
+  padding-bottom: 0;
+}
+
+.day:last-child::before {
+  display: none;
+}
+
+.marker {
+  position: absolute;
+  top: 6px;
+  left: 0;
+  width: 12px;
+  height: 12px;
+  border-radius: var(--radius-pill);
+  background-color: var(--color-primary);
+  box-shadow: 0 0 0 4px var(--color-primary-soft);
+}
+
+.content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+.dayMeta {
+  font-size: var(--font-xs);
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-primary);
+}
+
+.heading {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-lg);
+}
+
+.headingText {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.destination {
+  font-size: var(--font-md);
+  font-weight: var(--font-weight-semibold);
+}
+
+.summary {
+  font-size: var(--font-sm);
+  color: var(--color-text-muted);
+}
+
+.thumbnail {
+  display: none;
+  flex: none;
+  width: 72px;
+  height: 56px;
+  margin-left: auto;
+  object-fit: cover;
+  border-radius: var(--radius-md);
+}
+
+/* Activities ---------------------------------------------------------- */
+.activities {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  margin: 0;
+  padding: var(--space-lg);
+  list-style: none;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background-color: var(--color-surface);
+}
+
+.activity {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-md);
+}
+
+.time {
+  flex: none;
+  width: 46px;
+  font-size: var(--font-xs);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.activityBody {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.activityTitle {
+  font-size: var(--font-sm);
+  font-weight: var(--font-weight-medium);
+}
+
+.activityDescription {
+  font-size: var(--font-xs);
+  color: var(--color-text-muted);
+}
+
+.price {
+  margin-left: auto;
+  font-size: var(--font-xs);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-main);
+  font-variant-numeric: tabular-nums;
+}
+
+@media (min-width: 768px) {
+  .thumbnail {
+    display: block;
+  }
+}
+
+/* -------------------------------------------------------------------------
+ * Edit mode
+ *
+ * The rows sit in the same bordered card as the read view, so switching modes
+ * changes the controls and nothing around them.
+ * ---------------------------------------------------------------------- */
+
+.editableActivity {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  padding: var(--space-sm);
+  border-radius: var(--radius-md);
+  background-color: var(--color-surface-muted);
+}
+
+.editRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.editControl {
+  width: 100%;
+  min-width: 0;
+  min-height: 2.5rem;
+  padding: var(--space-xs) var(--space-sm);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background-color: var(--color-surface);
+  color: var(--color-text-main);
+  font-family: inherit;
+  font-size: var(--font-sm);
+}
+
+.editControl:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 1px;
+  border-color: var(--color-primary);
+}
+
+.editControl:disabled {
+  opacity: 0.6;
+}
+
+.editTime {
+  flex: 0 0 6.5rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.editDescription {
+  resize: vertical;
+}
+
+.editError {
+  font-size: var(--font-xs);
+  color: var(--color-danger);
+}
+
+/* Provenance for a stop imported from the explorer — the edit row cannot show
+   its photo, category or coordinates, but it can say they are there. */
+.pickedThumb {
+  flex: none;
+  width: 28px;
+  height: 28px;
+  object-fit: cover;
+  border-radius: var(--radius-sm);
+}
+
+.pickedMark {
+  font-size: var(--font-xs);
+  color: var(--color-text-muted);
+}
+
+.addRow {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  align-items: flex-start;
+}
+
+.emptyDay {
+  font-size: var(--font-xs);
+  color: var(--color-text-muted);
+}
+
+/*
+ * A booking on its day.
+ *
+ * Distinct from the planned activity rows below it on purpose: these are
+ * things the reader holds rather than things they intend, and a schedule that
+ * drew them identically would blur a reservation into a suggestion.
+ */
+.booked {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-sm);
+  margin-top: var(--space-xs);
+  font-size: var(--font-sm);
+}
+
+.bookedKind {
+  flex: none;
+  padding: 2px var(--space-sm);
+  border-radius: var(--radius-pill);
+  font-size: var(--font-xs);
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: 0.03em;
+}
+
+.bookedTitle {
+  min-width: 0;
+  color: var(--color-text-main);
+}
+
+/* The same four hues the Bookings tab uses, so a flight is a flight on both. */
+.flight.bookedKind {
+  background-color: var(--color-kind-flight-soft);
+  color: var(--color-kind-flight);
+}
+
+.hotel.bookedKind {
+  background-color: var(--color-kind-hotel-soft);
+  color: var(--color-kind-hotel);
+}
+
+.activity.bookedKind {
+  background-color: var(--color-kind-activity-soft);
+  color: var(--color-kind-activity);
+}
+
+.ticket.bookedKind {
+  background-color: var(--color-kind-ticket-soft);
+  color: var(--color-kind-ticket);
+}

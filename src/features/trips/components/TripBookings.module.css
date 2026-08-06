@@ -1,0 +1,359 @@
+.bookings {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+}
+
+.summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-md);
+  flex-wrap: wrap;
+}
+
+.count {
+  font-size: var(--font-sm);
+  color: var(--color-text-muted);
+}
+
+.total {
+  color: var(--color-text-main);
+}
+
+.group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.groupLabel {
+  font-size: var(--font-xs);
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.addRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+/* The catalogue, under what is already booked. */
+.browse {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  padding-top: var(--space-lg);
+  border-top: 1px solid var(--color-border);
+}
+
+.browseTitle {
+  font-size: var(--font-md);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-main);
+}
+
+.manualLabel {
+  font-size: var(--font-xs);
+  color: var(--color-text-muted);
+}
+
+.error {
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-md);
+  background-color: var(--color-danger-soft);
+  color: var(--color-danger);
+  font-size: var(--font-sm);
+}
+
+/* ------------------------------------------------------------------- card */
+.card {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: var(--space-md);
+}
+
+/* Every row's avatar, photographed or drawn — one size, so the text beside
+   them always starts at the same place. */
+.thumb {
+  flex: none;
+  width: 72px;
+  height: 72px;
+  object-fit: cover;
+  border-radius: var(--radius-md);
+  background-color: var(--color-surface-muted);
+}
+
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  min-width: 0;
+}
+
+.kind {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  flex-wrap: wrap;
+}
+
+/*
+ * The kind, as a colour rather than four words of identical grey.
+ *
+ * The hue is the point: a trip's bookings are scanned for "where is my hotel"
+ * far more often than they are read top to bottom, and the label alone made
+ * every row look the same. The word stays — colour on its own would be
+ * unreadable to anyone who cannot tell these four apart.
+ */
+.kindChip {
+  padding: 2px var(--space-sm);
+  border-radius: var(--radius-pill);
+  font-size: var(--font-xs);
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.flight.kindChip {
+  background-color: var(--color-kind-flight-soft);
+  color: var(--color-kind-flight);
+}
+
+.hotel.kindChip {
+  background-color: var(--color-kind-hotel-soft);
+  color: var(--color-kind-hotel);
+}
+
+.activity.kindChip {
+  background-color: var(--color-kind-activity-soft);
+  color: var(--color-kind-activity);
+}
+
+.ticket.kindChip {
+  background-color: var(--color-kind-ticket-soft);
+  color: var(--color-kind-ticket);
+}
+
+.chipBooked,
+.chipSaved {
+  padding: 2px var(--space-sm);
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--color-border);
+  font-size: var(--font-xs);
+  font-weight: var(--font-weight-semibold);
+}
+
+/* Outlined, not filled: the filled chip beside it is the kind, and two solid
+   pills of different colours on one line compete for the same job. */
+.chipBooked {
+  border-color: var(--color-primary);
+  background: none;
+  color: var(--color-primary);
+}
+
+.chipSaved {
+  background: none;
+  color: var(--color-text-muted);
+}
+
+/* Looks like the heading it replaces until it is focused, so a card reads as
+   a card rather than as a form. */
+.title {
+  width: 100%;
+  min-width: 0;
+  padding: 2px var(--space-xs);
+  margin-left: calc(var(--space-xs) * -1);
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--color-text-main);
+  font-family: inherit;
+  font-size: var(--font-md);
+  font-weight: var(--font-weight-semibold);
+}
+
+.title:hover:not(:disabled) {
+  border-color: var(--color-border);
+}
+
+.title:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 1px;
+  border-color: var(--color-primary);
+}
+
+.subtitle {
+  font-size: var(--font-xs);
+  color: var(--color-text-muted);
+}
+
+.fields {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+  margin-top: var(--space-xs);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.fieldLabel {
+  font-size: var(--font-xs);
+  color: var(--color-text-muted);
+}
+
+.control {
+  min-width: 0;
+  min-height: 2.25rem;
+  padding: var(--space-xs) var(--space-sm);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background-color: var(--color-surface);
+  color: var(--color-text-main);
+  font-family: inherit;
+  font-size: var(--font-sm);
+}
+
+.control:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 1px;
+  border-color: var(--color-primary);
+}
+
+.control:disabled,
+.title:disabled {
+  opacity: 0.6;
+}
+
+.side {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-xs);
+  grid-column: 1 / -1;
+}
+
+.price {
+  font-size: var(--font-md);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-main);
+}
+
+.sample {
+  margin-left: var(--space-xs);
+  font-size: var(--font-xs);
+  font-weight: var(--font-weight-regular, 400);
+  color: var(--color-text-muted);
+}
+
+/*
+ * How the figure above it was reached — "$116 × 4 nights".
+ *
+ * Its own line rather than beside the price: the whole point is that a reader
+ * can run down the column adding the bold numbers, and working set inline
+ * would compete with them for that reading.
+ */
+.workings {
+  display: block;
+  font-size: var(--font-xs);
+  font-weight: var(--font-weight-regular, 400);
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}
+
+.link {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  font-size: var(--font-xs);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-primary);
+}
+
+.statusToggle {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--color-text-muted);
+  font-family: inherit;
+  font-size: var(--font-xs);
+  font-weight: var(--font-weight-semibold);
+  cursor: pointer;
+}
+
+.statusToggle:hover:not(:disabled) {
+  color: var(--color-text-main);
+}
+
+.statusToggle:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+.statusToggle:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+@media (min-width: 720px) {
+  .card {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+  }
+
+  .side {
+    grid-column: auto;
+    align-items: flex-end;
+  }
+}
+
+/* "Outbound" / "Return" — only present when a booking covers two days. */
+.legChip {
+  padding: 2px var(--space-sm);
+  border-radius: var(--radius-pill);
+  background-color: var(--color-surface-muted, var(--color-primary-soft));
+  color: var(--color-text-muted);
+  font-size: var(--font-xs);
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+/* The return row's title is not editable — the booking has one name, edited
+   on the outbound row. */
+.returnTitle {
+  font-size: var(--font-md);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-main);
+}
+
+.samePurchase {
+  align-self: flex-end;
+  font-size: var(--font-xs);
+  color: var(--color-text-muted);
+}
+
+/* The kinds, revealed by "Add by hand" rather than always on screen. */
+.manualKinds {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-xs);
+}

@@ -1,0 +1,111 @@
+.card {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.media {
+  aspect-ratio: 16 / 9;
+  background-image: linear-gradient(140deg, var(--color-primary-soft), var(--color-surface-muted));
+}
+
+.image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xl);
+  padding: var(--space-xl);
+}
+
+/* Trip identity ------------------------------------------------------- */
+.header {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.title {
+  font-size: var(--font-xl);
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: -0.01em;
+}
+
+.meta {
+  font-size: var(--font-sm);
+  color: var(--color-text-muted);
+}
+
+/* Cost rows ----------------------------------------------------------- */
+.costs {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  margin: 0;
+}
+
+.row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-lg);
+}
+
+.label {
+  font-size: var(--font-sm);
+  color: var(--color-text-muted);
+}
+
+.value {
+  margin: 0;
+  font-size: var(--font-sm);
+  font-weight: var(--font-weight-semibold);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Total is larger and bold (DESIGN_SPEC Screen 8). */
+.totalRow {
+  padding-top: var(--space-lg);
+  border-top: 1px solid var(--color-border);
+}
+
+.totalLabel {
+  font-size: var(--font-md);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-main);
+}
+
+.totalValue {
+  margin: 0;
+  font-size: var(--font-xl);
+  font-weight: var(--font-weight-bold);
+  letter-spacing: -0.01em;
+  font-variant-numeric: tabular-nums;
+}
+
+.disclaimer {
+  margin-top: calc(var(--space-md) * -1);
+  font-size: var(--font-xs);
+  color: var(--color-text-muted);
+}
+
+/* Actions ------------------------------------------------------------- */
+.actions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+@media (min-width: 768px) {
+  .body {
+    padding: var(--space-2xl);
+  }
+
+  .actions {
+    flex-direction: row;
+  }
+}

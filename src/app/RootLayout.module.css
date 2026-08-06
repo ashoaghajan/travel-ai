@@ -1,0 +1,20 @@
+/* Off-screen until focused, then pinned to the top-left. */
+.skipLink {
+  position: fixed;
+  top: var(--space-md);
+  left: var(--space-md);
+  z-index: var(--z-overlay);
+  padding: var(--space-md) var(--space-lg);
+  border-radius: var(--radius-md);
+  background-color: var(--color-primary);
+  color: var(--color-text-light);
+  font-size: var(--font-sm);
+  font-weight: var(--font-weight-semibold);
+  box-shadow: var(--shadow-card);
+  transform: translateY(calc(-100% - var(--space-2xl)));
+  transition: transform var(--transition-fast);
+}
+
+.skipLink:focus-visible {
+  transform: translateY(0);
+}

@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#6d3fef" />
+    <!--
+      Paints the theme before the first frame.
+
+      This has to be inline and blocking: a module script is deferred, so by the
+      time `useAppliedTheme` runs, a dark-theme reader has already been shown a
+      white page. The light theme is the document's default, so there is nothing
+      to do unless the answer is dark.
+
+      `src/services/theme.service.ts` is the source of truth for this logic —
+      the duplication is deliberate and both copies must resolve alike.
+    -->
+    <script>
+      (function () {
+        try {
+          var stored = JSON.parse(localStorage.getItem('ai-travel-planner:settings') || 'null');
+          var preference = (stored && stored.theme) || 'system';
+          var dark =
+            preference === 'dark' ||
+            (preference === 'system' && matchMedia('(prefers-color-scheme: dark)').matches);
+
+          if (dark) {
+            document.documentElement.dataset.theme = 'dark';
+            document.querySelector('meta[name="theme-color"]').content = '#0f1117';
+          }
+        } catch {
+          // Blocked storage or an unparseable record: light is the safe answer.
+        }
+      })();
+    </script>
+    <meta
+      name="description"
+      content="AI Travel Planner — plan the perfect trip in minutes. Customised. Smart. Effortless."
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <title>AI Travel Planner</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

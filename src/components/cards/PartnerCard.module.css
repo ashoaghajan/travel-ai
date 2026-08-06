@@ -1,0 +1,67 @@
+.card {
+  display: flex;
+  align-items: center;
+  gap: var(--space-lg);
+}
+
+/* Brand-coloured placeholder square, not partner artwork. */
+.logo {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 52px;
+  height: 52px;
+  border-radius: var(--radius-md);
+  background-color: var(--partner-color, var(--color-surface-muted));
+  color: var(--partner-text-color, var(--color-text-main));
+  font-size: var(--font-md);
+  font-weight: var(--font-weight-bold);
+  letter-spacing: -0.01em;
+}
+
+.details {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.name {
+  font-size: var(--font-md);
+  font-weight: var(--font-weight-semibold);
+}
+
+.description {
+  font-size: var(--font-sm);
+  color: var(--color-text-muted);
+}
+
+.action {
+  flex: none;
+  width: 100%;
+}
+
+/* Stack on the narrowest screens so the button never squeezes the name. */
+@media (max-width: 479px) {
+  .card {
+    flex-wrap: wrap;
+  }
+}
+
+@media (min-width: 480px) {
+  .action {
+    width: auto;
+    margin-left: auto;
+  }
+}
+
+/* Holds "Add to trip" beside "View Deals" — the card keeps its single-action
+   shape when no attach handler is supplied. */
+.actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  flex-wrap: wrap;
+  margin-left: auto;
+}

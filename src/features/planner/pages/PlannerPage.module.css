@@ -1,0 +1,67 @@
+/**
+ * Planner dashboard — DESIGN_SPEC Screen 2.
+ * The shell's main region scrolls, so the header and composer stay pinned
+ * with `position: sticky`.
+ */
+
+.page {
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+}
+
+/* Brand mark stands in for the hidden sidebar on small screens. */
+.mobileBrand {
+  display: inline-flex;
+}
+
+.conversation {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: var(--space-2xl);
+  width: 100%;
+  max-width: 900px;
+  margin: 0 auto;
+  padding: var(--space-xl) var(--layout-content-padding);
+}
+
+.composer {
+  position: sticky;
+  bottom: 0;
+  padding: var(--space-md) var(--layout-content-padding) var(--space-lg);
+  background-color: var(--color-background);
+  border-top: 1px solid var(--color-border);
+}
+
+.composerInner {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  width: 100%;
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+.error {
+  padding: var(--space-sm) var(--space-lg);
+  border-radius: var(--radius-md);
+  background-color: var(--color-danger-soft);
+  color: var(--color-danger);
+  font-size: var(--font-xs);
+}
+
+@media (min-width: 1024px) {
+  .mobileBrand {
+    display: none;
+  }
+
+  .conversation {
+    gap: var(--space-2xl);
+    padding: var(--space-2xl);
+  }
+
+  .composer {
+    padding: var(--space-lg) var(--space-2xl) var(--space-xl);
+  }
+}

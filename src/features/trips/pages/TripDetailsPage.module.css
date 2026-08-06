@@ -1,0 +1,283 @@
+.page {
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+}
+
+.content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+  width: 100%;
+  max-width: var(--layout-max-width);
+  margin: 0 auto;
+  padding: var(--space-xl) var(--layout-content-padding) var(--space-2xl);
+}
+
+.error {
+  padding: var(--space-sm) var(--space-lg);
+  border-radius: var(--radius-md);
+  background-color: var(--color-danger-soft);
+  color: var(--color-danger);
+  font-size: var(--font-sm);
+}
+
+.confirm {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-md);
+}
+
+.confirmText {
+  font-size: var(--font-sm);
+  font-weight: var(--font-weight-medium);
+}
+
+.confirmActions {
+  display: flex;
+  gap: var(--space-sm);
+}
+
+.panel:focus-visible {
+  box-shadow: var(--focus-ring);
+  border-radius: var(--radius-lg);
+}
+
+.sectionTitle {
+  margin-bottom: var(--space-lg);
+  font-size: var(--font-lg);
+  font-weight: var(--font-weight-semibold);
+}
+
+/* Itinerary tab ------------------------------------------------------- */
+.itineraryLayout {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--space-lg);
+  align-items: start;
+}
+
+.timelineCard {
+  min-width: 0;
+}
+
+/* Map sits in its own tab below 1024px. */
+.mapColumn {
+  display: none;
+}
+
+/* Map tab ------------------------------------------------------------- */
+.mapPanel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+}
+
+.stopList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.stop {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  font-size: var(--font-sm);
+}
+
+.stopMarker {
+  flex: none;
+  width: 10px;
+  height: 10px;
+  border-radius: var(--radius-pill);
+  background-color: var(--color-map-route);
+  box-shadow: 0 0 0 4px var(--color-primary-soft);
+}
+
+@media (min-width: 1024px) {
+  .content {
+    padding: var(--space-2xl);
+    gap: var(--space-xl);
+  }
+
+  .itineraryLayout {
+    grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr);
+    gap: var(--space-xl);
+  }
+
+  .mapColumn {
+    display: block;
+    position: sticky;
+    top: var(--space-xl);
+  }
+}
+
+/* -------------------------------------------------------------------------
+ * Edit mode
+ * ---------------------------------------------------------------------- */
+
+.editBanner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-sm) var(--space-lg);
+  border-radius: var(--radius-md);
+  background-color: var(--color-primary-soft);
+}
+
+.editBannerText {
+  font-size: var(--font-sm);
+  color: var(--color-primary);
+}
+
+.dirtyBadge {
+  margin-left: auto;
+  padding: 2px var(--space-sm);
+  border-radius: var(--radius-pill);
+  background-color: var(--color-surface);
+  color: var(--color-primary);
+  font-size: var(--font-xs);
+  font-weight: var(--font-weight-semibold);
+}
+
+/**
+ * Sticky save bar.
+ *
+ * Pinned to the bottom of the scrolling main region rather than the viewport,
+ * so it sits above the page and below the mobile bottom navigation instead of
+ * fighting it.
+ */
+.editBar {
+  position: sticky;
+  bottom: 0;
+  z-index: var(--z-sticky, 10);
+  border-top: 1px solid var(--color-border);
+  background-color: var(--color-surface);
+  box-shadow: var(--shadow-card);
+}
+
+.editBarInner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-sm);
+  width: 100%;
+  max-width: var(--layout-max-width);
+  margin: 0 auto;
+  padding: var(--space-md) var(--layout-content-padding);
+}
+
+.editBarStatus {
+  flex: 1;
+  min-width: 100%;
+  font-size: var(--font-sm);
+  color: var(--color-text-muted);
+}
+
+.editBarActions {
+  display: flex;
+  gap: var(--space-sm);
+  width: 100%;
+}
+
+.editBarActions > * {
+  flex: 1;
+}
+
+@media (min-width: 768px) {
+  .editBarStatus {
+    min-width: 0;
+  }
+
+  .editBarActions {
+    width: auto;
+  }
+
+  .editBarActions > * {
+    flex: none;
+  }
+
+  .editBarInner {
+    padding: var(--space-md) var(--space-2xl);
+  }
+}
+
+/* A stop the map could not place — the list stays the complete record. */
+.stopUnmapped {
+  margin-left: var(--space-sm);
+  font-size: var(--font-xs);
+  color: var(--color-text-muted);
+}
+
+/*
+ * The second heading inside the map's list card.
+ *
+ * `.sectionTitle` carries no top margin — it is written for a heading that
+ * opens a card. A second one following a list needs the gap, or "On this trip"
+ * sits directly on the last route stop.
+ */
+.secondSection {
+  margin-top: var(--space-lg);
+}
+
+/*
+ * The kind, as a badge rather than a word of grey.
+ *
+ * Same shape and same hues as the chips on the Bookings tab and the schedule:
+ * a reader who has learned that teal means "somewhere to sleep" on one screen
+ * should not have to learn it again on another.
+ */
+.kindBadge {
+  flex: none;
+  padding: 2px var(--space-sm);
+  border-radius: var(--radius-pill);
+  font-size: var(--font-xs);
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: 0.03em;
+}
+
+.badgeFlight,
+.badge_flight {
+  background-color: var(--color-kind-flight-soft);
+  color: var(--color-kind-flight);
+}
+
+.badge_hotel {
+  background-color: var(--color-kind-hotel-soft);
+  color: var(--color-kind-hotel);
+}
+
+.badge_activity {
+  background-color: var(--color-kind-activity-soft);
+  color: var(--color-kind-activity);
+}
+
+.badge_ticket {
+  background-color: var(--color-kind-ticket-soft);
+  color: var(--color-kind-ticket);
+}
+
+/* The bullet takes the same hue, so the row reads as one colour end to end. */
+.markerFlight,
+.marker_flight {
+  background-color: var(--color-kind-flight);
+}
+
+.marker_hotel {
+  background-color: var(--color-kind-hotel);
+}
+
+.marker_activity {
+  background-color: var(--color-kind-activity);
+}
+
+.marker_ticket {
+  background-color: var(--color-kind-ticket);
+}

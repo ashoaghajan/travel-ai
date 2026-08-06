@@ -1,0 +1,148 @@
+.frame {
+  position: relative;
+  /* Contains Leaflet's own z-index ladder (panes 200–700, controls 800–1000)
+     so a sticky map cannot rise above the app header at --z-header: 10. */
+  isolation: isolate;
+  overflow: hidden;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xl);
+  background-color: var(--color-map-water);
+  box-shadow: var(--shadow-soft);
+}
+
+.md {
+  aspect-ratio: 4 / 3;
+}
+
+.lg {
+  aspect-ratio: 4 / 3;
+}
+
+.map {
+  width: 100%;
+  height: 100%;
+}
+
+/* Leaflet writes its own classes onto elements it creates, so a CSS module
+   cannot hash them. Every rule below is nested under this module's `.frame`,
+   which scopes by ancestor while matching globally at the leaf. */
+
+.frame :global(.leaflet-container) {
+  font-family: var(--font-family-base);
+  background-color: var(--color-map-water);
+}
+
+/* Required by the OSM tile policy and deliberately not dismissible. */
+.frame :global(.leaflet-control-attribution) {
+  padding: 2px var(--space-sm);
+  background-color: var(--color-surface-translucent);
+  color: var(--color-text-muted);
+  font-size: var(--font-xs);
+}
+
+.frame :global(.leaflet-control-attribution a) {
+  color: var(--color-primary);
+}
+
+.frame :global(.leaflet-bar a) {
+  color: var(--color-text-main);
+  background-color: var(--color-surface);
+  border-color: var(--color-border);
+}
+
+.frame :global(.leaflet-bar a:focus-visible) {
+  box-shadow: var(--focus-ring);
+}
+
+/* Pins */
+
+/* The divIcon's own wrapper — Leaflet gives it no styling of its own. */
+.pinIcon {
+  background: none;
+  border: none;
+}
+
+.pin {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: var(--radius-pill);
+  background-color: var(--color-map-route);
+  color: var(--color-text-light);
+  font-size: var(--font-xs);
+  font-weight: var(--font-weight-semibold);
+  box-shadow:
+    0 0 0 3px var(--color-surface),
+    var(--shadow-soft);
+}
+
+.route {
+  stroke: var(--color-map-route);
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.tooltip {
+  padding: 3px var(--space-sm);
+  border: none;
+  border-radius: var(--radius-pill);
+  background-color: var(--color-surface);
+  color: var(--color-text-main);
+  font-size: var(--font-xs);
+  font-weight: var(--font-weight-medium);
+  box-shadow: var(--shadow-soft);
+}
+
+/* Leaflet's tooltip arrow, which the pill shape has no room for. */
+.tooltip::before {
+  display: none;
+}
+
+@media (min-width: 1024px) {
+  .lg {
+    aspect-ratio: 16 / 9;
+  }
+}
+
+/*
+ * A booked place: outlined rather than filled, so it reads as "something here"
+ * next to the solid numbered pins that read as "step N of the route".
+ */
+.placePin {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: 2px solid currentcolor;
+  border-radius: var(--radius-pill);
+  background-color: var(--color-surface);
+  box-shadow: 0 1px 4px rgb(0 0 0 / 30%);
+}
+
+/*
+ * One hue per kind, and the same hues the Bookings tab and the schedule use.
+ *
+ * Four outlined pins in one colour told the reader only "something is booked
+ * here"; the glyph alone is 14px of line art and is not doing that work at a
+ * glance. An airport borrows the flight colour, because that is what it is —
+ * the point a flight touches, not a fifth kind of thing.
+ */
+.placeHotel {
+  color: var(--color-kind-hotel);
+}
+
+.placeActivity {
+  color: var(--color-kind-activity);
+}
+
+.placeTicket {
+  color: var(--color-kind-ticket);
+}
+
+.placeAirport {
+  color: var(--color-kind-flight);
+}

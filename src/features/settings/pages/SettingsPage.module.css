@@ -1,0 +1,137 @@
+.page {
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+}
+
+.content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+  width: 100%;
+  max-width: 720px;
+  margin: 0 auto;
+  padding: var(--space-xl) var(--layout-content-padding) var(--space-2xl);
+}
+
+.error {
+  padding: var(--space-sm) var(--space-lg);
+  border-radius: var(--radius-md);
+  background-color: var(--color-danger-soft);
+  color: var(--color-danger);
+  font-size: var(--font-sm);
+}
+
+/* Theme segmented control ---------------------------------------------- */
+.fieldset {
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.segmented {
+  display: flex;
+  gap: var(--space-xs);
+  padding: var(--space-xs);
+  border-radius: var(--radius-pill);
+  background-color: var(--color-surface-muted);
+}
+
+.segment {
+  flex: 1;
+  padding: var(--space-sm) var(--space-lg);
+  border-radius: var(--radius-pill);
+  text-align: center;
+  font-size: var(--font-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-muted);
+  cursor: pointer;
+  transition:
+    background-color var(--transition-fast),
+    color var(--transition-fast);
+}
+
+.segment[data-checked='true'] {
+  background-color: var(--color-surface);
+  color: var(--color-primary);
+  font-weight: var(--font-weight-semibold);
+  box-shadow: var(--shadow-soft);
+}
+
+/* Keeps the focus ring visible even though the radio itself is hidden. */
+.segment:has(input:focus-visible) {
+  box-shadow: var(--focus-ring);
+}
+
+/*
+ * The one place the surface tokens have to be swapped rather than inherited.
+ * `--color-surface` is lighter than `--color-surface-muted` in the light theme
+ * and darker in the dark one, so the selected pill above would lift on light
+ * and sink on dark. Recessing the track instead keeps the pill the raised
+ * element in both, and the dark shadows are strong enough to seal it.
+ */
+:root[data-theme='dark'] .segmented {
+  background-color: var(--color-background);
+}
+
+:root[data-theme='dark'] .segment[data-checked='true'] {
+  background-color: var(--color-surface-muted);
+}
+
+/* Storage usage -------------------------------------------------------- */
+.usage {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  margin: 0;
+}
+
+.usageRow {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-lg);
+}
+
+.usageLabel {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-sm);
+  font-size: var(--font-sm);
+  color: var(--color-text-muted);
+}
+
+.unused {
+  font-size: var(--font-xs);
+  color: var(--color-text-muted);
+  opacity: 0.75;
+}
+
+.usageValue {
+  margin: 0;
+  font-size: var(--font-sm);
+  font-weight: var(--font-weight-semibold);
+  font-variant-numeric: tabular-nums;
+}
+
+.usageTotal {
+  padding-top: var(--space-md);
+  border-top: 1px solid var(--color-border);
+}
+
+.usageTotal .usageLabel {
+  color: var(--color-text-main);
+  font-weight: var(--font-weight-medium);
+}
+
+.footnote {
+  font-size: var(--font-xs);
+  color: var(--color-text-muted);
+}
+
+.code {
+  padding: 1px var(--space-xs);
+  border-radius: var(--radius-sm);
+  background-color: var(--color-surface-muted);
+  font-size: 0.95em;
+}

@@ -1,0 +1,130 @@
+@import "./tokens.css";
+
+/* -------------------------------------------------------------------------
+ * Reset
+ * ---------------------------------------------------------------------- */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+* {
+  margin: 0;
+}
+
+/**
+ * Puts back what the line above takes away.
+ *
+ * `showModal()` centres a dialog using `margin: auto` from the UA stylesheet,
+ * and `* { margin: 0 }` outranks it — so every modal in the app opened flush
+ * against the top-left corner instead of the middle of the screen. It belongs
+ * here rather than in each dialog's own module: the reset is what broke it,
+ * and there are four of them.
+ */
+dialog:modal {
+  margin: auto;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  min-height: 100dvh;
+  font-family: var(--font-family-base);
+  font-size: var(--font-md);
+  line-height: var(--line-height-base);
+  color: var(--color-text-main);
+  background-color: var(--color-background);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+#root {
+  min-height: 100dvh;
+  isolation: isolate;
+}
+
+img,
+picture,
+svg,
+video {
+  display: block;
+  max-width: 100%;
+}
+
+input,
+button,
+textarea,
+select {
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+h1,
+h2,
+h3,
+h4 {
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--line-height-snug);
+  text-wrap: balance;
+}
+
+p {
+  text-wrap: pretty;
+}
+
+/* -------------------------------------------------------------------------
+ * Focus — always visible, never a heavy black outline (DESIGN_SPEC §4)
+ * ---------------------------------------------------------------------- */
+:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+  border-radius: var(--radius-sm);
+}
+
+/* -------------------------------------------------------------------------
+ * Utilities
+ * ---------------------------------------------------------------------- */
+/**
+ * Available to screen readers, invisible on screen, and — thanks to the
+ * negative margin — contributing no scrollable area.
+ *
+ * Absolute positioning takes the element out of normal flow but *not* out of
+ * its container's overflow calculation. Left at its static position, the live
+ * region at the end of `RootLayout` lands one pixel below a full-height shell
+ * and gives the document a second scrollbar. The negative margin pulls that
+ * pixel back inside.
+ */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

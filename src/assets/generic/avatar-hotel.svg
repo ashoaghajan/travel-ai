@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 72 72" width="72" height="72" role="img" aria-label="">
+  <defs>
+    <linearGradient id="hotelDusk" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#14b8a6" />
+      <stop offset="1" stop-color="#0b6b62" />
+    </linearGradient>
+  </defs>
+
+  <rect width="72" height="72" fill="url(#hotelDusk)" />
+  <circle cx="36" cy="34" r="21" fill="#ffffff" opacity="0.12" />
+
+  <!-- A building with lit windows: the one thing that reads as "somewhere to
+       stay" at this size, rather than as a generic block. -->
+  <path d="M22 50V29l14-8 14 8v21Z" fill="#ffffff" />
+  <g fill="#0b6b62" opacity="0.85">
+    <rect x="27" y="32" width="5" height="5" rx="1" />
+    <rect x="34" y="32" width="5" height="5" rx="1" />
+    <rect x="41" y="32" width="5" height="5" rx="1" />
+    <rect x="27" y="40" width="5" height="5" rx="1" />
+    <rect x="41" y="40" width="5" height="5" rx="1" />
+  </g>
+  <rect x="33" y="41" width="7" height="9" rx="1.4" fill="#0b6b62" opacity="0.45" />
+  <rect x="18" y="50" width="36" height="3" rx="1.5" fill="#ffffff" opacity="0.9" />
+</svg>

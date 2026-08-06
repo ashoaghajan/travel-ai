@@ -1,0 +1,51 @@
+/*
+ * The control itself is styled by the form that hosts this (its `.control`
+ * class arrives as `className`) so the box matches the country `<select>`
+ * beside it. Only the popup belongs here.
+ */
+.root {
+  position: relative;
+  display: flex;
+  min-width: 0;
+}
+
+.control {
+  width: 100%;
+  min-width: 0;
+}
+
+.list {
+  position: absolute;
+  z-index: var(--z-overlay);
+  top: calc(100% + var(--space-xs));
+  left: 0;
+  right: 0;
+  max-height: 320px;
+  overflow-y: auto;
+  margin: 0;
+  padding: var(--space-xs);
+  list-style: none;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background-color: var(--color-surface);
+  box-shadow: var(--shadow-card);
+}
+
+.option {
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-sm);
+  color: var(--color-text-main);
+  cursor: pointer;
+}
+
+/* One highlight, driven by keyboard and pointer alike — see `active` in the
+   component. A separate :hover rule would let two rows look chosen at once. */
+.active {
+  background-color: var(--color-primary-soft);
+}
+
+.option[aria-selected='true'] {
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-primary);
+}

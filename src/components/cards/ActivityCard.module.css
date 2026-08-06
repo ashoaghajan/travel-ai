@@ -1,0 +1,190 @@
+.card {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+
+/* Containing block for the stretched title link below. */
+.clickable {
+  position: relative;
+  transition:
+    transform var(--transition-fast),
+    box-shadow var(--transition-fast);
+}
+
+.clickable:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-card-hover, var(--shadow-card));
+}
+
+/* The ring belongs to the card, not to the two words of the title. */
+.clickable:focus-within {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+.titleLink {
+  color: inherit;
+  text-decoration: none;
+}
+
+.titleLink::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+}
+
+.titleLink:focus-visible {
+  outline: none;
+}
+
+/*
+ * Large photo (DESIGN_SPEC Screen 6), but not unboundedly large.
+ *
+ * `aspect-ratio` alone ties the height to the card's width, which is fine in
+ * the explorer's three-column grid and wrong everywhere the card runs the full
+ * width of a page — a 700px-wide card was giving itself a 470px-tall
+ * photograph and pushing the title off the fold. The cap wins over the ratio
+ * past ~360px wide, and `object-fit: cover` crops rather than squashes, so the
+ * picture still fills the frame at any size.
+ */
+.media {
+  position: relative;
+  aspect-ratio: 3 / 2;
+  max-height: 240px;
+  overflow: hidden;
+  background-image: linear-gradient(140deg, var(--color-primary-soft), var(--color-surface-muted));
+}
+
+.image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.categoryBadge {
+  position: absolute;
+  top: var(--space-md);
+  left: var(--space-md);
+  padding: var(--space-xs) var(--space-md);
+  border-radius: var(--radius-pill);
+  background-color: var(--color-surface);
+  color: var(--color-primary);
+  font-size: var(--font-xs);
+  font-weight: var(--font-weight-semibold);
+  box-shadow: var(--shadow-soft);
+}
+
+/**
+ * Photo credit — the CC licences these images carry require it, so it has to
+ * be legible, but it is not what anyone came to read. Sits along the bottom
+ * edge over a scrim so it stays readable whatever the photo is doing.
+ */
+/* Above the stretched link, so the attribution stays reachable. */
+.credit {
+  position: absolute;
+  z-index: 1;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  padding: var(--space-lg) var(--space-md) var(--space-xs);
+  background-image: linear-gradient(to top, rgb(0 0 0 / 55%), transparent);
+  color: rgb(255 255 255 / 85%);
+  font-size: 0.6875rem;
+  line-height: 1.3;
+  text-align: right;
+  text-decoration: none;
+  /* One line, however long the photographer's name is. */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.credit:hover,
+.credit:focus-visible {
+  color: rgb(255 255 255);
+  text-decoration: underline;
+}
+
+.body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: var(--space-xs);
+  padding: var(--space-lg);
+}
+
+.title {
+  font-size: var(--font-md);
+  font-weight: var(--font-weight-semibold);
+}
+
+.description {
+  font-size: var(--font-sm);
+  color: var(--color-text-muted);
+}
+
+/* Rating -------------------------------------------------------------- */
+.rating {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  font-size: var(--font-sm);
+}
+
+.star {
+  color: var(--color-warning);
+}
+
+.ratingValue {
+  font-weight: var(--font-weight-semibold);
+  font-variant-numeric: tabular-nums;
+}
+
+.reviews {
+  color: var(--color-text-muted);
+  font-size: var(--font-xs);
+}
+
+/* Price pinned to the bottom so cards in a row line up. */
+.priceRow {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-xs);
+  margin-top: auto;
+  padding-top: var(--space-md);
+}
+
+.price {
+  font-size: var(--font-lg);
+  font-weight: var(--font-weight-bold);
+  font-variant-numeric: tabular-nums;
+}
+
+.perPerson {
+  font-size: var(--font-xs);
+  color: var(--color-text-muted);
+}
+
+/*
+ * Raised above the stretched title link, for the same reason the photo credit
+ * is: the overlay covers the whole card, and a button underneath it can be
+ * seen but never clicked.
+ */
+.actions {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+  margin-top: var(--space-sm);
+}
+
+/* Stands in for the price row on a listing nobody has quoted — same treatment
+   as an unpriced stay in `HotelCard.module.css`. */
+.unpriced {
+  margin: 0;
+  font-size: var(--font-xs);
+  color: var(--color-text-muted);
+}

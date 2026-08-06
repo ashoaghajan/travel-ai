@@ -1,0 +1,26 @@
+.note {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  margin: 0;
+  font-size: var(--font-xs);
+  color: var(--color-text-muted);
+}
+
+.dot {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: var(--radius-pill);
+  background-color: var(--color-success);
+}
+
+/* Amber rather than red: a sample price is a caveat, not a failure. */
+.sample .dot {
+  background-color: var(--color-warning);
+}
+
+/* Neutral: shifted dates are information, not a warning. */
+.vary .dot {
+  background-color: var(--color-text-muted);
+}

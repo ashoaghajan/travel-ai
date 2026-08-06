@@ -1,0 +1,84 @@
+.selector {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+/* Stacked on mobile; country, city and the button share a row from tablet up. */
+.fields {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  min-width: 0;
+}
+
+.label {
+  font-size: var(--font-xs);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-muted);
+}
+
+.control {
+  width: 100%;
+  min-width: 0;
+  padding: var(--space-sm) var(--space-md);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background-color: var(--color-surface);
+  color: var(--color-text);
+  font-size: var(--font-sm);
+  /* Match the button's height so the row lines up. */
+  min-height: 2.75rem;
+}
+
+.control::placeholder {
+  color: var(--color-text-muted);
+}
+
+.control:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 1px;
+  border-color: var(--color-primary);
+}
+
+.control:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.revert {
+  font-size: var(--font-xs);
+  color: var(--color-text-muted);
+}
+
+.revertButton {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--color-primary);
+  font: inherit;
+  font-weight: var(--font-weight-semibold);
+  cursor: pointer;
+}
+
+.revertButton:hover {
+  text-decoration: underline;
+}
+
+@media (min-width: 768px) {
+  .fields {
+    flex-direction: row;
+    align-items: flex-end;
+    max-width: 46rem;
+  }
+
+  .field {
+    flex: 1;
+  }
+}

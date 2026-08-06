@@ -1,0 +1,154 @@
+.page {
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+}
+
+.content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+  width: 100%;
+  max-width: var(--layout-max-width);
+  margin: 0 auto;
+  padding: var(--space-xl) var(--layout-content-padding) var(--space-2xl);
+}
+
+/* Identity ------------------------------------------------------------- */
+.identity {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-lg);
+}
+
+.identityText {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  min-width: 0;
+}
+
+.name {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  font-size: var(--font-lg);
+  font-weight: var(--font-weight-semibold);
+}
+
+.badge {
+  padding: 2px var(--space-md);
+  border-radius: var(--radius-pill);
+  background-color: var(--color-primary-soft);
+  color: var(--color-primary);
+  font-size: var(--font-xs);
+  font-weight: var(--font-weight-semibold);
+}
+
+.identityMeta {
+  max-width: 46ch;
+  font-size: var(--font-sm);
+  color: var(--color-text-muted);
+}
+
+.signIn {
+  width: 100%;
+}
+
+.status {
+  min-height: 1.2em;
+  font-size: var(--font-xs);
+  color: var(--color-primary);
+}
+
+/* Stats ---------------------------------------------------------------- */
+.stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-md);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  height: 100%;
+  text-align: center;
+}
+
+.statValue {
+  font-size: var(--font-xl);
+  font-weight: var(--font-weight-bold);
+  font-variant-numeric: tabular-nums;
+}
+
+.statLabel {
+  font-size: var(--font-xs);
+  color: var(--color-text-muted);
+}
+
+/* Recent trips --------------------------------------------------------- */
+.trips {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+}
+
+.tripsHeader {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-lg);
+}
+
+.tripsTitle {
+  font-size: var(--font-lg);
+  font-weight: var(--font-weight-semibold);
+}
+
+.viewAll {
+  font-size: var(--font-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-primary);
+}
+
+.tripGrid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--space-lg);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+@media (min-width: 480px) {
+  .signIn {
+    width: auto;
+    margin-left: auto;
+  }
+}
+
+@media (min-width: 768px) {
+  .tripGrid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (min-width: 1024px) {
+  .content {
+    padding: var(--space-2xl);
+  }
+
+  .stats {
+    gap: var(--space-lg);
+  }
+
+  .tripGrid {
+    grid-template-columns: repeat(3, 1fr);
+    gap: var(--space-xl);
+  }
+}

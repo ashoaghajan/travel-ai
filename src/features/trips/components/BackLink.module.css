@@ -1,0 +1,17 @@
+.back {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-md);
+  color: var(--color-text-muted);
+  transition:
+    background-color var(--transition-fast),
+    color var(--transition-fast);
+}
+
+.back:hover {
+  background-color: var(--color-surface-muted);
+  color: var(--color-text-main);
+}

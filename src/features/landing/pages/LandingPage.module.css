@@ -1,0 +1,198 @@
+/**
+ * Landing page — DESIGN_SPEC Screen 1.
+ * Mobile first; tablet (>=768px) and desktop (>=1024px) refinements below.
+ */
+
+.page {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-height: 100dvh;
+  color: var(--color-text-light);
+}
+
+/* -------------------------------------------------------------------------
+ * Full-screen travel photograph + dark overlay
+ * ---------------------------------------------------------------------- */
+.background {
+  position: absolute;
+  inset: 0;
+  z-index: var(--z-background);
+  overflow: hidden;
+  background-color: var(--color-photo-placeholder);
+}
+
+.backgroundPicture,
+.backgroundImage {
+  width: 100%;
+  height: 100%;
+}
+
+.backgroundImage {
+  object-fit: cover;
+  object-position: center;
+}
+
+.overlay {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    180deg,
+    var(--color-overlay-top) 0%,
+    var(--color-overlay-mid) 34%,
+    var(--color-overlay-bottom) 100%
+  );
+}
+
+/* -------------------------------------------------------------------------
+ * Logo area
+ * ---------------------------------------------------------------------- */
+.header {
+  position: relative;
+  z-index: var(--z-header);
+  width: 100%;
+  max-width: var(--layout-max-width);
+  margin: 0 auto;
+  padding: var(--space-xl) var(--layout-content-padding);
+}
+
+.brandLink {
+  display: inline-flex;
+  border-radius: var(--radius-lg);
+}
+
+.brandLink:focus-visible {
+  box-shadow: var(--focus-ring-on-dark);
+}
+
+/* -------------------------------------------------------------------------
+ * Content column
+ * ---------------------------------------------------------------------- */
+.main {
+  position: relative;
+  z-index: var(--z-content);
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: var(--space-3xl);
+  width: 100%;
+  max-width: var(--layout-max-width);
+  margin: 0 auto;
+  padding: var(--space-2xl) var(--layout-content-padding) var(--space-2xl);
+}
+
+.hero {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xl);
+  max-width: 620px;
+  padding-top: var(--space-lg);
+}
+
+.headline {
+  font-size: clamp(var(--font-xl), 6vw, var(--font-2xl));
+  font-weight: var(--font-weight-bold);
+  line-height: var(--line-height-tight);
+  letter-spacing: -0.02em;
+  color: var(--color-text-light);
+  text-shadow: var(--shadow-text-on-photo);
+}
+
+.subtitle {
+  display: flex;
+  flex-direction: column;
+  font-size: var(--font-md);
+  line-height: var(--line-height-snug);
+  color: var(--color-text-on-overlay-muted);
+  text-shadow: var(--shadow-text-on-photo-soft);
+}
+
+.subtitleLine {
+  display: block;
+}
+
+.actions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+.actions > * {
+  width: 100%;
+}
+
+/* -------------------------------------------------------------------------
+ * Feature cards
+ * ---------------------------------------------------------------------- */
+.featureGrid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--space-lg);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* -------------------------------------------------------------------------
+ * Tablet — 768px and above
+ * ---------------------------------------------------------------------- */
+@media (min-width: 768px) {
+  .header,
+  .main {
+    padding-right: var(--space-2xl);
+    padding-left: var(--space-2xl);
+  }
+
+  .main {
+    padding-bottom: var(--space-3xl);
+    gap: var(--space-4xl);
+  }
+
+  .hero {
+    gap: var(--space-2xl);
+    padding-top: var(--space-2xl);
+  }
+
+  .subtitle {
+    font-size: var(--font-lg);
+  }
+
+  .actions {
+    flex-direction: row;
+    align-items: center;
+  }
+
+  .actions > * {
+    width: auto;
+  }
+
+  .featureGrid {
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  }
+}
+
+/* -------------------------------------------------------------------------
+ * Desktop — 1024px and above
+ * ---------------------------------------------------------------------- */
+@media (min-width: 1024px) {
+  .header {
+    padding-top: var(--space-2xl);
+  }
+
+  .main {
+    padding-bottom: var(--space-4xl);
+  }
+
+  .hero {
+    padding-top: var(--space-4xl);
+  }
+
+  .featureGrid {
+    gap: var(--space-xl);
+  }
+}
+
+.main:focus {
+  outline: none;
+}

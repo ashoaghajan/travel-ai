@@ -1,0 +1,74 @@
+/* Copied from BookingsPage.module.css, which these rules used to live in —
+   CSS Modules scope per file, so there is nothing to share across them. */
+
+.browser {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+}
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2xl);
+}
+
+.panel:focus-visible {
+  box-shadow: var(--focus-ring);
+  border-radius: var(--radius-lg);
+}
+
+.deals {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+.dealsHeader {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.dealsTitle {
+  font-size: var(--font-md);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-main);
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.skeletonCard {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+.error {
+  font-size: var(--font-sm);
+  color: var(--color-danger);
+}
+
+/*
+ * Which nights of the trip still need a bed.
+ *
+ * Beside the price note rather than above the list: both answer "what should I
+ * know before I pick one of these", and splitting them puts two notices in two
+ * places saying related things.
+ */
+.coverage {
+  font-size: var(--font-sm);
+  color: var(--color-text-muted);
+}
+
+/* The outbound/return picker, above the fares it decides. */
+.legs {
+  margin-bottom: var(--space-md);
+}
