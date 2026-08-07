@@ -3,6 +3,15 @@
   top: 0;
   z-index: var(--z-header);
   display: flex;
+  /*
+   * Wraps so the actions drop to their own row rather than squeezing the
+   * title out of existence. Without this, a narrow screen gave the title
+   * whatever the buttons left over — which on /trips was about 30px, enough
+   * to render "Your Trips" as "Y." and stack "0 saved trips" one word per
+   * line. The title is the one thing on the row that cannot be re-found by
+   * scrolling, so it is the one thing that must not shrink.
+   */
+  flex-wrap: wrap;
   align-items: center;
   gap: var(--space-md);
   padding: var(--space-lg) var(--layout-content-padding);
@@ -16,8 +25,15 @@
   align-items: center;
 }
 
+/*
+ * `12rem` is a floor, not a width: flex lines are formed from this basis
+ * before any shrinking happens, so it is what decides that the actions wrap
+ * instead of the title collapsing. It still shrinks below that once the
+ * actions are out of the way, which is why `min-width: 0` stays.
+ */
 .titles {
   display: flex;
+  flex: 1 1 12rem;
   flex-direction: column;
   gap: 2px;
   min-width: 0;
@@ -27,9 +43,12 @@
   font-size: var(--font-lg);
   font-weight: var(--font-weight-semibold);
   letter-spacing: -0.01em;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  /*
+   * Wraps rather than truncates. A page title is the answer to "where am I",
+   * and an ellipsis on a two-word title answers it worse than a second line
+   * costs.
+   */
+  overflow-wrap: break-word;
 }
 
 .subtitle {
@@ -39,6 +58,9 @@
 
 .actions {
   display: flex;
+  /* Never compressed: buttons that shrink below their label are unreadable,
+     and wrapping to a second row is the better answer at that point. */
+  flex: none;
   align-items: center;
   gap: var(--space-sm);
   margin-left: auto;

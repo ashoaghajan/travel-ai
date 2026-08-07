@@ -12,9 +12,17 @@
   display: none;
 }
 
+/*
+ * Shrinks on small screens. `flex-shrink: 0` meant three tabs kept their full
+ * padding at any width and the last one was pushed past the edge — and since
+ * `.tabs` hides its scrollbar, "Multi-city" simply looked cut in half rather
+ * than scrollable. The labels are short enough to share the row instead; the
+ * 768px block below restores the roomier desktop sizing.
+ */
 .tab {
-  flex: 1 0 auto;
-  padding: var(--space-sm) var(--space-lg);
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: var(--space-sm) var(--space-md);
   border: 0;
   border-radius: var(--radius-pill);
   background-color: transparent;

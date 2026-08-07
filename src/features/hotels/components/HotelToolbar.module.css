@@ -1,5 +1,16 @@
+/*
+ * Wraps instead of scrolling.
+ *
+ * These three controls are the whole toolbar, not the start of a long list, so
+ * scrolling was never going to be discovered — and with the scrollbar hidden
+ * the third pill simply looked sliced off at the edge. Wrapping puts Map on a
+ * second row on the narrowest screens and keeps everything reachable without
+ * a gesture nothing advertises. `overflow-x` stays as a floor for the case
+ * where one pill is somehow wider than the screen.
+ */
 .toolbar {
   display: flex;
+  flex-wrap: wrap;
   gap: var(--space-sm);
   overflow-x: auto;
   scrollbar-width: none;
