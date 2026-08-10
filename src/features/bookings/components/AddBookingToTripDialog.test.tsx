@@ -7,9 +7,10 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import type { Booking, BookingDraft } from '../../../types/booking.types';
 import type { Trip } from '../../../types/trip.types';
-import { STORAGE_KEYS, storageService } from '../../../services/localStorage.service';
 import { AddBookingToTripDialog } from './AddBookingToTripDialog';
 import { seedTrips } from '../../../test/seedTrips';
+import { BookingAlreadyOnTripError, bookingService } from '../../../services/booking.service';
+import { bookingStore } from '../../../store/booking.store';
 
 // jsdom does not implement the native dialog methods.
 beforeEach(async () => {
@@ -20,7 +21,7 @@ beforeEach(async () => {
     this.open = false;
   });
 
-  storageService.remove(STORAGE_KEYS.bookings);
+  fakeBookingsApi();
   await seedTrips([makeTrip()]);
 
   // Reset, then load: the store caches its first fetch, and priming it here
@@ -65,8 +66,59 @@ function open(drafts = [makeDraft()], onAdded = vi.fn()) {
   return onAdded;
 }
 
+/**
+ * An in-memory stand-in for the bookings API.
+ *
+ * The dialog writes over HTTP now. These tests are about what it records — one
+ * booking or two, with which dates and which reference — so `saved` stands
+ * where localStorage used to.
+ */
+let saved: Booking[] = [];
+
+function fakeBookingsApi() {
+  saved = [];
+
+  // The store caches its first load, so a later case would otherwise keep
+  // serving whatever an earlier one seeded.
+  bookingStore.reset();
+
+  vi.spyOn(bookingService, 'getBookings').mockImplementation(async () => saved);
+
+  vi.spyOn(bookingService, 'create').mockImplementation(async (draft) => {
+    // The rule the server enforces: the same search result cannot be filed
+    // against the same trip twice.
+    const clash =
+      draft.source &&
+      draft.tripId &&
+      saved.some(
+        (booking) =>
+          booking.tripId === draft.tripId &&
+          booking.source?.resultId === draft.source?.resultId,
+      );
+
+    if (clash) throw new BookingAlreadyOnTripError(draft.title);
+
+    const booking = {
+      ...draft,
+      id: `bkg_${saved.length + 1}`,
+      createdAt: 'x',
+      updatedAt: 'x',
+    } as Booking;
+
+    saved = [booking, ...saved];
+    return booking;
+  });
+}
+
 function stored(): Booking[] {
-  return storageService.get<Booking[]>(STORAGE_KEYS.bookings, []);
+  // Oldest first, so a round trip reads outbound then return.
+  return [...saved].reverse();
+}
+
+async function seedBookings(bookings: Booking[]) {
+  saved = [...bookings];
+  bookingStore.reset();
+  await bookingStore.refresh();
 }
 
 describe('AddBookingToTripDialog', () => {
@@ -271,7 +323,7 @@ describe('AddBookingToTripDialog', () => {
       await userEvent.type(screen.getByLabelText('Check-out'), '2027-10-05');
       await userEvent.click(screen.getByRole('button', { name: 'Add to trip' }));
 
-      const saved = storageService.get<Booking[]>(STORAGE_KEYS.bookings, []);
+      const saved = stored();
       expect(saved[0].date).toBe('2027-10-02');
       expect(saved[0].endDate).toBe('2027-10-05');
       // Three nights, not the four the draft was captured with.
@@ -284,8 +336,8 @@ describe('AddBookingToTripDialog', () => {
      * nights an existing stay already covered, so a second hotel could be
      * booked over the top of the first.
      */
-    it('bounds the picker to the free nights, not the whole trip', () => {
-      storageService.set(STORAGE_KEYS.bookings, [
+    it('bounds the picker to the free nights, not the whole trip', async () => {
+      await seedBookings([
         {
           id: 'existing',
           tripId: 'trip_1',

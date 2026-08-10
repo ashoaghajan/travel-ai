@@ -55,7 +55,7 @@ describe('POST /api/migrate/local', () => {
       .send({ trips: [localTrip('trip_a'), localTrip('trip_b')] })
       .expect(200);
 
-    expect(response.body).toEqual({ alreadyMigrated: false, imported: 2 });
+    expect(response.body).toEqual({ alreadyMigrated: false, imported: 2, importedBookings: 0 });
 
     const list = await api().get(TRIPS).set('Authorization', auth).expect(200);
     expect(list.body).toHaveLength(2);
@@ -151,6 +151,90 @@ describe('POST /api/migrate/local', () => {
     expect(me.body.activeTripId).toBeNull();
   });
 
+  it('brings the bookings across with their trips', async () => {
+    const { accessToken } = await signUp();
+    const auth = `Bearer ${accessToken}`;
+
+    const response = await api()
+      .post(MIGRATE)
+      .set('Authorization', auth)
+      .send({
+        trips: [localTrip('trip_a')],
+        bookings: [
+          {
+            id: 'bkg_1',
+            tripId: 'trip_a',
+            kind: 'flight',
+            status: 'booked',
+            title: 'Air Arabia',
+            date: '2027-09-11',
+            reference: 'ABC123',
+          },
+        ],
+      })
+      .expect(200);
+
+    expect(response.body.importedBookings).toBe(1);
+
+    const list = await api().get('/api/bookings').set('Authorization', auth).expect(200);
+    expect(list.body[0]).toMatchObject({ id: 'bkg_1', tripId: 'trip_a', reference: 'ABC123' });
+  });
+
+  it('imports a booking whose trip is not in the payload, unassigned', async () => {
+    const { accessToken } = await signUp();
+    const auth = `Bearer ${accessToken}`;
+
+    await api()
+      .post(MIGRATE)
+      .set('Authorization', auth)
+      .send({
+        trips: [],
+        bookings: [
+          {
+            id: 'bkg_orphan',
+            tripId: 'trip_deleted_long_ago',
+            kind: 'flight',
+            status: 'booked',
+            title: 'Air Arabia',
+            date: '2027-09-11',
+            reference: 'ABC123',
+          },
+        ],
+      })
+      .expect(200);
+
+    // Exactly what the app already shows for a booking whose trip was
+    // deleted. Losing a confirmation number over a dangling pointer would be
+    // the worse outcome.
+    const list = await api().get('/api/bookings').set('Authorization', auth).expect(200);
+    expect(list.body[0]).toMatchObject({ tripId: null, reference: 'ABC123' });
+  });
+
+  it('does not duplicate bookings when run twice', async () => {
+    const { accessToken } = await signUp();
+    const auth = `Bearer ${accessToken}`;
+    const payload = {
+      trips: [localTrip('trip_a')],
+      bookings: [
+        {
+          id: 'bkg_1',
+          tripId: 'trip_a',
+          kind: 'flight',
+          status: 'saved',
+          title: 'Air Arabia',
+          date: '2027-09-11',
+          reference: '',
+        },
+      ],
+    };
+
+    await api().post(MIGRATE).set('Authorization', auth).send(payload).expect(200);
+    await api().post(MIGRATE).set('Authorization', auth).send(payload).expect(200);
+
+    const list = await api().get('/api/bookings').set('Authorization', auth).expect(200);
+    expect(list.body).toHaveLength(1);
+  });
+
   it('accepts an empty payload', async () => {
     const { accessToken } = await signUp();
 
@@ -211,6 +295,6 @@ describe('POST /api/migrate/local', () => {
       .send({ trips: [localTrip('trip_a')] })
       .expect(200);
 
-    expect(retry.body).toEqual({ alreadyMigrated: false, imported: 1 });
+    expect(retry.body).toEqual({ alreadyMigrated: false, imported: 1, importedBookings: 0 });
   });
 });

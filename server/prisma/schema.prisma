@@ -62,6 +62,7 @@ model User {
   identities    AuthIdentity[]
   trips         Trip[]         @relation("OwnedTrips")
   settings      UserSettings?
+  bookings      Booking[]
 }
 
 /// App preferences, one row per account.
@@ -157,10 +158,83 @@ model Trip {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  activeFor User[] @relation("ActiveTrip")
+  activeFor User[]    @relation("ActiveTrip")
+  bookings  Booking[]
 
   @@unique([userId, draftId])
   @@index([userId, createdAt(sort: Desc)])
+}
+
+/// A flight, stay, ticket or activity the reader has saved or booked.
+///
+/// One user-scoped collection rather than four tables and rather than a field
+/// on `Trip`. A booking outlives the search that produced it, and it can exist
+/// before anyone has decided which trip it belongs to — so it is its own
+/// record with a nullable pointer, not a child of one.
+model Booking {
+  /// Client-format (`bk_<uuid>`), like a trip's, and for the same reason: the
+  /// localStorage import preserves ids so that re-running it cannot duplicate.
+  id     String @id
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  /// The trip this belongs to, or null for one attached to nothing yet.
+  ///
+  /// `SetNull`, deliberately, and it is the whole reason this is a relation
+  /// rather than a loose string. Deleting a trip must not destroy the
+  /// confirmation number for a flight that was actually paid for — the
+  /// booking becomes unassigned and the reader can still find it. An itinerary
+  /// activity is a guess; a booking is a fact, and facts survive the plan
+  /// they were made under.
+  tripId String?
+  trip   Trip?   @relation(fields: [tripId], references: [id], onDelete: SetNull)
+
+  /// 'flight' | 'hotel' | 'ticket' | 'activity'. Strings, not enums — see the
+  /// header.
+  kind String
+  /// 'saved' | 'booked'.
+  status String @default("saved")
+
+  title String
+
+  /// ISO calendar date, `YYYY-MM-DD`. Empty when unknown, which is a group of
+  /// its own on the bookings tab rather than a guess at the trip's start.
+  date String
+
+  /// Check-out, for a stay. `date` is the check-in. Only a hotel has one: a
+  /// flight happens on a day, a stay occupies a range, and the nights in that
+  /// range are what a nightly rate multiplies by.
+  endDate String?
+
+  /// Confirmation number, as the provider issued it. Empty until booked.
+  ///
+  /// Stored plainly. A booking reference is not a credential — it is useful
+  /// only to someone who already has the airline's site open — and the
+  /// account scoping is the protection that matters.
+  reference String @default("")
+
+  /// What it cost, once known. Null is not zero.
+  price Float?
+
+  /// What `price` measures, so a total can add it to other prices correctly:
+  /// a hotel's is per night, a flight's is per person. Null means the price is
+  /// already a total, which is true of every hand-typed one — and is the safe
+  /// default, because it makes an old row sum exactly as it always did.
+  priceBasis Json?
+
+  /// The confirmation page, if the reader has one.
+  url String?
+
+  /// A copy of the search result this came from — provider, image, deep link,
+  /// the price as quoted. A snapshot rather than a reference: the search that
+  /// produced it will not return the same row tomorrow.
+  source Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([tripId])
 }
 
 /// One external account someone can sign in with.

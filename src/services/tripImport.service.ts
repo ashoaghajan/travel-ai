@@ -1,3 +1,4 @@
+import type { Booking } from '../types/booking.types';
 import type { Trip } from '../types/trip.types';
 import { http } from './http';
 import { STORAGE_KEYS, archiveKey, storageService } from './localStorage.service';
@@ -26,11 +27,12 @@ type Marker = {
 type MigrateResponse = {
   alreadyMigrated: boolean;
   imported: number;
+  importedBookings: number;
 };
 
 export type ImportOutcome =
   | { status: 'skipped' }
-  | { status: 'imported'; count: number }
+  | { status: 'imported'; trips: number; bookings: number }
   | { status: 'failed' };
 
 /**
@@ -43,6 +45,12 @@ function readLocalTrips(): Trip[] {
   const trips = storageService.get<Trip[]>(STORAGE_KEYS.trips, []);
 
   return Array.isArray(trips) ? trips : [];
+}
+
+function readLocalBookings(): Booking[] {
+  const bookings = storageService.get<Booking[]>(STORAGE_KEYS.bookings, []);
+
+  return Array.isArray(bookings) ? bookings : [];
 }
 
 function readMarker(): Marker | null {
@@ -71,7 +79,7 @@ function writeMarker(userId: string, imported: number): void {
  * local backup" for when they are satisfied.
  */
 function archiveImportedKeys(userId: string): void {
-  for (const key of [STORAGE_KEYS.trips, STORAGE_KEYS.activeTripId]) {
+  for (const key of [STORAGE_KEYS.trips, STORAGE_KEYS.activeTripId, STORAGE_KEYS.bookings]) {
     const value = storageService.get<unknown>(key, undefined);
     if (value === undefined) continue;
 
@@ -100,10 +108,12 @@ export const tripImportService = {
     if (marker?.userId === userId) return { status: 'skipped' };
 
     const trips = readLocalTrips();
+    const bookings = readLocalBookings();
 
     // The common case by far, and it must cost nothing: a new account on a
-    // fresh browser has no local trips to hand over.
-    if (trips.length === 0) {
+    // fresh browser has nothing to hand over. Bookings count too — someone can
+    // have saved a fare without ever creating a trip.
+    if (trips.length === 0 && bookings.length === 0) {
       writeMarker(userId, 0);
       return { status: 'skipped' };
     }
@@ -111,14 +121,22 @@ export const tripImportService = {
     const activeTripId = storageService.get<string | null>(STORAGE_KEYS.activeTripId, null);
 
     try {
-      const result = await http.post<MigrateResponse>('/migrate/local', { trips, activeTripId });
+      const result = await http.post<MigrateResponse>('/migrate/local', {
+        trips,
+        bookings,
+        activeTripId,
+      });
 
       archiveImportedKeys(userId);
       writeMarker(userId, result.imported);
 
       return result.alreadyMigrated
         ? { status: 'skipped' }
-        : { status: 'imported', count: result.imported };
+        : {
+            status: 'imported',
+            trips: result.imported,
+            bookings: result.importedBookings,
+          };
     } catch {
       /*
        * Touch nothing.

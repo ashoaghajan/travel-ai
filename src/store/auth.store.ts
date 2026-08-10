@@ -5,6 +5,7 @@ import { signedOut } from '../services/http';
 import { claimLocalData, releaseLocalData } from '../services/localData.service';
 import { settingsService } from '../services/settings.service';
 import { tripImportService } from '../services/tripImport.service';
+import { bookingStore } from './booking.store';
 import { tripStore } from './trip.store';
 
 /**
@@ -81,8 +82,11 @@ function signIn(user: ApiUser): void {
    * sign-in can retry.
    */
   void tripImportService.run(user.id).then((outcome) => {
-    // The store was loaded from an account that did not have these yet.
-    if (outcome.status === 'imported') void tripStore.refresh();
+    // The stores were loaded from an account that did not have these yet.
+    if (outcome.status !== 'imported') return;
+
+    void tripStore.refresh();
+    void bookingStore.refresh();
   });
 }
 
@@ -97,6 +101,7 @@ signedOut.subscribe(() => {
   // The next reader must not see this account's trips, or have their theme
   // painted, for the moment before their own arrive.
   tripStore.reset();
+  bookingStore.reset();
   settingsService.clearCache();
   setState(ANONYMOUS);
 });
@@ -168,6 +173,7 @@ export const authStore = {
       // Even if the server never heard about it, this browser is signed out.
       releaseLocalData();
       tripStore.reset();
+      bookingStore.reset();
       settingsService.clearCache();
       setState(ANONYMOUS);
     }

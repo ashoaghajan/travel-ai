@@ -40,8 +40,10 @@ function seedLocalTrips(trips: Trip[], activeTripId?: string) {
   if (activeTripId) storageService.set(STORAGE_KEYS.activeTripId, activeTripId);
 }
 
-function apiAccepts(imported = 1, alreadyMigrated = false) {
-  return vi.spyOn(http, 'post').mockResolvedValue({ alreadyMigrated, imported });
+function apiAccepts(imported = 1, alreadyMigrated = false, importedBookings = 0) {
+  return vi
+    .spyOn(http, 'post')
+    .mockResolvedValue({ alreadyMigrated, imported, importedBookings });
 }
 
 beforeEach(() => {
@@ -78,11 +80,15 @@ describe('a successful import', () => {
 
     await expect(tripImportService.run(USER)).resolves.toEqual({
       status: 'imported',
-      count: 1,
+      trips: 1,
+      bookings: 0,
     });
 
+    // Bookings travel with the trips they belong to, in one payload — see the
+    // migration route for why they cannot be two calls.
     expect(post).toHaveBeenCalledWith('/migrate/local', {
       trips: [makeTrip()],
+      bookings: [],
       activeTripId: 'trip_1',
     });
   });

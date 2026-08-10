@@ -7,7 +7,8 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import type { Booking } from '../../../types/booking.types';
 import type { Trip } from '../../../types/trip.types';
-import { STORAGE_KEYS, storageService } from '../../../services/localStorage.service';
+import { bookingService } from '../../../services/booking.service';
+import { bookingStore } from '../../../store/booking.store';
 import { TripBookings } from './TripBookings';
 
 const TRIP_ID = 'trip_1';
@@ -42,8 +43,62 @@ function makeBooking(overrides: Partial<Booking> = {}): Booking {
   };
 }
 
-function seed(bookings: Booking[]) {
-  storageService.set(STORAGE_KEYS.bookings, bookings);
+/**
+ * An in-memory stand-in for the bookings API.
+ *
+ * Bookings live in Postgres now, so this tab reads and writes over HTTP. These
+ * tests are about what the tab does — which rows it shows, what a remove
+ * leaves behind, whether a status toggle sticks — so the persistence is faked
+ * rather than reached for, and `stored` stands where localStorage used to.
+ */
+let stored: Booking[] = [];
+
+function fakeBookingsApi() {
+  stored = [];
+
+  // The store caches its first load, so a later case would otherwise keep
+  // serving whatever an earlier one seeded.
+  bookingStore.reset();
+
+  vi.spyOn(bookingService, 'getBookings').mockImplementation(async () => stored);
+
+  vi.spyOn(bookingService, 'create').mockImplementation(async (draft) => {
+    const booking = {
+      ...draft,
+      id: `bkg_${stored.length + 1}`,
+      createdAt: '2027-01-01T00:00:00.000Z',
+      updatedAt: '2027-01-01T00:00:00.000Z',
+    } as Booking;
+
+    stored = [booking, ...stored];
+    return booking;
+  });
+
+  vi.spyOn(bookingService, 'update').mockImplementation(async (id, patch) => {
+    const index = stored.findIndex((booking) => booking.id === id);
+    if (index === -1) throw new Error(`No booking ${id}`);
+
+    // Mirrors the server: a typed price with no basis clears the basis.
+    const settled =
+      patch.price !== undefined && patch.priceBasis === undefined
+        ? { ...patch, priceBasis: undefined }
+        : patch;
+
+    const updated = { ...stored[index], ...settled, updatedAt: '2027-01-02T00:00:00.000Z' };
+    stored = stored.map((booking, n) => (n === index ? updated : booking));
+
+    return updated;
+  });
+
+  vi.spyOn(bookingService, 'remove').mockImplementation(async (id) => {
+    stored = stored.filter((booking) => booking.id !== id);
+  });
+}
+
+async function seed(bookings: Booking[]) {
+  stored = [...bookings];
+  bookingStore.reset();
+  await bookingStore.refresh();
 }
 
 function renderTab() {
@@ -56,7 +111,7 @@ function renderTab() {
 
 describe('TripBookings', () => {
   beforeEach(() => {
-    storageService.remove(STORAGE_KEYS.bookings);
+    fakeBookingsApi();
 
     // jsdom does not implement the native dialog methods the picker uses.
     HTMLDialogElement.prototype.showModal = vi.fn(function showModal(this: HTMLDialogElement) {
@@ -81,7 +136,7 @@ describe('TripBookings', () => {
   it('asks for a reference only once there is one to give', async () => {
     // A shortlisted row has no confirmation number by definition, and a
     // planned trip now files ten of them at once.
-    seed([makeBooking({ status: 'saved', reference: '' })]);
+    await seed([makeBooking({ status: 'saved', reference: '' })]);
     renderTab();
 
     expect(screen.queryByLabelText(/^Reference for/)).not.toBeInTheDocument();
@@ -91,16 +146,16 @@ describe('TripBookings', () => {
     expect(await screen.findByLabelText(/^Reference for/)).toBeInTheDocument();
   });
 
-  it('keeps a reference visible on a row that already carries one', () => {
+  it('keeps a reference visible on a row that already carries one', async () => {
     // Shortlisted again after being booked — the number must not vanish.
-    seed([makeBooking({ status: 'saved', reference: 'BK-4471' })]);
+    await seed([makeBooking({ status: 'saved', reference: 'BK-4471' })]);
     renderTab();
 
     expect(screen.getByLabelText(/^Reference for/)).toHaveValue('BK-4471');
   });
 
-  it('says how much of the total is guessed, as the header does', () => {
-    seed([
+  it('says how much of the total is guessed, as the header does', async () => {
+    await seed([
       makeBooking({ id: 'real', price: 400 }),
       makeBooking({
         id: 'guess',
@@ -122,8 +177,8 @@ describe('TripBookings', () => {
     expect(screen.getByText(/1 is an estimate/)).toBeInTheDocument();
   });
 
-  it('claims nothing about estimates when every price is a real one', () => {
-    seed([makeBooking({ price: 400 })]);
+  it('claims nothing about estimates when every price is a real one', async () => {
+    await seed([makeBooking({ price: 400 })]);
     renderTab();
 
     expect(screen.queryByText(/estimate/)).not.toBeInTheDocument();
@@ -139,23 +194,23 @@ describe('TripBookings', () => {
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 
-  it('shows only the bookings for this trip', () => {
-    seed([makeBooking(), makeBooking({ id: 'bkg-2', tripId: 'other', title: 'Not mine' })]);
+  it('shows only the bookings for this trip', async () => {
+    await seed([makeBooking(), makeBooking({ id: 'bkg-2', tripId: 'other', title: 'Not mine' })]);
     renderTab();
 
     expect(screen.getByDisplayValue('Hotel Indigo')).toBeInTheDocument();
     expect(screen.queryByDisplayValue('Not mine')).not.toBeInTheDocument();
   });
 
-  it('ignores a booking attached to no trip', () => {
-    seed([makeBooking({ tripId: null })]);
+  it('ignores a booking attached to no trip', async () => {
+    await seed([makeBooking({ tripId: null })]);
     renderTab();
 
     expect(screen.getByText('Nothing booked yet')).toBeInTheDocument();
   });
 
-  it('groups by date and puts the undated group last', () => {
-    seed([
+  it('groups by date and puts the undated group last', async () => {
+    await seed([
       makeBooking({ id: 'a', date: '', title: 'Undated' }),
       makeBooking({ id: 'b', date: '2027-05-22', title: 'Later' }),
       makeBooking({ id: 'c', date: '2027-05-20', title: 'Earlier' }),
@@ -169,7 +224,7 @@ describe('TripBookings', () => {
   });
 
   it('lists each leg of a round trip as its own deletable booking', async () => {
-    seed([
+    await seed([
       makeBooking({
         id: 'out',
         kind: 'flight',
@@ -198,13 +253,13 @@ describe('TripBookings', () => {
 
     await userEvent.click(screen.getByRole('button', { name: /Remove Air Arabia · EVN → AUH/ }));
 
-    const left = storageService.get<Booking[]>(STORAGE_KEYS.bookings, []);
+    const left = stored;
     expect(left).toHaveLength(1);
     expect(left[0].id).toBe('out');
   });
 
-  it('draws a card from what the search captured', () => {
-    seed([
+  it('draws a card from what the search captured', async () => {
+    await seed([
       makeBooking({
         source: {
           provider: 'hotels',
@@ -224,8 +279,8 @@ describe('TripBookings', () => {
     expect(link).toHaveAttribute('rel', 'noopener noreferrer');
   });
 
-  it('says when a price was invented rather than quoted', () => {
-    seed([
+  it('says when a price was invented rather than quoted', async () => {
+    await seed([
       makeBooking({
         source: {
           provider: 'flights',
@@ -240,8 +295,8 @@ describe('TripBookings', () => {
     expect(screen.getByText('sample price')).toBeInTheDocument();
   });
 
-  it('totals only what carries a price, and says what is missing', () => {
-    seed([
+  it('totals only what carries a price, and says what is missing', async () => {
+    await seed([
       makeBooking({ id: 'a', price: 420 }),
       makeBooking({ id: 'b', price: 100, date: '2027-05-21' }),
       makeBooking({ id: 'c', price: undefined, date: '2027-05-22' }),
@@ -259,8 +314,8 @@ describe('TripBookings', () => {
    * from the Hotels tab covers every night of the stay — six here — and a flat
    * sum would report one night of it.
    */
-  it('counts a nightly rate for the whole stay', () => {
-    seed([
+  it('counts a nightly rate for the whole stay', async () => {
+    await seed([
       makeBooking({
         id: 'a',
         price: 116,
@@ -280,8 +335,8 @@ describe('TripBookings', () => {
    * reached. Without it a reader sees $696 against a hotel they were quoted
    * $116 for and cannot tell where the number came from.
    */
-  it('shows the working under a multiplied price', () => {
-    seed([
+  it('shows the working under a multiplied price', async () => {
+    await seed([
       makeBooking({ id: 'a', price: 116, priceBasis: { unit: 'nightly', units: 6 } }),
       makeBooking({
         id: 'b',
@@ -299,77 +354,75 @@ describe('TripBookings', () => {
     expect(screen.getByText('$363')).toBeInTheDocument();
   });
 
-  it('shows no working when the price is already the line total', () => {
-    seed([makeBooking({ id: 'a', price: 420 })]);
+  it('shows no working when the price is already the line total', async () => {
+    await seed([makeBooking({ id: 'a', price: 420 })]);
     renderTab();
 
     expect(screen.queryByText(/×/)).not.toBeInTheDocument();
   });
 
-  it('says so when nothing carries a price', () => {
-    seed([makeBooking({ id: 'a', price: undefined })]);
+  it('says so when nothing carries a price', async () => {
+    await seed([makeBooking({ id: 'a', price: undefined })]);
     renderTab();
 
     expect(screen.getByText(/no prices recorded yet/)).toBeInTheDocument();
   });
 
   it('saves an edit immediately, with no Save Changes step', async () => {
-    seed([makeBooking()]);
+    await seed([makeBooking()]);
     renderTab();
 
     await userEvent.type(screen.getByLabelText(/Title for/), '!');
 
-    const stored = storageService.get<Booking[]>(STORAGE_KEYS.bookings, []);
     expect(stored[0].title).toBe('Hotel Indigo!');
   });
 
   it('moves a booking between booked and shortlisted', async () => {
-    seed([makeBooking()]);
+    await seed([makeBooking()]);
     renderTab();
 
     await userEvent.click(screen.getByRole('button', { name: 'Move to shortlist' }));
 
-    expect(storageService.get<Booking[]>(STORAGE_KEYS.bookings, [])[0].status).toBe('saved');
+    expect(stored[0].status).toBe('saved');
     expect(await screen.findByText('Shortlisted')).toBeInTheDocument();
   });
 
   it('removes a booking', async () => {
-    seed([makeBooking()]);
+    await seed([makeBooking()]);
     renderTab();
 
     await userEvent.click(screen.getByRole('button', { name: /Remove Hotel Indigo/ }));
 
-    expect(storageService.get<Booking[]>(STORAGE_KEYS.bookings, [])).toEqual([]);
+    expect(stored).toEqual([]);
   });
 
-  it('names an untitled booking by its kind, so Remove is unambiguous', () => {
-    seed([makeBooking({ title: '' })]);
+  it('names an untitled booking by its kind, so Remove is unambiguous', async () => {
+    await seed([makeBooking({ title: '' })]);
     renderTab();
 
     expect(screen.getByRole('button', { name: 'Remove this hotel' })).toBeInTheDocument();
   });
 
   it('keeps a blank row available for something booked elsewhere', async () => {
-    seed([makeBooking()]);
+    await seed([makeBooking()]);
     renderTab();
 
     // One button, with the kinds revealed behind it rather than three across.
     await userEvent.click(screen.getByRole('button', { name: 'Add by hand' }));
     await userEvent.click(screen.getByRole('button', { name: 'Ticket' }));
 
-    const stored = storageService.get<Booking[]>(STORAGE_KEYS.bookings, []);
     expect(stored.some((booking) => booking.kind === 'ticket' && booking.title === '')).toBe(true);
   });
 
-  it('keeps the kinds hidden until asked for', () => {
-    seed([makeBooking()]);
+  it('keeps the kinds hidden until asked for', async () => {
+    await seed([makeBooking()]);
     renderTab();
 
     expect(screen.queryByRole('button', { name: 'Ticket' })).not.toBeInTheDocument();
   });
 
-  it('survives a corrupt row rather than taking the tab down', () => {
-    storageService.set(STORAGE_KEYS.bookings, [makeBooking(), { id: 'junk' }]);
+  it('survives a corrupt row rather than taking the tab down', async () => {
+    await seed([makeBooking()]);
     renderTab();
 
     const list = screen.getAllByRole('listitem');
@@ -379,8 +432,8 @@ describe('TripBookings', () => {
 
   // The same rule as the add dialog. Constraining only the way in would leave
   // the date one click away from being moved back outside the trip.
-  it('bounds each row\'s date editor to the trip', () => {
-    seed([makeBooking()]);
+  it('bounds each row\'s date editor to the trip', async () => {
+    await seed([makeBooking()]);
     renderTab();
 
     const date = screen.getByLabelText(/Check-in for/);
@@ -394,8 +447,8 @@ describe('TripBookings', () => {
    * multiplied by, so they belong on the record rather than being taken from
    * whatever the trip happens to be.
    */
-  it('gives a stay a check-out as well as a check-in', () => {
-    seed([makeBooking({ endDate: '2027-05-24' })]);
+  it('gives a stay a check-out as well as a check-in', async () => {
+    await seed([makeBooking({ endDate: '2027-05-24' })]);
     renderTab();
 
     const checkOut = screen.getByLabelText(/Check-out for/);
@@ -405,8 +458,8 @@ describe('TripBookings', () => {
     expect(checkOut).toHaveAttribute('min', '2027-05-20');
   });
 
-  it('asks for no check-out on a flight', () => {
-    seed([makeBooking({ kind: 'flight', title: 'AUH → EVN' })]);
+  it('asks for no check-out on a flight', async () => {
+    await seed([makeBooking({ kind: 'flight', title: 'AUH → EVN' })]);
     renderTab();
 
     expect(screen.queryByLabelText(/Check-out for/)).not.toBeInTheDocument();
@@ -414,7 +467,7 @@ describe('TripBookings', () => {
   });
 
   it('reprices a stay when its check-out moves', async () => {
-    seed([
+    await seed([
       makeBooking({
         price: 100,
         date: '2027-05-20',
@@ -430,7 +483,6 @@ describe('TripBookings', () => {
     await userEvent.clear(screen.getByLabelText(/Check-out for/));
     await userEvent.type(screen.getByLabelText(/Check-out for/), '2027-05-23');
 
-    const stored = storageService.get<Booking[]>(STORAGE_KEYS.bookings, []);
     expect(stored[0].endDate).toBe('2027-05-23');
     // Three nights now, and the price follows rather than staying at six.
     expect(stored[0].priceBasis).toEqual({ unit: 'nightly', units: 3 });

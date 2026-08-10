@@ -1,11 +1,11 @@
 /**
  * @vitest-environment jsdom
  */
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { ERROR_CODES } from '@ai-travel/shared';
 import type { Booking, BookingDraft } from '../types/booking.types';
 import type { Activity, BookingContext, Flight, Hotel, Partner } from '../types/travel.types';
 import type { ItineraryDay, Trip } from '../types/trip.types';
-import { STORAGE_KEYS, storageService } from './localStorage.service';
 import {
   BookingAlreadyOnTripError,
   BookingNotFoundError,
@@ -16,8 +16,24 @@ import {
   isResultOnTrip,
   itineraryActivityToBookingDraft,
   partnerToBookingDraft,
-  readBookingsSync,
 } from './booking.service';
+import { ApiError, http } from './http';
+
+/**
+ * Bookings, now that they live in Postgres.
+ *
+ * The persistence this file used to test — writing to `localStorage`, reading
+ * it back, dropping a hand-edited row, evicting when the quota filled — moved
+ * to `server/src/modules/bookings/`, where it runs against a real database.
+ * Two of those behaviours are simply gone: the 500-row cap existed because
+ * these shared a 5MB quota with the reader's trips, and the tolerance for a
+ * half-written entry existed because storage can be edited by hand.
+ *
+ * What is left here is what this file still owns: the requests it makes, the
+ * mapping of an API failure back to the error classes components branch on,
+ * and the mappers that turn a fare or an attraction into a booking draft —
+ * which never went anywhere near the server.
+ */
 
 function makeDraft(overrides: Partial<BookingDraft> = {}): BookingDraft {
   return {
@@ -27,6 +43,16 @@ function makeDraft(overrides: Partial<BookingDraft> = {}): BookingDraft {
     title: 'Hotel Indigo',
     date: '2027-05-20',
     reference: '',
+    ...overrides,
+  };
+}
+
+function makeBooking(overrides: Partial<Booking> = {}): Booking {
+  return {
+    ...makeDraft(),
+    id: 'bkg_1',
+    createdAt: '2027-01-01T00:00:00.000Z',
+    updatedAt: '2027-01-01T00:00:00.000Z',
     ...overrides,
   };
 }
@@ -52,322 +78,239 @@ const DAY: ItineraryDay = {
   activities: [],
 };
 
-beforeEach(() => {
-  storageService.remove(STORAGE_KEYS.bookings);
+function apiFails(code: string, status = 400) {
+  return new ApiError(status, code as never, 'Nope.');
+}
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
+
+describe('getBookings', () => {
+  it('asks the bookings endpoint', async () => {
+    const get = vi.spyOn(http, 'get').mockResolvedValue([makeBooking()]);
+
+    await expect(bookingService.getBookings()).resolves.toHaveLength(1);
+    expect(get).toHaveBeenCalledWith('/bookings');
+  });
 });
 
 describe('create', () => {
-  it('stamps an id and both timestamps', async () => {
-    const booking = await bookingService.create(makeDraft());
+  it('posts the draft', async () => {
+    const post = vi.spyOn(http, 'post').mockResolvedValue(makeBooking());
 
-    expect(booking.id).toMatch(/^bkg_/);
-    expect(booking.createdAt).toBe(booking.updatedAt);
-    expect(readBookingsSync()).toHaveLength(1);
-  });
-
-  it('puts the newest first', async () => {
-    await bookingService.create(makeDraft({ title: 'First' }));
-    await bookingService.create(makeDraft({ title: 'Second' }));
-
-    expect(readBookingsSync()[0].title).toBe('Second');
-  });
-
-  it('refuses the same search result twice on one trip', async () => {
-    const draft = makeDraft({
-      source: { provider: 'hotels', resultId: 'h1', capturedAt: '2027-01-01T00:00:00.000Z' },
-    });
-    await bookingService.create(draft);
-
-    await expect(bookingService.create(draft)).rejects.toThrow(BookingAlreadyOnTripError);
-  });
-
-  it('allows the same result on a different trip', async () => {
-    const source = { provider: 'hotels', resultId: 'h1', capturedAt: '2027-01-01T00:00:00.000Z' };
-    await bookingService.create(makeDraft({ source }));
-    await bookingService.create(makeDraft({ source, tripId: 'trip_2' }));
-
-    expect(readBookingsSync()).toHaveLength(2);
-  });
-
-  it('allows the same result twice while it belongs to no trip', async () => {
-    const source = { provider: 'hotels', resultId: 'h1', capturedAt: '2027-01-01T00:00:00.000Z' };
-    await bookingService.create(makeDraft({ source, tripId: null }));
-    await bookingService.create(makeDraft({ source, tripId: null }));
-
-    expect(readBookingsSync()).toHaveLength(2);
-  });
-
-  it('never treats a hand-typed row as a duplicate', async () => {
-    await bookingService.create(makeDraft());
     await bookingService.create(makeDraft());
 
-    expect(readBookingsSync()).toHaveLength(2);
+    expect(post).toHaveBeenCalledWith('/bookings', expect.objectContaining({
+      title: 'Hotel Indigo',
+      kind: 'hotel',
+      tripId: 'trip_1',
+    }));
+  });
+
+  it('reports a repeat as BookingAlreadyOnTripError, naming it', async () => {
+    vi.spyOn(http, 'post').mockRejectedValue(apiFails(ERROR_CODES.BOOKING_ALREADY_ON_TRIP, 409));
+
+    const caught = await bookingService.create(makeDraft()).catch((error) => error);
+
+    // Enforced server-side now, which is what makes it hold across two tabs.
+    expect(caught).toBeInstanceOf(BookingAlreadyOnTripError);
+    expect(caught.message).toContain('Hotel Indigo');
+  });
+
+  it('lets an unrecognised failure through untouched', async () => {
+    vi.spyOn(http, 'post').mockRejectedValue(apiFails(ERROR_CODES.NETWORK, 0));
+
+    const caught = await bookingService.create(makeDraft()).catch((error) => error);
+
+    // A dead network is not "already on the trip".
+    expect(caught).toBeInstanceOf(ApiError);
+    expect(caught).not.toBeInstanceOf(BookingAlreadyOnTripError);
   });
 });
 
 describe('update', () => {
-  it('patches and moves updatedAt', async () => {
-    const created = await bookingService.create(makeDraft());
-    const updated = await bookingService.update(created.id, { reference: 'BK-1' });
+  it('patches the booking', async () => {
+    const patch = vi.spyOn(http, 'patch').mockResolvedValue(makeBooking({ reference: 'ABC123' }));
 
-    expect(updated.reference).toBe('BK-1');
-    expect(updated.createdAt).toBe(created.createdAt);
+    await bookingService.update('bkg_1', { reference: 'ABC123' });
+
+    expect(patch).toHaveBeenCalledWith('/bookings/bkg_1', { reference: 'ABC123' });
   });
 
-  /*
-   * A price someone types is what the line cost, not a rate. Without this,
-   * correcting a nightly row to the $800 actually paid would silently become
-   * $800 a night.
-   */
-  it('clears the basis when a price is typed over it', async () => {
-    const created = await bookingService.create(
-      makeDraft({ price: 116, priceBasis: { unit: 'nightly', units: 6 } }),
-    );
+  it('clears the basis when a price is typed without one', async () => {
+    const patch = vi.spyOn(http, 'patch').mockResolvedValue(makeBooking());
 
-    const updated = await bookingService.update(created.id, { price: 800 });
+    await bookingService.update('bkg_1', { price: 800 });
 
-    expect(updated.price).toBe(800);
-    expect(updated.priceBasis).toBeUndefined();
+    /*
+     * `null`, not `undefined`. A price the reader typed is what the line cost,
+     * not a rate — and an `undefined` here is dropped by JSON.stringify, so
+     * the server would leave the nightly basis in place and quietly turn the
+     * $800 actually paid into $800 a night.
+     */
+    expect(patch).toHaveBeenCalledWith('/bookings/bkg_1', { price: 800, priceBasis: null });
   });
 
-  it('keeps a basis the caller set alongside the price', async () => {
-    const created = await bookingService.create(makeDraft({ price: 116 }));
+  it('takes a patch that sets both at its word', async () => {
+    const patch = vi.spyOn(http, 'patch').mockResolvedValue(makeBooking());
+    const basis = { unit: 'nightly' as const, units: 4 };
 
-    const updated = await bookingService.update(created.id, {
-      price: 120,
-      priceBasis: { unit: 'nightly', units: 3 },
-    });
+    await bookingService.update('bkg_1', { price: 116, priceBasis: basis });
 
-    expect(updated.priceBasis).toEqual({ unit: 'nightly', units: 3 });
+    expect(patch).toHaveBeenCalledWith('/bookings/bkg_1', { price: 116, priceBasis: basis });
   });
 
-  it('leaves the basis alone when the price is not touched', async () => {
-    const basis = { unit: 'nightly', units: 6 } as const;
-    const created = await bookingService.create(makeDraft({ price: 116, priceBasis: basis }));
+  it('reports a missing booking as BookingNotFoundError', async () => {
+    vi.spyOn(http, 'patch').mockRejectedValue(apiFails(ERROR_CODES.BOOKING_NOT_FOUND, 404));
 
-    const updated = await bookingService.update(created.id, { reference: 'BK-9' });
-
-    expect(updated.priceBasis).toEqual(basis);
-  });
-
-  it('throws for an id that is not there', async () => {
-    await expect(bookingService.update('nope', { title: 'x' })).rejects.toThrow(
+    await expect(bookingService.update('bkg_gone', {})).rejects.toBeInstanceOf(
       BookingNotFoundError,
     );
   });
+});
 
-  it('attaches to a trip and detaches again', async () => {
-    const created = await bookingService.create(makeDraft({ tripId: null }));
+describe('attach and setStatus', () => {
+  it('files a booking against a trip', async () => {
+    const patch = vi.spyOn(http, 'patch').mockResolvedValue(makeBooking());
 
-    expect((await bookingService.attach(created.id, 'trip_9')).tripId).toBe('trip_9');
-    expect((await bookingService.attach(created.id, null)).tripId).toBeNull();
+    await bookingService.attach('bkg_1', 'trip_2');
+
+    expect(patch).toHaveBeenCalledWith('/bookings/bkg_1', { tripId: 'trip_2' });
   });
 
-  it('sets the status', async () => {
-    const created = await bookingService.create(makeDraft());
+  it('detaches with an explicit null', async () => {
+    const patch = vi.spyOn(http, 'patch').mockResolvedValue(makeBooking());
 
-    expect((await bookingService.setStatus(created.id, 'booked')).status).toBe('booked');
+    await bookingService.attach('bkg_1', null);
+
+    // Same trap as everywhere else: `undefined` would mean "leave it".
+    expect(patch).toHaveBeenCalledWith('/bookings/bkg_1', { tripId: null });
+  });
+
+  it('marks a booking booked', async () => {
+    const patch = vi.spyOn(http, 'patch').mockResolvedValue(makeBooking());
+
+    await bookingService.setStatus('bkg_1', 'booked');
+
+    expect(patch).toHaveBeenCalledWith('/bookings/bkg_1', { status: 'booked' });
   });
 });
 
 describe('remove', () => {
-  it('drops one and leaves the rest', async () => {
-    const first = await bookingService.create(makeDraft({ title: 'First' }));
-    await bookingService.create(makeDraft({ title: 'Second' }));
+  it('deletes the booking', async () => {
+    const remove = vi.spyOn(http, 'delete').mockResolvedValue(undefined);
 
-    await bookingService.remove(first.id);
+    await bookingService.remove('bkg_1');
 
-    expect(readBookingsSync()).toHaveLength(1);
-    expect(readBookingsSync()[0].title).toBe('Second');
-  });
-
-  it('is a no-op for an unknown id', async () => {
-    await bookingService.create(makeDraft());
-    await bookingService.remove('nope');
-
-    expect(readBookingsSync()).toHaveLength(1);
+    expect(remove).toHaveBeenCalledWith('/bookings/bkg_1');
   });
 });
 
 describe('createFromItinerary', () => {
-  function planned(overrides: Partial<Trip> = {}): Trip {
+  function tripWithStops(): Trip {
     return {
       id: 'trip_1',
-      title: 'Three days in the Maldives',
-      destination: 'Maafushi',
-      startDate: '2027-09-14',
-      endDate: '2027-09-16',
+      title: 'Yerevan',
+      destination: 'Yerevan',
+      startDate: '2027-05-20',
+      endDate: '2027-05-22',
       travellers: 2,
-      coverImage: '/x.jpg',
+      coverImage: '/y.jpg',
       itinerary: [
         {
           id: 'day_1',
           dayNumber: 1,
-          date: '2027-09-14',
-          destination: 'Maafushi',
-          summary: 'Ferry south',
+          date: '2027-05-20',
+          destination: 'Yerevan',
+          summary: 'Arrival',
           activities: [
-            { id: 'a1', time: '09:00', title: 'Airport ferry', description: '', category: 'travel', priceEstimate: 2 },
-            { id: 'a2', time: '17:30', title: 'Bikini Beach', description: '', category: 'relaxation' },
-          ],
-        },
-        {
-          id: 'day_2',
-          dayNumber: 2,
-          date: '2027-09-15',
-          destination: 'South Malé Atoll',
-          summary: 'Sandbank',
-          activities: [
-            { id: 'a3', time: '08:30', title: 'Snorkel trip', description: '', category: 'adventure', priceEstimate: 40 },
+            {
+              id: 'act_1',
+              time: '09:00',
+              title: 'Cascade at opening',
+              description: 'Before the heat.',
+              category: 'culture',
+              sourceActivityId: 'otm_cascade',
+            },
+            {
+              id: 'act_2',
+              time: '14:00',
+              title: 'Ararat tour',
+              description: 'Brandy and the view.',
+              category: 'culture',
+              sourceActivityId: 'otm_ararat',
+            },
           ],
         },
       ],
       createdAt: 'x',
       updatedAt: 'x',
-      ...overrides,
     };
   }
 
-  it('files every stop on the schedule, shortlisted rather than booked', async () => {
-    const created = await bookingService.createFromItinerary(planned());
+  it('files every stop in one request', async () => {
+    vi.spyOn(http, 'get').mockResolvedValue([]);
+    const post = vi.spyOn(http, 'post').mockResolvedValue([]);
 
-    expect(created).toHaveLength(3);
-    expect(created.every((booking) => booking.status === 'saved')).toBe(true);
-    expect(created.every((booking) => booking.kind === 'activity')).toBe(true);
-    // Never bare — the whole reason these look like catalogue rows.
-    expect(created.every((booking) => Boolean(booking.source?.image))).toBe(true);
-  });
+    await bookingService.createFromItinerary(tripWithStops());
 
-  it('writes them in schedule order, so a day reads morning first', async () => {
-    await bookingService.createFromItinerary(planned());
-
-    // The store is newest-first and a date group keeps array order; creating
-    // one at a time would stack each day backwards.
-    expect(readBookingsSync().map((booking) => booking.title)).toEqual([
-      'Airport ferry',
-      'Bikini Beach',
-      'Snorkel trip',
+    // One request, not a dozen: a trip must not end up half recorded.
+    expect(post).toHaveBeenCalledTimes(1);
+    const sent = post.mock.calls[0][1] as { bookings: BookingDraft[] };
+    expect(sent.bookings.map((booking) => booking.title)).toEqual([
+      'Cascade at opening',
+      'Ararat tour',
     ]);
   });
 
-  it('prices a stop per head and flags the figure as a guess', async () => {
-    const created = await bookingService.createFromItinerary(planned());
-    const snorkel = created.find((booking) => booking.title === 'Snorkel trip');
+  it('sends them in schedule order', async () => {
+    vi.spyOn(http, 'get').mockResolvedValue([]);
+    const post = vi.spyOn(http, 'post').mockResolvedValue([]);
 
-    expect(snorkel?.price).toBe(40);
-    expect(snorkel?.priceBasis).toEqual({ unit: 'perPerson', units: 2 });
-    expect(snorkel?.source?.priceSource).toBe('sample');
+    await bookingService.createFromItinerary(tripWithStops());
+
+    // The list is newest-first and a date group keeps array order, so this is
+    // what makes day one's morning read before its afternoon.
+    const sent = post.mock.calls[0][1] as { bookings: BookingDraft[] };
+    expect(sent.bookings[0].title).toBe('Cascade at opening');
   });
 
-  it('adds nothing the second time the same draft is saved', async () => {
-    const trip = planned();
-    await bookingService.createFromItinerary(trip);
-
-    const again = await bookingService.createFromItinerary(trip);
-
-    expect(again).toEqual([]);
-    expect(readBookingsSync()).toHaveLength(3);
-  });
-
-  it('leaves a stop alone when the reader already booked it from the catalogue', async () => {
-    await bookingService.create(
-      makeDraft({
-        kind: 'activity',
-        title: 'Snorkel trip',
-        source: { provider: 'opentripmap', resultId: 'otm_9931', capturedAt: 'x' },
-      }),
-    );
-
-    const trip = planned();
-    const created = await bookingService.createFromItinerary({
-      ...trip,
-      itinerary: [
-        {
-          ...trip.itinerary[1],
-          activities: [{ ...trip.itinerary[1].activities[0], sourceActivityId: 'otm_9931' }],
-        },
-      ],
-    });
-
-    expect(created).toEqual([]);
-    expect(readBookingsSync()).toHaveLength(1);
-  });
-
-  it('files one booking for an attraction that sits on two days', async () => {
-    const trip = planned();
-    const twice: Trip = {
-      ...trip,
-      itinerary: trip.itinerary.map((day) => ({
-        ...day,
-        activities: [
-          { id: `${day.id}-x`, time: '09:00', title: 'Blue Mosque', description: '', category: 'culture' as const, sourceActivityId: 'otm_1' },
-        ],
-      })),
-    };
-
-    // Both days name the same place, so both drafts carry one result id — and
-    // `create` would refuse the second as a duplicate.
-    expect(await bookingService.createFromItinerary(twice)).toHaveLength(1);
-  });
-
-  it('does nothing for a trip with no schedule', async () => {
-    expect(await bookingService.createFromItinerary(planned({ itinerary: [] }))).toEqual([]);
-    expect(readBookingsSync()).toEqual([]);
-  });
-});
-
-describe('reading a damaged store', () => {
-  it('answers with nothing when the value is not JSON', async () => {
-    localStorage.setItem(STORAGE_KEYS.bookings, 'not json at all');
-
-    expect(await bookingService.getBookings()).toEqual([]);
-  });
-
-  it('answers with nothing when the value is not an array', async () => {
-    storageService.set(STORAGE_KEYS.bookings, { not: 'an array' });
-
-    expect(await bookingService.getBookings()).toEqual([]);
-  });
-
-  it('drops rows that are the wrong shape and keeps the rest', async () => {
-    const good = { ...makeDraft(), id: 'ok', createdAt: 'x', updatedAt: 'x' };
-    storageService.set(STORAGE_KEYS.bookings, [
-      good,
-      null,
-      'nonsense',
-      { id: 'no-kind', tripId: null, title: 't', date: '', reference: '', createdAt: 'x' },
-      { ...good, id: 'bad-status', status: 'maybe' },
-      { ...good, id: 'bad-trip', tripId: 7 },
+  it('skips a stop already filed against this trip', async () => {
+    vi.spyOn(http, 'get').mockResolvedValue([
+      makeBooking({ tripId: 'trip_1', source: { provider: 'otm', resultId: 'otm_cascade', capturedAt: 'x' } }),
     ]);
+    const post = vi.spyOn(http, 'post').mockResolvedValue([]);
 
-    const kept = await bookingService.getBookings();
-    expect(kept).toHaveLength(1);
-    expect(kept[0].id).toBe('ok');
+    await bookingService.createFromItinerary(tripWithStops());
+
+    // Saving the same draft twice returns the same trip, and this must not
+    // then double its bookings.
+    const sent = post.mock.calls[0][1] as { bookings: BookingDraft[] };
+    expect(sent.bookings.map((booking) => booking.title)).toEqual(['Ararat tour']);
   });
-});
 
-describe('capping', () => {
-  it('drops shortlisted rows before confirmed ones', async () => {
-    const many: Booking[] = Array.from({ length: 500 }, (_, index) => ({
-      ...makeDraft({ status: 'saved', title: `Saved ${index}` }),
-      id: `saved-${index}`,
-      createdAt: 'x',
-      updatedAt: 'x',
-    }));
-    // One real reservation, oldest in the list — a newest-first cap would lose it.
-    many.push({
-      ...makeDraft({ status: 'booked', title: 'Real reservation' }),
-      id: 'booked-1',
-      createdAt: 'x',
-      updatedAt: 'x',
-    });
-    storageService.set(STORAGE_KEYS.bookings, many);
+  it('makes no request when there is nothing left to file', async () => {
+    vi.spyOn(http, 'get').mockResolvedValue([
+      makeBooking({ id: 'a', tripId: 'trip_1', source: { provider: 'otm', resultId: 'otm_cascade', capturedAt: 'x' } }),
+      makeBooking({ id: 'b', tripId: 'trip_1', source: { provider: 'otm', resultId: 'otm_ararat', capturedAt: 'x' } }),
+    ]);
+    const post = vi.spyOn(http, 'post').mockResolvedValue([]);
 
-    await bookingService.create(makeDraft({ status: 'saved', title: 'One more' }));
+    await expect(bookingService.createFromItinerary(tripWithStops())).resolves.toEqual([]);
+    expect(post).not.toHaveBeenCalled();
+  });
 
-    const stored = readBookingsSync();
-    expect(stored).toHaveLength(500);
-    expect(stored.some((booking) => booking.title === 'Real reservation')).toBe(true);
+  it('files everything as saved, never booked', async () => {
+    vi.spyOn(http, 'get').mockResolvedValue([]);
+    const post = vi.spyOn(http, 'post').mockResolvedValue([]);
+
+    await bookingService.createFromItinerary(tripWithStops());
+
+    // Nothing has been reserved — the planner cannot reserve anything — so the
+    // trip's headline still has to read "estimated".
+    const sent = post.mock.calls[0][1] as { bookings: BookingDraft[] };
+    expect(sent.bookings.every((booking) => booking.status === 'saved')).toBe(true);
   });
 });
 

@@ -3,12 +3,14 @@
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, renderHook, waitFor } from '@testing-library/react';
+import type { Booking } from '../../types/booking.types';
 import type { Trip, TripDraft } from '../../types/trip.types';
 import { tripService } from '../../services/trip.service';
 import { bookingService } from '../../services/booking.service';
 import { tripStore } from '../../store/trip.store';
 import { bookingStore } from '../../store/booking.store';
 import { usePlanner } from './usePlanner';
+import { http } from '../../services/http';
 
 /**
  * Saving and customising a suggested itinerary.
@@ -94,6 +96,26 @@ function fakeTripsApi() {
 
   vi.spyOn(tripService, 'getTrips').mockImplementation(async () => trips);
   vi.spyOn(tripService, 'getActiveTripId').mockResolvedValue(null);
+
+  // Bookings are filed over HTTP now; `createFromItinerary` reads the list
+  // first to skip what is already there.
+  let filed: Booking[] = [];
+
+  vi.spyOn(bookingService, 'getBookings').mockImplementation(async () => filed);
+
+  // The batch endpoint, not `create`: filing a trip's schedule is one request
+  // so it cannot half-fail. The real dedupe in `createFromItinerary` runs
+  // above this and is what these tests are actually about.
+  vi.spyOn(http, 'post').mockImplementation(async (_path, body) => {
+    const drafts = (body as { bookings: Booking[] }).bookings;
+    const created = drafts.map(
+      (draft, index) =>
+        ({ ...draft, id: `bkg_${filed.length + index + 1}`, createdAt: 'x', updatedAt: 'x' }) as Booking,
+    );
+
+    filed = [...created, ...filed];
+    return created as never;
+  });
 
   vi.spyOn(tripService, 'createTrip').mockImplementation(async (draft) => {
     // The server's unique constraint, in one line.

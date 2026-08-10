@@ -1,4 +1,4 @@
-import { createTripSchema } from '@ai-travel/shared/schemas';
+import { createTripSchema, importBookingSchema } from '@ai-travel/shared/schemas';
 import { Prisma } from '@prisma/client';
 import express, { Router } from 'express';
 import type { Request, Response } from 'express';
@@ -41,6 +41,15 @@ const payloadSchema = z.object({
     .max(200)
     .default([]),
   activeTripId: CLIENT_ID.nullish(),
+  /**
+   * Bookings come across in the same payload as the trips they belong to.
+   *
+   * One endpoint rather than two, because they have to arrive together: a
+   * booking's `tripId` points at a trip in this same payload, and importing
+   * them separately would leave every booking unassigned if the second call
+   * failed.
+   */
+  bookings: z.array(importBookingSchema).max(500).default([]),
 });
 
 export type MigrateResponse = {
@@ -53,6 +62,7 @@ export type MigrateResponse = {
    */
   alreadyMigrated: boolean;
   imported: number;
+  importedBookings: number;
 };
 
 migrateRouter.post(
@@ -82,7 +92,11 @@ migrateRouter.post(
      * client-only would re-import after someone clears their storage.
      */
     if (user.localImportCompletedAt) {
-      return void response.json({ alreadyMigrated: true, imported: 0 } satisfies MigrateResponse);
+      return void response.json({
+        alreadyMigrated: true,
+        imported: 0,
+        importedBookings: 0,
+      } satisfies MigrateResponse);
     }
 
     const imported = await prisma.$transaction(async (tx) => {
@@ -118,6 +132,38 @@ migrateRouter.post(
         });
       }
 
+      /*
+       * Bookings after the trips, so their `tripId` has something to point at.
+       *
+       * A booking naming a trip that is not in this payload is imported
+       * unassigned rather than rejected — that is exactly what the app shows
+       * for a booking whose trip was deleted, and losing a confirmation
+       * number over a dangling pointer would be the worse outcome.
+       */
+      const tripIds = new Set(payload.trips.map((trip) => trip.id));
+
+      for (const booking of payload.bookings) {
+        await tx.booking.upsert({
+          where: { id: booking.id },
+          update: {},
+          create: {
+            id: booking.id,
+            userId,
+            tripId: booking.tripId && tripIds.has(booking.tripId) ? booking.tripId : null,
+            kind: booking.kind,
+            status: booking.status,
+            title: booking.title,
+            date: booking.date,
+            endDate: booking.endDate,
+            reference: booking.reference,
+            price: booking.price,
+            priceBasis: (booking.priceBasis ?? Prisma.DbNull) as Prisma.InputJsonValue,
+            url: booking.url,
+            source: (booking.source ?? Prisma.DbNull) as Prisma.InputJsonValue,
+          },
+        });
+      }
+
       // Only point at a trip this import actually established.
       const activeTripId =
         payload.activeTripId && payload.trips.some((trip) => trip.id === payload.activeTripId)
@@ -129,9 +175,13 @@ migrateRouter.post(
         data: { localImportCompletedAt: new Date(), activeTripId },
       });
 
-      return payload.trips.length;
+      return { trips: payload.trips.length, bookings: payload.bookings.length };
     });
 
-    response.json({ alreadyMigrated: false, imported } satisfies MigrateResponse);
+    response.json({
+      alreadyMigrated: false,
+      imported: imported.trips,
+      importedBookings: imported.bookings,
+    } satisfies MigrateResponse);
   },
 );

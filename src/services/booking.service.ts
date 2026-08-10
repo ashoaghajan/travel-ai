@@ -1,8 +1,9 @@
+import { ERROR_CODES } from '@ai-travel/shared';
 import type {
   Booking,
   BookingDraft,
-  BookingPatch,
   BookingKind,
+  BookingPatch,
   BookingStatus,
   PriceBasis,
 } from '../types/booking.types';
@@ -17,10 +18,9 @@ import type {
 } from '../types/travel.types';
 import type { ItineraryActivity, ItineraryDay, Trip } from '../types/trip.types';
 import { CATEGORY_IMAGES } from '../assets/category-images';
-import { createId } from '../utils/id';
 import { usdFormatter } from '../utils/currency';
 import { nightsBetween } from '../utils/date';
-import { STORAGE_KEYS, storageService } from './localStorage.service';
+import { ApiError, http } from './http';
 
 /**
  * Flights, stays, tickets and activities the reader has attached to a trip.
@@ -29,18 +29,15 @@ import { STORAGE_KEYS, storageService } from './localStorage.service';
  * found before the trip it belongs to has been chosen — `tripId` is nullable
  * and stays that way until the reader files it. See `booking.types.ts`.
  *
- * Async like the other domain services, so Stage 2 can move it behind
- * `GET /api/bookings` without changing a caller.
- */
-
-/**
- * Bounded, but not the way `savedActivity` is.
+ * Persisted through `/api/bookings`. Everything else in this file — turning a
+ * fare into drafts, working out what a nightly rate comes to, building the
+ * partner links — stays here, because none of it is the server's business.
  *
- * A newest-first cap would throw away a real reservation to make room for
- * something merely shortlisted, so eviction drops `saved` rows first and only
- * touches `booked` ones when there is nothing else left to drop.
+ * The old 500-row cap is gone with the storage it protected. It existed
+ * because these shared a 5MB quota with the reader's trips, and dropping a
+ * shortlisted row to make space was the least bad answer; against a database
+ * there is nothing to make space for.
  */
-const MAX_BOOKINGS = 500;
 
 export class BookingNotFoundError extends Error {
   constructor(id: string) {
@@ -57,91 +54,66 @@ export class BookingAlreadyOnTripError extends Error {
   }
 }
 
-const KINDS: BookingKind[] = ['flight', 'hotel', 'ticket', 'activity'];
-const STATUSES: BookingStatus[] = ['saved', 'booked'];
+/**
+ * Turns an API failure back into the error the callers branch on.
+ *
+ * Same shape as `trip.service`'s: every booking failure the server can report
+ * has a code, and anything unrecognised is rethrown untouched so a network
+ * blip is never dressed up as "that booking is gone".
+ */
+function rethrowBookingError(error: unknown, context: { id?: string; title?: string }): never {
+  if (error instanceof ApiError) {
+    if (error.code === ERROR_CODES.BOOKING_NOT_FOUND) {
+      throw new BookingNotFoundError(context.id ?? '');
+    }
+    if (error.code === ERROR_CODES.BOOKING_ALREADY_ON_TRIP) {
+      throw new BookingAlreadyOnTripError(context.title ?? 'That booking');
+    }
+  }
 
-function isBooking(value: unknown): value is Booking {
-  if (typeof value !== 'object' || value === null) return false;
-
-  const candidate = value as Partial<Booking>;
-  return (
-    typeof candidate.id === 'string' &&
-    typeof candidate.title === 'string' &&
-    typeof candidate.date === 'string' &&
-    typeof candidate.reference === 'string' &&
-    typeof candidate.createdAt === 'string' &&
-    (candidate.tripId === null || typeof candidate.tripId === 'string') &&
-    KINDS.includes(candidate.kind as BookingKind) &&
-    STATUSES.includes(candidate.status as BookingStatus)
-  );
+  throw error;
 }
 
-function read(): Booking[] {
-  const stored = storageService.get<unknown>(STORAGE_KEYS.bookings, []);
-  if (!Array.isArray(stored)) return [];
-
-  // A hand-edited or half-written entry drops out rather than crashing the tab.
-  return stored.filter(isBooking);
-}
-
-/** Drops shortlisted rows before confirmed ones when over the cap. */
-function evict(bookings: Booking[]): Booking[] {
-  if (bookings.length <= MAX_BOOKINGS) return bookings;
-
-  const booked = bookings.filter((booking) => booking.status === 'booked');
-  const saved = bookings.filter((booking) => booking.status === 'saved');
-
-  // Confirmed reservations first, then as many shortlisted ones as still fit.
-  return [...booked, ...saved].slice(0, MAX_BOOKINGS);
-}
-
-function write(bookings: Booking[]): void {
-  storageService.set(STORAGE_KEYS.bookings, evict(bookings));
-}
-
-function touch(booking: Booking, patch: BookingPatch): Booking {
-  return { ...booking, ...patch, updatedAt: new Date().toISOString() };
+/** A draft, minus the fields the server assigns. */
+function toBody(draft: BookingDraft) {
+  return {
+    tripId: draft.tripId,
+    kind: draft.kind,
+    status: draft.status,
+    title: draft.title,
+    date: draft.date,
+    endDate: draft.endDate,
+    reference: draft.reference,
+    price: draft.price,
+    priceBasis: draft.priceBasis,
+    url: draft.url,
+    source: draft.source,
+  };
 }
 
 export const bookingService = {
   /** Newest first. */
   async getBookings(): Promise<Booking[]> {
-    return read();
+    return http.get<Booking[]>('/bookings');
   },
 
   /**
    * Records a booking.
    *
    * Refuses a second attach of the same search result to the same trip, the
-   * way `addActivityToDay` refuses a repeated attraction. The same fare on two
-   * different trips is legitimate, so the check is scoped to `tripId` — and a
-   * row with no `source` was typed by hand and is never a duplicate of
-   * anything.
+   * way `addActivityToDay` refuses a repeated attraction. That check runs
+   * server-side now, which is what makes it hold across two tabs — the old
+   * one compared against a list this browser happened to be holding.
    */
   async create(draft: BookingDraft): Promise<Booking> {
-    const bookings = read();
-
-    if (draft.source && draft.tripId) {
-      const clash = bookings.find(
-        (booking) =>
-          booking.tripId === draft.tripId &&
-          booking.source?.resultId === draft.source?.resultId,
-      );
-      if (clash) throw new BookingAlreadyOnTripError(draft.title);
+    try {
+      return await http.post<Booking>('/bookings', toBody(draft));
+    } catch (error) {
+      return rethrowBookingError(error, { title: draft.title });
     }
-
-    const now = new Date().toISOString();
-    const booking: Booking = { ...draft, id: createId('bkg'), createdAt: now, updatedAt: now };
-
-    write([booking, ...bookings]);
-    return booking;
   },
 
   async update(id: string, patch: BookingPatch): Promise<Booking> {
-    const bookings = read();
-    const index = bookings.findIndex((booking) => booking.id === id);
-    if (index === -1) throw new BookingNotFoundError(id);
-
     /*
      * A price the reader typed is what the line cost, not a rate.
      *
@@ -149,49 +121,47 @@ export const bookingService = {
      * quietly become $800 a night. Only a patch that sets `price` without
      * saying what it measures clears the basis; one that sets both is taken at
      * its word.
+     *
+     * `null`, not `undefined` — the same trap `toPatch` fell into. An
+     * `undefined` here is dropped by `JSON.stringify`, so the server would
+     * hear nothing about the basis and correctly leave it in place, turning
+     * the corrected total back into a nightly rate.
      */
-    const settled: BookingPatch =
+    const settled =
       patch.price !== undefined && patch.priceBasis === undefined
-        ? { ...patch, priceBasis: undefined }
+        ? { ...patch, priceBasis: null }
         : patch;
 
-    const updated = touch(bookings[index], settled);
-
-    write(bookings.map((booking, i) => (i === index ? updated : booking)));
-    return updated;
+    try {
+      return await http.patch<Booking>(`/bookings/${encodeURIComponent(id)}`, settled);
+    } catch (error) {
+      return rethrowBookingError(error, { id, title: patch.title });
+    }
   },
 
   /**
    * Files every stop on a planned trip as a booking, in one write.
    *
-   * Called once, when a trip the planner wrote is saved. The alternative —
-   * showing the schedule on the Bookings tab and asking which stops to keep —
-   * put a second list of the same eleven things under the first and made the
-   * reader do the sorting. Filing them all is the blunter answer and the
-   * clearer one: everything the trip involves is in one place, and removing
-   * the two that are not reservations is a click each.
+   * Called once, when a trip the planner wrote is saved. Every row lands
+   * `saved`, never `booked`: nothing has been reserved, and the prices come
+   * through flagged `sample` so the trip's headline still reads "estimated".
    *
-   * Every row lands `saved`, never `booked`. Nothing has been reserved — the
-   * planner cannot reserve anything — and the prices come through flagged
-   * `sample`, so the trip's headline still reads "estimated". See
-   * `itineraryActivityToBookingDraft`.
-   *
-   * Idempotent, because `createTrip` is: saving the same draft twice returns
-   * the same trip, and this must not then double its bookings. A stop already
-   * filed under its result id is skipped, which also covers the reader who
-   * booked something from the catalogue before the trip was saved.
+   * Idempotent, because `createTrip` is — saving the same draft twice returns
+   * the same trip, and this must not then double its bookings. The stops
+   * already filed are skipped here, and the server refuses any that slip
+   * through. One request rather than a dozen, so a trip cannot end up half
+   * recorded.
    */
   async createFromItinerary(trip: Trip): Promise<Booking[]> {
-    const bookings = read();
+    const existing = await bookingService.getBookings();
     const filed = new Set(
-      bookings
+      existing
         .filter((booking) => booking.tripId === trip.id)
         .map((booking) => booking.source?.resultId)
         .filter((resultId): resultId is string => resultId !== undefined),
     );
 
-    const now = new Date().toISOString();
-    const created: Booking[] = [];
+    const drafts: BookingDraft[] = [];
 
     for (const day of trip.itinerary) {
       for (const activity of day.activities) {
@@ -205,22 +175,21 @@ export const bookingService = {
           filed.add(resultId);
         }
 
-        created.push({ ...draft, id: createId('bkg'), createdAt: now, updatedAt: now });
+        drafts.push(draft);
       }
     }
 
-    if (created.length === 0) return [];
+    if (drafts.length === 0) return [];
 
     // Schedule order, not reversed. The store is newest-first and
-    // `groupBookingsByDate` keeps a group in array order, so writing the batch
-    // as it runs is what makes day one's morning read before its afternoon —
-    // creating them one at a time would stack each day backwards.
-    write([...created, ...bookings]);
-    return created;
+    // `groupBookingsByDate` keeps a group in array order, so sending the batch
+    // as it runs is what makes day one's morning read before its afternoon.
+    return http.post<Booking[]>('/bookings', { bookings: drafts.map(toBody) });
   },
 
+  /** Idempotent: removing one already gone is a success. */
   async remove(id: string): Promise<void> {
-    write(read().filter((booking) => booking.id !== id));
+    await http.delete<void>(`/bookings/${encodeURIComponent(id)}`);
   },
 
   /** Files a booking against a trip, or against none when `tripId` is null. */
@@ -232,14 +201,6 @@ export const bookingService = {
     return bookingService.update(id, { status });
   },
 };
-
-/**
- * Synchronous read, used only by the store so subscribers paint the stored
- * state on the first render — the same split `trip.service` uses.
- */
-export function readBookingsSync(): Booking[] {
-  return read();
-}
 
 /** True when this trip already carries a booking made from this result. */
 export function isResultOnTrip(

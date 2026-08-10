@@ -4,6 +4,7 @@ import cookieParser from 'cookie-parser';
 import { errorHandler, notFoundHandler } from './errors';
 import { authRouter } from './modules/auth/auth.routes';
 import { meRouter } from './modules/auth/me.routes';
+import { bookingsRouter } from './modules/bookings/bookings.routes';
 import { imagesRouter } from './modules/places/images.routes';
 import { placesRouter } from './modules/places/places.routes';
 import { referenceRouter } from './modules/places/reference.routes';
@@ -49,6 +50,8 @@ export function createApp(): Express {
   // them. Carries its own body limit — see the module.
   app.use('/api', migrateRouter);
   app.use('/api', settingsRouter);
+  // A booking outlives the trip it was made for — see the module.
+  app.use('/api', bookingsRouter);
   // Unauthenticated, and mounted at the root of /api because its paths are
   // domain-shaped (`/flights/search`) rather than grouped under one noun.
   app.use('/api', travelRouter);
