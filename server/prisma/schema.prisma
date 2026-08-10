@@ -1,16 +1,28 @@
-// Phase 1-2 schema: accounts and sessions only.
+// Accounts, sessions and trips.
 //
-// Trips, saved activities, settings and conversations stay in the browser
-// until Phase 4 moves them; the relations for those are deliberately absent
-// rather than declared-and-unused, so the schema says what is actually true.
+// Saved activities, settings and conversations stay in the browser for now;
+// the relations for those are deliberately absent rather than
+// declared-and-unused, so the schema says what is actually true.
 //
 // Postgres. The move from SQLite was the provider swap and a fresh migration
 // this file predicted, and it happened for deployment: a SQLite database is a
 // file, and every host worth deploying to hands you an empty filesystem on
 // each release. Accounts and sessions cannot live somewhere that is wiped.
 //
-// The models stay free of `enum` and `@db.*` native types anyway. Nothing here
-// needs them, and staying portable is what made this swap cheap.
+// Two conventions worth stating, because Trip is where they first get tested:
+//
+// No `enum`. Kinds and statuses are plain strings, validated by zod at the
+// edge. It costs nothing and it is what kept the SQLite-to-Postgres swap
+// cheap; there is no reason to spend that portability on a spelling check the
+// API already performs.
+//
+// One `Json` column, deliberately. `Trip.itinerary` is the only place a
+// document beats tables here: the editor already replaces the whole itinerary
+// on every save, nothing ever queries inside one, and the nested ids are
+// client-generated and stable. Relational days and activities would turn each
+// edit into a three-way diff across two child tables for no query anyone
+// makes. Keep the JSON byte-identical to `ItineraryDay[]` so a later backfill
+// is a mechanical `jsonb_array_elements`.
 
 generator client {
   provider = "prisma-client-js"
@@ -39,60 +51,14 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  /// The trip last opened, so a reload can offer to resume it.
+  ///
+  /// `SetNull` rather than `Cascade`: deleting a trip must never delete the
+  /// person, and must never leave this pointing at a row that is gone.
+  activeTripId String?
+  activeTrip   Trip?   @relation("ActiveTrip", fields: [activeTripId], references: [id], onDelete: SetNull)
+
   refreshTokens RefreshToken[]
   identities    AuthIdentity[]
-}
-
-/// One external account someone can sign in with.
-///
-/// Keyed on the provider's own id rather than on email, which Google
-/// explicitly recommends: a Google account's email address can change, and
-/// following it would either lose the link or hand the account to whoever
-/// inherits the old address.
-model AuthIdentity {
-  id     String @id @default(uuid())
-  userId String
-  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  /// 'google' today. A string rather than an enum — SQLite has none.
-  provider String
-  /// Google's `sub` claim.
-  providerUserId String
-
-  /// As the provider reported it, for display on the profile screen. Not used
-  /// for lookup, and not kept in step with the account's own email.
-  email String?
-
-  createdAt DateTime @default(now())
-
-  @@unique([provider, providerUserId])
-  @@index([userId])
-}
-
-/// One issued refresh token. Rotated on every use; never reused.
-model RefreshToken {
-  id     String @id @default(uuid())
-  userId String
-  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  /// sha256 of the token. The raw value exists only in the client's cookie,
-  /// so a leaked database cannot be replayed against us.
-  tokenHash String @unique
-
-  /// Every token descended from one sign-in. Replaying any dead member kills
-  /// the whole family — that is the theft signal.
-  familyId String
-
-  expiresAt DateTime
-  revokedAt DateTime?
-  /// The token this one was rotated into, for tracing a family.
-  replacedById String?
-
-  userAgent String?
-  ip        String?
-
-  createdAt DateTime @default(now())
-
-  @@index([userId])
-  @@index([familyId])
+  trips         Trip[]         @relation("OwnedTrips")
 }

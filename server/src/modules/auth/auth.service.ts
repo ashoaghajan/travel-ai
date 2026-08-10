@@ -81,6 +81,7 @@ export function toApiUser(user: User, identities: AuthIdentity[] = []): ApiUser 
       email: identity.email,
     })),
     hasPassword: user.passwordHash !== null,
+    activeTripId: user.activeTripId,
   };
 }
 

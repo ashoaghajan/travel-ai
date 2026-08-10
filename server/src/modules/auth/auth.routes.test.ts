@@ -40,6 +40,7 @@ describe('POST /api/auth/register', () => {
 
     expect(Object.keys(response.body).sort()).toEqual(['accessToken', 'expiresIn', 'user']);
     expect(Object.keys(response.body.user).sort()).toEqual([
+      'activeTripId',
       'createdAt',
       'email',
       'hasPassword',

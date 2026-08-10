@@ -148,7 +148,41 @@ export type Trip = {
 };
 
 /**
- * A trip that has been generated but not persisted: the server (localStorage
- * in Stage 1) owns the id and timestamps.
+ * A trip that has been generated but not persisted: the server owns the id and
+ * the timestamps.
  */
 export type TripDraft = Omit<Trip, 'id' | 'createdAt' | 'updatedAt'>;
+
+/**
+ * The body of a `PATCH /api/trips/:id` — deliberately not `Partial<TripDraft>`.
+ *
+ * An absent key means "leave this alone"; `null` means "clear it". The two
+ * have to be different values because `undefined` does not survive
+ * `JSON.stringify`: a patch setting a field to `undefined` arrives at the
+ * server as no mention of that field at all, which is indistinguishable from
+ * not wanting to change it. Without `null`, clearing a trip's country is
+ * impossible — the form empties, the save succeeds, and the old value returns
+ * on the next load.
+ */
+export type TripPatch = {
+  title?: string;
+  destination?: string;
+  destinationCountry?: string | null;
+  destinationCity?: string | null;
+  startDate?: string;
+  endDate?: string;
+  travellers?: number;
+  coverImage?: string;
+  itinerary?: ItineraryDay[];
+  notes?: TripNote[] | null;
+  flightsEstimate?: number | null;
+  hotelsEstimate?: number | null;
+  activitiesEstimate?: number | null;
+  /**
+   * The version the client believes it is editing.
+   *
+   * Optional: an empty touch that only refreshes `updatedAt` has no version
+   * to defend. When present, a mismatch is refused rather than overwritten.
+   */
+  version?: number;
+};

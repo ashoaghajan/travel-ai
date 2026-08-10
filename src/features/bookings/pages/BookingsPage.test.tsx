@@ -5,9 +5,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import type { Trip } from '../../../types/trip.types';
-import { STORAGE_KEYS, storageService } from '../../../services/localStorage.service';
 import { searchService } from '../../../services/search.service';
 import { BookingsPage } from './BookingsPage';
+import { seedTrips } from '../../../test/seedTrips';
 
 /**
  * What the screen says it is filling for, and what it actually searches.
@@ -42,9 +42,9 @@ function renderPage() {
   );
 }
 
-beforeEach(() => {
+beforeEach(async () => {
   localStorage.clear();
-  storageService.set(STORAGE_KEYS.trips, [TRIP]);
+  await seedTrips([TRIP]);
 
   // A leftover search for an entirely different trip — the state this bug
   // needed to show itself.

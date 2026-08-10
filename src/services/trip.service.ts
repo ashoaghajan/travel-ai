@@ -1,24 +1,21 @@
-import type { ItineraryActivity, Trip, TripDraft } from '../types/trip.types';
+import { ERROR_CODES } from '@ai-travel/shared';
+import type { ApiUser } from '@ai-travel/shared';
+import type { ItineraryActivity, Trip, TripDraft, TripPatch } from '../types/trip.types';
 import type { Activity } from '../types/travel.types';
 import { createId } from '../utils/id';
-import { STORAGE_KEYS, storageService } from './localStorage.service';
+import { ApiError, http } from './http';
 
 /**
  * Trip persistence.
  *
- * The methods are async and mirror the Stage 2 endpoints (`GET /api/trips`,
- * `POST /api/trips`, …) so swapping localStorage for `fetch` later touches
- * only this file — README "Backend Preparation Rule".
+ * Every method now goes to `/api/trips`, and every signature is the one it had
+ * when this read `localStorage` — which is why the swap touched no caller. The
+ * error classes below are part of that contract: components branch on them, so
+ * an API failure is turned back into the type they expect rather than an
+ * `ApiError` they have never heard of.
+ *
+ * No React component may import this file.
  */
-
-function readTrips(): Trip[] {
-  const trips = storageService.get<Trip[]>(STORAGE_KEYS.trips, []);
-  return Array.isArray(trips) ? trips : [];
-}
-
-function writeTrips(trips: Trip[]): void {
-  storageService.set(STORAGE_KEYS.trips, trips);
-}
 
 export class TripNotFoundError extends Error {
   constructor(id: string) {
@@ -41,14 +38,55 @@ export class ActivityAlreadyOnDayError extends Error {
   }
 }
 
-/** Where an imported attraction lands when the day already has a schedule. */
-const DEFAULT_IMPORT_TIME = '12:00';
+/**
+ * The trip changed underneath this edit.
+ *
+ * New with the API, because the situation is: two tabs open on one trip both
+ * read version 3, and without this the slower write wins silently and the
+ * other person's changes are gone with nothing to show for it.
+ */
+export class StaleTripError extends Error {
+  constructor() {
+    super('This trip changed somewhere else while you were editing it.');
+    this.name = 'StaleTripError';
+  }
+}
+
+/**
+ * Turns an API failure back into the error the callers branch on.
+ *
+ * Every trip failure the server can report has a code of its own, so this is a
+ * lookup rather than status-sniffing. Anything unrecognised is rethrown
+ * untouched — a dead network or a 500 is not a trip problem, and dressing one
+ * as `TripNotFoundError` would tell someone their trip was deleted because the
+ * server restarted.
+ */
+function rethrowTripError(
+  error: unknown,
+  context: { tripId?: string; dayId?: string; title?: string },
+): never {
+  if (error instanceof ApiError) {
+    if (error.code === ERROR_CODES.TRIP_NOT_FOUND) {
+      throw new TripNotFoundError(context.tripId ?? '');
+    }
+    if (error.code === ERROR_CODES.DAY_NOT_FOUND) {
+      throw new ItineraryDayNotFoundError(context.dayId ?? '');
+    }
+    if (error.code === ERROR_CODES.ACTIVITY_ALREADY_ON_DAY) {
+      throw new ActivityAlreadyOnDayError(context.title ?? 'That attraction');
+    }
+    if (error.code === ERROR_CODES.STALE_TRIP) throw new StaleTripError();
+  }
+
+  throw error;
+}
 
 /**
  * Sorts "09:30" before "14:00"; anything unparseable sinks to the end.
  *
- * Exported for the itinerary editor, which places a picked attraction by the
- * same rule this service sorts by.
+ * Still client-side, because the itinerary editor places a picked attraction
+ * by this rule before anything is saved. The server has its own copy for the
+ * import endpoint — one is UX, the other is the record.
  */
 export function minutesOf(time: string): number {
   const match = /^(\d{1,2}):(\d{2})$/.exec(time.trim());
@@ -81,63 +119,53 @@ export function toItineraryActivity(activity: Activity, time: string): Itinerary
 export const tripService = {
   /** Newest first. */
   async getTrips(): Promise<Trip[]> {
-    return readTrips();
+    return http.get<Trip[]>('/trips');
   },
 
+  /**
+   * One trip, or `undefined`.
+   *
+   * Undefined rather than a throw for a missing trip: that is what this has
+   * always returned, and `useTripDetails` reads it as `notFound`.
+   */
   async getTripById(id: string): Promise<Trip | undefined> {
-    return readTrips().find((trip) => trip.id === id);
+    try {
+      return await http.get<Trip>(`/trips/${encodeURIComponent(id)}`);
+    } catch (error) {
+      if (error instanceof ApiError && error.code === ERROR_CODES.TRIP_NOT_FOUND) return undefined;
+
+      throw error;
+    }
   },
 
   /**
    * Saves a generated draft.
    *
-   * Idempotent by `draftId`: saving the same itinerary twice — a double click,
-   * a second tab, or the same conversation after a reload — returns the trip
+   * Idempotent by `draftId`, now enforced by a unique constraint rather than a
+   * scan of the list: saving the same itinerary twice — a double click, a
+   * second tab, or the same conversation after a reload — returns the trip
    * that already exists instead of creating a duplicate.
    */
   async createTrip(draft: TripDraft): Promise<Trip> {
-    const trips = readTrips();
-
-    if (draft.draftId) {
-      const existing = trips.find((trip) => trip.draftId === draft.draftId);
-      if (existing) return existing;
-    }
-
-    const now = new Date().toISOString();
-    const trip: Trip = {
-      ...draft,
-      id: createId('trip'),
-      createdAt: now,
-      updatedAt: now,
-    };
-
-    writeTrips([trip, ...trips]);
-    return trip;
+    return http.post<Trip>('/trips', draft);
   },
 
   /** Edits persist immediately and bump `updatedAt`. */
-  async updateTrip(id: string, patch: Partial<TripDraft>): Promise<Trip> {
-    const trips = readTrips();
-    const index = trips.findIndex((trip) => trip.id === id);
-    if (index === -1) throw new TripNotFoundError(id);
-
-    const updated: Trip = {
-      ...trips[index],
-      ...patch,
-      updatedAt: new Date().toISOString(),
-    };
-
-    writeTrips(trips.map((trip, i) => (i === index ? updated : trip)));
-    return updated;
+  async updateTrip(id: string, patch: TripPatch): Promise<Trip> {
+    try {
+      return await http.patch<Trip>(`/trips/${encodeURIComponent(id)}`, patch);
+    } catch (error) {
+      return rethrowTripError(error, { tripId: id });
+    }
   },
 
   /**
    * Adds an attraction from the explorer to one day of a trip.
    *
-   * The day's activities stay in time order, so an import lands where it
-   * belongs rather than at the bottom. Re-adding the same place is refused
-   * instead of silently duplicating it — the caller shows that as a message,
-   * which is more useful than two identical rows.
+   * The ordering and duplicate rules run server-side now, inside a row-locked
+   * transaction: the day stays in time order so an import lands where it
+   * belongs, and re-adding the same place is refused rather than silently
+   * duplicated.
    */
   async addActivityToDay(
     tripId: string,
@@ -145,64 +173,49 @@ export const tripService = {
     activity: Activity,
     options: { time?: string } = {},
   ): Promise<Trip> {
-    const trips = readTrips();
-    const index = trips.findIndex((trip) => trip.id === tripId);
-    if (index === -1) throw new TripNotFoundError(tripId);
-
-    const trip = trips[index];
-    const dayIndex = trip.itinerary.findIndex((day) => day.id === dayId);
-    if (dayIndex === -1) throw new ItineraryDayNotFoundError(dayId);
-
-    const day = trip.itinerary[dayIndex];
-    if (day.activities.some((entry) => entry.sourceActivityId === activity.id)) {
-      throw new ActivityAlreadyOnDayError(activity.title);
+    try {
+      return await http.post<Trip>(
+        `/trips/${encodeURIComponent(tripId)}/days/${encodeURIComponent(dayId)}/activities`,
+        {
+          // Named rather than spread: `Activity` carries display-only fields —
+          // rating, reviews, credits — that the itinerary has no use for.
+          activity: {
+            id: activity.id,
+            title: activity.title,
+            description: activity.description,
+            category: activity.category,
+            price: activity.price,
+            image: activity.image,
+            coordinates: activity.coordinates,
+          },
+          time: options.time?.trim() || undefined,
+        },
+      );
+    } catch (error) {
+      return rethrowTripError(error, { tripId, dayId, title: activity.title });
     }
-
-    const entry = toItineraryActivity(activity, options.time?.trim() || DEFAULT_IMPORT_TIME);
-    const activities = [...day.activities, entry].sort(
-      (a, b) => minutesOf(a.time) - minutesOf(b.time),
-    );
-
-    const updated: Trip = {
-      ...trip,
-      itinerary: trip.itinerary.map((candidate, i) =>
-        i === dayIndex ? { ...candidate, activities } : candidate,
-      ),
-      updatedAt: new Date().toISOString(),
-    };
-
-    writeTrips(trips.map((candidate, i) => (i === index ? updated : candidate)));
-    return updated;
   },
 
+  /** Idempotent: deleting a trip that is already gone is a success. */
   async deleteTrip(id: string): Promise<void> {
-    writeTrips(readTrips().filter((trip) => trip.id !== id));
-
-    // Never leave the active pointer aimed at a trip that no longer exists.
-    if (readActiveTripId() === id) {
-      storageService.remove(STORAGE_KEYS.activeTripId);
-    }
+    await http.delete<void>(`/trips/${encodeURIComponent(id)}`);
   },
 
-  /** The trip the user last opened, so a reload can offer to resume it. */
+  /**
+   * The trip the user last opened, so a reload can offer to resume it.
+   *
+   * Read from `/api/me` rather than an endpoint of its own, because it is a
+   * fact about the person. Milestone 3 folds the whole of app boot into that
+   * one request; until then this is a second call fetching a little more than
+   * it needs.
+   */
+  async getActiveTripId(): Promise<string | null> {
+    const user = await http.get<ApiUser>('/me');
+
+    return user.activeTripId;
+  },
+
   async setActiveTrip(id: string | null): Promise<void> {
-    if (id === null) {
-      storageService.remove(STORAGE_KEYS.activeTripId);
-      return;
-    }
-    storageService.set(STORAGE_KEYS.activeTripId, id);
+    await http.put<void>('/me/active-trip', { tripId: id });
   },
 };
-
-/**
- * Synchronous reads, used only by the trip store so subscribers paint the
- * stored state on the first render. Stage 2 replaces them with the async API
- * plus a loading state.
- */
-export function readTripsSync(): Trip[] {
-  return readTrips();
-}
-
-export function readActiveTripId(): string | null {
-  return storageService.get<string | null>(STORAGE_KEYS.activeTripId, null);
-}

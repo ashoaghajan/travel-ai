@@ -1,9 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { Trip } from '../../types/trip.types';
 import { tripService } from '../../services/trip.service';
-import { tripStore, useTrips as useTripsSnapshot } from '../../store/trip.store';
-
-type LoadStatus = 'loading' | 'ready' | 'error';
+import { tripStore, useTripsResource } from '../../store/trip.store';
 
 const LOAD_ERROR = 'We could not load your saved trips.';
 const DELETE_ERROR = 'We could not delete that trip. Please try again.';
@@ -11,44 +9,27 @@ const DELETE_ERROR = 'We could not delete that trip. Please try again.';
 /**
  * Saved trips plus the states the list screen needs.
  *
- * The data comes from the store (so a save anywhere updates the list), while
- * the `tripService` call drives the load status. In Stage 1 that resolves in a
- * microtask; in Stage 2 it becomes the real request and the skeletons earn
- * their keep.
+ * Status comes from the resource rather than from an effect of its own. The
+ * old shape ran a second `getTrips()` purely to drive a spinner while the data
+ * came from a snapshot that was already populated — which meant `isLoading`
+ * was true for about a microtask and never gated on anything real. Now there
+ * is one request, and the skeletons earn their keep.
+ *
+ * The return shape is unchanged, so `TripsPage` did not move.
  */
 export function useSavedTrips() {
-  const trips = useTripsSnapshot();
-  const [status, setStatus] = useState<LoadStatus>('loading');
-  const [error, setError] = useState<string | null>(null);
+  const { data: trips, status } = useTripsResource();
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const [deletingTripId, setDeletingTripId] = useState<string | null>(null);
-
-  useEffect(() => {
-    let active = true;
-
-    tripService
-      .getTrips()
-      .then(() => {
-        if (active) setStatus('ready');
-      })
-      .catch(() => {
-        if (!active) return;
-        setStatus('error');
-        setError(LOAD_ERROR);
-      });
-
-    return () => {
-      active = false;
-    };
-  }, []);
 
   const deleteTrip = useCallback(async (trip: Trip) => {
     setDeletingTripId(trip.id);
-    setError(null);
+    setDeleteError(null);
 
     try {
       await tripStore.deleteTrip(trip.id);
     } catch {
-      setError(DELETE_ERROR);
+      setDeleteError(DELETE_ERROR);
     } finally {
       setDeletingTripId(null);
     }
@@ -56,9 +37,13 @@ export function useSavedTrips() {
 
   return {
     trips,
-    error,
+    // A failed delete is the more immediate thing to say; a stale load error
+    // beside a list that did eventually arrive would just be confusing.
+    error: deleteError ?? (status === 'error' ? LOAD_ERROR : null),
     deletingTripId,
-    isLoading: status === 'loading',
+    // 'idle' counts as loading: the fetch starts when the first subscriber
+    // arrives, so a component can render one frame before it begins.
+    isLoading: status === 'loading' || status === 'idle',
     deleteTrip,
   };
 }
@@ -133,42 +118,57 @@ export function useDeleteTrip() {
  * resume it after a reload.
  */
 export function useTripDetails(tripId: string | undefined) {
-  const trips = useTripsSnapshot();
-  const [status, setStatus] = useState<LoadStatus>('loading');
+  const { data: trips, status } = useTripsResource();
+  const [deepLinked, setDeepLinked] = useState<Trip | null>(null);
+  const [isFetchingOne, setIsFetchingOne] = useState(false);
 
+  const fromList = tripId ? trips.find((candidate) => candidate.id === tripId) : undefined;
+  const isListLoading = status === 'loading' || status === 'idle';
+
+  /*
+   * A deep link to a trip the list does not hold.
+   *
+   * The list is this screen's source, but it is not exhaustive forever: an
+   * address pasted into a fresh tab, or a trip created in another tab, can
+   * name an id the loaded list has never seen. One lookup settles it, and
+   * only once the list has actually arrived — asking earlier would fire a
+   * request for every trip opened normally.
+   */
   useEffect(() => {
-    if (!tripId) {
-      setStatus('ready');
-      return;
-    }
+    if (!tripId || isListLoading || fromList) return;
 
     let active = true;
-    setStatus('loading');
+    setIsFetchingOne(true);
 
     tripService
       .getTripById(tripId)
-      .then(() => {
-        if (active) setStatus('ready');
+      .then((found) => {
+        if (active) setDeepLinked(found ?? null);
       })
       .catch(() => {
-        if (active) setStatus('error');
+        if (active) setDeepLinked(null);
+      })
+      .finally(() => {
+        if (active) setIsFetchingOne(false);
       });
 
     return () => {
       active = false;
     };
-  }, [tripId]);
+  }, [tripId, isListLoading, fromList]);
 
-  const trip = tripId ? trips.find((candidate) => candidate.id === tripId) : undefined;
+  const trip = fromList ?? (deepLinked?.id === tripId ? deepLinked : undefined);
 
   // Remember the last trip opened; `deleteTrip` clears it if that trip goes.
   useEffect(() => {
     if (trip) void tripStore.setActiveTrip(trip.id);
   }, [trip]);
 
+  const isLoading = isListLoading || isFetchingOne;
+
   return {
     trip,
-    isLoading: status === 'loading',
-    notFound: status !== 'loading' && !trip,
+    isLoading,
+    notFound: !isLoading && !trip,
   };
 }

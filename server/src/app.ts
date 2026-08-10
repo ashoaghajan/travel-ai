@@ -11,6 +11,8 @@ import { weatherRouter } from './modules/places/weather.routes';
 import { plannerRouter } from './modules/planner/planner.routes';
 import { ratesRouter } from './modules/rates/rates.routes';
 import { travelRouter } from './modules/travel/travel.routes';
+import { migrateRouter } from './modules/trips/migrate.routes';
+import { activeTripRouter, tripsRouter } from './modules/trips/trips.routes';
 import { serveSpa } from './static';
 
 /**
@@ -38,6 +40,13 @@ export function createApp(): Express {
 
   app.use('/api/auth', authRouter);
   app.use('/api/me', meRouter);
+  // The reader's own trips. Authenticated, and scoped by the token's user in
+  // every query — see the module docblock.
+  app.use('/api', tripsRouter);
+  app.use('/api', activeTripRouter);
+  // Claims the trips a browser saved before there was anywhere else to put
+  // them. Carries its own body limit — see the module.
+  app.use('/api', migrateRouter);
   // Unauthenticated, and mounted at the root of /api because its paths are
   // domain-shaped (`/flights/search`) rather than grouped under one noun.
   app.use('/api', travelRouter);

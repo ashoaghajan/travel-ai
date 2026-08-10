@@ -40,6 +40,15 @@ export const STORAGE_KEYS = {
    */
   exchangeRates: 'ai-travel-planner:exchangeRates',
   /**
+   * The account this browser has already handed its local trips to.
+   *
+   * Per browser, deliberately. The server has its own marker, which stops a
+   * second *device* re-importing data an account already claimed; this one
+   * stops *this* browser asking again while still letting a different browser
+   * with genuinely different trips contribute its own.
+   */
+  migratedFor: 'ai-travel-planner:migratedFor',
+  /**
    * Which account the user data above currently belongs to.
    *
    * Trips are still device-local while accounts are real, so something has to

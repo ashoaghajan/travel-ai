@@ -1,462 +1,335 @@
-/**
- * @vitest-environment jsdom
- */
-import { beforeEach, describe, expect, it } from 'vitest';
-import type { TripDraft } from '../types/trip.types';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { ERROR_CODES } from '@ai-travel/shared';
+import type { Trip, TripDraft } from '../types/trip.types';
 import type { Activity } from '../types/travel.types';
-import { STORAGE_KEYS, storageService } from './localStorage.service';
 import {
   ActivityAlreadyOnDayError,
   ItineraryDayNotFoundError,
+  StaleTripError,
   TripNotFoundError,
-  readActiveTripId,
-  readTripsSync,
+  minutesOf,
+  toItineraryActivity,
   tripService,
 } from './trip.service';
+import { ApiError, http } from './http';
 
-function makeDraft(overrides: Partial<TripDraft> = {}): TripDraft {
+/**
+ * The trips client, now that trips live in Postgres.
+ *
+ * This file used to test persistence — it wrote to `localStorage` and read it
+ * back. That behaviour moved to `server/src/modules/trips/`, where it is
+ * tested against a real database. What is left is the contract this file keeps
+ * with the rest of the app: the requests it makes, and the fact that an API
+ * failure arrives as the error class six call sites branch on rather than as
+ * an `ApiError` none of them have heard of.
+ *
+ * That mapping is the part worth pinning precisely. A network blip mistaken
+ * for `TripNotFoundError` tells someone their trip was deleted because the
+ * server restarted.
+ */
+
+function makeTrip(overrides: Partial<Trip> = {}): Trip {
   return {
-    draftId: 'draft_test',
-    title: 'Bali Adventure',
-    destination: 'Bali',
-    startDate: '2027-05-20',
-    endDate: '2027-05-26',
+    id: 'trip_1',
+    title: 'A week in Yerevan',
+    destination: 'Yerevan',
+    startDate: '2027-09-02',
+    endDate: '2027-09-06',
     travellers: 2,
-    coverImage: '/bali.jpg',
+    coverImage: '/yerevan.jpg',
     itinerary: [
       {
         id: 'day-1',
         dayNumber: 1,
-        date: '2027-05-20',
-        destination: 'Ubud',
-        summary: 'Welcome & relax',
+        date: '2027-09-02',
+        destination: 'Yerevan',
+        summary: 'Arrival',
         activities: [],
       },
     ],
-    flightsEstimate: 2248,
-    hotelsEstimate: 1080,
-    activitiesEstimate: 570,
+    createdAt: '2026-08-10T00:00:00.000Z',
+    updatedAt: '2026-08-10T00:00:00.000Z',
     ...overrides,
   };
 }
 
-describe('getTrips', () => {
-  it('starts empty', async () => {
-    await expect(tripService.getTrips()).resolves.toEqual([]);
-  });
+function makeDraft(overrides: Partial<TripDraft> = {}): TripDraft {
+  const { id: _id, createdAt: _createdAt, updatedAt: _updatedAt, ...draft } = makeTrip();
 
-  it('returns an empty list when the stored value is not an array', async () => {
-    storageService.set(STORAGE_KEYS.trips, { not: 'an array' });
-    await expect(tripService.getTrips()).resolves.toEqual([]);
-  });
+  return { ...draft, ...overrides };
+}
 
-  it('returns an empty list when the stored value is corrupt', async () => {
-    localStorage.setItem(STORAGE_KEYS.trips, 'not json at all');
-    await expect(tripService.getTrips()).resolves.toEqual([]);
-  });
+const ATTRACTION: Activity = {
+  id: 'otm_matenadaran',
+  title: 'Matenadaran',
+  category: 'culture',
+  description: 'A library of manuscripts.',
+  price: 0,
+  rating: 5,
+  reviews: 120,
+  image: '/matenadaran.jpg',
+};
+
+/** The API refusing with one of its own codes. */
+function apiFails(code: string, status = 400) {
+  return new ApiError(status, code as never, 'Nope.');
+}
+
+afterEach(() => {
+  vi.restoreAllMocks();
 });
 
-describe('createTrip', () => {
-  it('assigns an id and timestamps', async () => {
-    const trip = await tripService.createTrip(makeDraft());
+describe('getTrips', () => {
+  it('asks the trips endpoint', async () => {
+    const get = vi.spyOn(http, 'get').mockResolvedValue([makeTrip()]);
 
-    expect(trip.id).toMatch(/^trip_/);
-    expect(trip.createdAt).toEqual(expect.any(String));
-    expect(trip.updatedAt).toBe(trip.createdAt);
-  });
-
-  it('keeps the draft fields', async () => {
-    const draft = makeDraft();
-    const trip = await tripService.createTrip(draft);
-
-    expect(trip).toMatchObject({
-      title: draft.title,
-      destination: draft.destination,
-      travellers: draft.travellers,
-      itinerary: draft.itinerary,
-    });
-  });
-
-  it('persists the trip', async () => {
-    const trip = await tripService.createTrip(makeDraft());
-    await expect(tripService.getTrips()).resolves.toEqual([trip]);
-  });
-
-  it('puts the newest trip first', async () => {
-    const first = await tripService.createTrip(makeDraft({ draftId: 'draft_a', title: 'A' }));
-    const second = await tripService.createTrip(makeDraft({ draftId: 'draft_b', title: 'B' }));
-
-    const trips = await tripService.getTrips();
-    expect(trips.map((trip) => trip.id)).toEqual([second.id, first.id]);
-  });
-
-  describe('duplicate prevention', () => {
-    it('returns the existing trip when the same draft is saved twice', async () => {
-      const first = await tripService.createTrip(makeDraft());
-      const second = await tripService.createTrip(makeDraft());
-
-      expect(second.id).toBe(first.id);
-      await expect(tripService.getTrips()).resolves.toHaveLength(1);
-    });
-
-    it('still dedupes after the saved trip has been edited', async () => {
-      const first = await tripService.createTrip(makeDraft());
-      await tripService.updateTrip(first.id, { title: 'Renamed' });
-
-      const again = await tripService.createTrip(makeDraft());
-
-      expect(again.id).toBe(first.id);
-      expect(again.title).toBe('Renamed');
-      await expect(tripService.getTrips()).resolves.toHaveLength(1);
-    });
-
-    it('treats a different draft as a new trip', async () => {
-      await tripService.createTrip(makeDraft({ draftId: 'draft_a' }));
-      await tripService.createTrip(makeDraft({ draftId: 'draft_b' }));
-
-      await expect(tripService.getTrips()).resolves.toHaveLength(2);
-    });
-
-    it('always creates when the draft has no id', async () => {
-      await tripService.createTrip(makeDraft({ draftId: undefined }));
-      await tripService.createTrip(makeDraft({ draftId: undefined }));
-
-      await expect(tripService.getTrips()).resolves.toHaveLength(2);
-    });
+    await expect(tripService.getTrips()).resolves.toHaveLength(1);
+    expect(get).toHaveBeenCalledWith('/trips');
   });
 });
 
 describe('getTripById', () => {
-  it('finds a saved trip', async () => {
-    const trip = await tripService.createTrip(makeDraft());
-    await expect(tripService.getTripById(trip.id)).resolves.toEqual(trip);
+  it('returns the trip', async () => {
+    vi.spyOn(http, 'get').mockResolvedValue(makeTrip());
+
+    await expect(tripService.getTripById('trip_1')).resolves.toMatchObject({ id: 'trip_1' });
   });
 
-  it('resolves undefined for an unknown id', async () => {
-    await expect(tripService.getTripById('trip_nope')).resolves.toBeUndefined();
+  it('escapes the id in the path', async () => {
+    const get = vi.spyOn(http, 'get').mockResolvedValue(makeTrip());
+
+    await tripService.getTripById('trip/../admin');
+
+    expect(get).toHaveBeenCalledWith('/trips/trip%2F..%2Fadmin');
+  });
+
+  it('answers undefined for a trip that is not there', async () => {
+    vi.spyOn(http, 'get').mockRejectedValue(apiFails(ERROR_CODES.TRIP_NOT_FOUND, 404));
+
+    // Undefined rather than a throw: `useTripDetails` reads it as `notFound`.
+    await expect(tripService.getTripById('trip_gone')).resolves.toBeUndefined();
+  });
+
+  it('does not turn a server failure into a missing trip', async () => {
+    vi.spyOn(http, 'get').mockRejectedValue(apiFails(ERROR_CODES.INTERNAL, 500));
+
+    // Answering `undefined` here would render "this trip no longer exists"
+    // because the server restarted.
+    await expect(tripService.getTripById('trip_1')).rejects.toBeInstanceOf(ApiError);
+  });
+});
+
+describe('createTrip', () => {
+  it('posts the draft', async () => {
+    const post = vi.spyOn(http, 'post').mockResolvedValue(makeTrip());
+    const draft = makeDraft({ draftId: 'draft_1' });
+
+    await expect(tripService.createTrip(draft)).resolves.toMatchObject({ id: 'trip_1' });
+    expect(post).toHaveBeenCalledWith('/trips', draft);
+  });
+
+  it('returns whatever the server says the trip is', async () => {
+    // Saving the same draft twice answers with the trip that already exists,
+    // which may differ from the draft just sent.
+    vi.spyOn(http, 'post').mockResolvedValue(makeTrip({ title: 'The saved one' }));
+
+    const trip = await tripService.createTrip(makeDraft({ title: 'A later edit' }));
+
+    expect(trip.title).toBe('The saved one');
   });
 });
 
 describe('updateTrip', () => {
-  it('persists the change', async () => {
-    const trip = await tripService.createTrip(makeDraft());
-    await tripService.updateTrip(trip.id, { title: 'Bali, take two' });
+  it('patches the trip', async () => {
+    const patch = vi.spyOn(http, 'patch').mockResolvedValue(makeTrip({ title: 'Renamed' }));
 
-    await expect(tripService.getTripById(trip.id)).resolves.toMatchObject({
-      title: 'Bali, take two',
+    await expect(tripService.updateTrip('trip_1', { title: 'Renamed' })).resolves.toMatchObject({
+      title: 'Renamed',
     });
+    expect(patch).toHaveBeenCalledWith('/trips/trip_1', { title: 'Renamed' });
   });
 
-  it('bumps updatedAt but keeps id, createdAt and draftId', async () => {
-    const trip = await tripService.createTrip(makeDraft());
-    const updated = await tripService.updateTrip(trip.id, { travellers: 4 });
+  it('sends an empty patch as a touch', async () => {
+    const patch = vi.spyOn(http, 'patch').mockResolvedValue(makeTrip());
 
-    expect(updated.id).toBe(trip.id);
-    expect(updated.createdAt).toBe(trip.createdAt);
-    expect(updated.draftId).toBe(trip.draftId);
-    expect(new Date(updated.updatedAt).getTime()).toBeGreaterThanOrEqual(
-      new Date(trip.createdAt).getTime(),
-    );
+    await tripService.updateTrip('trip_1', {});
+
+    // The summary screen's Save does this deliberately, to bump `updatedAt`.
+    expect(patch).toHaveBeenCalledWith('/trips/trip_1', {});
   });
 
-  it('leaves untouched fields alone', async () => {
-    const trip = await tripService.createTrip(makeDraft());
-    const updated = await tripService.updateTrip(trip.id, { title: 'New' });
+  it('sends null through, so a field can be cleared', async () => {
+    const patch = vi.spyOn(http, 'patch').mockResolvedValue(makeTrip());
 
-    expect(updated.itinerary).toEqual(trip.itinerary);
-    expect(updated.destination).toBe(trip.destination);
+    await tripService.updateTrip('trip_1', { destinationCountry: null });
+
+    expect(patch).toHaveBeenCalledWith('/trips/trip_1', { destinationCountry: null });
   });
 
-  it('does not disturb other trips', async () => {
-    const first = await tripService.createTrip(makeDraft({ draftId: 'draft_a', title: 'A' }));
-    const second = await tripService.createTrip(makeDraft({ draftId: 'draft_b', title: 'B' }));
+  it('reports a missing trip as TripNotFoundError', async () => {
+    vi.spyOn(http, 'patch').mockRejectedValue(apiFails(ERROR_CODES.TRIP_NOT_FOUND, 404));
 
-    await tripService.updateTrip(first.id, { title: 'A renamed' });
-
-    await expect(tripService.getTripById(second.id)).resolves.toMatchObject({ title: 'B' });
+    await expect(tripService.updateTrip('trip_gone', {})).rejects.toBeInstanceOf(TripNotFoundError);
   });
 
-  it('throws TripNotFoundError for an unknown id', async () => {
-    await expect(tripService.updateTrip('trip_nope', { title: 'x' })).rejects.toThrow(
-      TripNotFoundError,
-    );
+  it('reports a conflicting edit as StaleTripError', async () => {
+    vi.spyOn(http, 'patch').mockRejectedValue(apiFails(ERROR_CODES.STALE_TRIP, 409));
+
+    // Two tabs on one trip. The screen offers a reload rather than pretending
+    // the save landed.
+    await expect(tripService.updateTrip('trip_1', {})).rejects.toBeInstanceOf(StaleTripError);
+  });
+
+  it('lets an unrecognised failure through untouched', async () => {
+    vi.spyOn(http, 'patch').mockRejectedValue(apiFails(ERROR_CODES.NETWORK, 0));
+
+    const caught = await tripService.updateTrip('trip_1', {}).catch((error) => error);
+
+    expect(caught).toBeInstanceOf(ApiError);
+    expect(caught).not.toBeInstanceOf(TripNotFoundError);
   });
 });
 
 describe('deleteTrip', () => {
-  it('removes the trip', async () => {
-    const trip = await tripService.createTrip(makeDraft());
-    await tripService.deleteTrip(trip.id);
+  it('deletes the trip', async () => {
+    const remove = vi.spyOn(http, 'delete').mockResolvedValue(undefined);
 
-    await expect(tripService.getTrips()).resolves.toEqual([]);
-  });
+    await tripService.deleteTrip('trip_1');
 
-  it('leaves the other trips in place', async () => {
-    const first = await tripService.createTrip(makeDraft({ draftId: 'draft_a' }));
-    const second = await tripService.createTrip(makeDraft({ draftId: 'draft_b' }));
-
-    await tripService.deleteTrip(first.id);
-
-    const trips = await tripService.getTrips();
-    expect(trips.map((trip) => trip.id)).toEqual([second.id]);
-  });
-
-  it('is harmless for an unknown id', async () => {
-    const trip = await tripService.createTrip(makeDraft());
-    await expect(tripService.deleteTrip('trip_nope')).resolves.toBeUndefined();
-    await expect(tripService.getTrips()).resolves.toHaveLength(1);
-    expect(trip.id).toBeDefined();
-  });
-
-  it('clears the active pointer when it aimed at the deleted trip', async () => {
-    const trip = await tripService.createTrip(makeDraft());
-    await tripService.setActiveTrip(trip.id);
-
-    await tripService.deleteTrip(trip.id);
-
-    expect(readActiveTripId()).toBeNull();
-  });
-
-  it('leaves the active pointer alone when another trip is deleted', async () => {
-    const kept = await tripService.createTrip(makeDraft({ draftId: 'draft_a' }));
-    const removed = await tripService.createTrip(makeDraft({ draftId: 'draft_b' }));
-    await tripService.setActiveTrip(kept.id);
-
-    await tripService.deleteTrip(removed.id);
-
-    expect(readActiveTripId()).toBe(kept.id);
+    expect(remove).toHaveBeenCalledWith('/trips/trip_1');
   });
 });
-
-describe('setActiveTrip', () => {
-  it('stores the id', async () => {
-    await tripService.setActiveTrip('trip_123');
-    expect(readActiveTripId()).toBe('trip_123');
-  });
-
-  it('clears the pointer when passed null', async () => {
-    await tripService.setActiveTrip('trip_123');
-    await tripService.setActiveTrip(null);
-
-    expect(readActiveTripId()).toBeNull();
-  });
-});
-
-describe('readTripsSync', () => {
-  it('sees what the async API wrote', async () => {
-    const trip = await tripService.createTrip(makeDraft());
-    expect(readTripsSync()).toEqual([trip]);
-  });
-});
-
-describe('storage integration', () => {
-  beforeEach(async () => {
-    await tripService.createTrip(makeDraft());
-  });
-
-  it('writes under the trips key', () => {
-    expect(localStorage.getItem(STORAGE_KEYS.trips)).not.toBeNull();
-  });
-
-  it('notifies subscribers when trips change', async () => {
-    let notified = 0;
-    const unsubscribe = storageService.subscribe(STORAGE_KEYS.trips, () => {
-      notified += 1;
-    });
-
-    await tripService.createTrip(makeDraft({ draftId: 'draft_other' }));
-
-    expect(notified).toBe(1);
-    unsubscribe();
-  });
-});
-
-/* -------------------------------------------- attractions from the explorer */
-
-function attraction(id: string, overrides: Partial<Activity> = {}): Activity {
-  return {
-    id,
-    title: `Place ${id}`,
-    category: 'culture',
-    description: 'Museums · 1.2 km from centre',
-    price: 0,
-    rating: 5,
-    reviews: 0,
-    image: 'city.jpg',
-    coordinates: { lat: -8.65, lng: 115.2 },
-    ...overrides,
-  };
-}
 
 describe('addActivityToDay', () => {
-  it('adds the attraction to the chosen day', async () => {
-    const trip = await tripService.createTrip(makeDraft());
+  it('posts the attraction to the day', async () => {
+    const post = vi.spyOn(http, 'post').mockResolvedValue(makeTrip());
 
-    const updated = await tripService.addActivityToDay(trip.id, 'day-1', attraction('N1'));
+    await tripService.addActivityToDay('trip_1', 'day-1', ATTRACTION, { time: '09:30' });
 
-    expect(updated.itinerary[0].activities).toHaveLength(1);
-    expect(updated.itinerary[0].activities[0].title).toBe('Place N1');
-  });
-
-  it('marks where it came from, so the import can be traced', async () => {
-    const trip = await tripService.createTrip(makeDraft());
-
-    const updated = await tripService.addActivityToDay(trip.id, 'day-1', attraction('N1'));
-
-    expect(updated.itinerary[0].activities[0]).toMatchObject({
-      sourceActivityId: 'N1',
-      coordinates: { lat: -8.65, lng: 115.2 },
-      category: 'culture',
+    expect(post).toHaveBeenCalledWith('/trips/trip_1/days/day-1/activities', {
+      activity: {
+        id: 'otm_matenadaran',
+        title: 'Matenadaran',
+        description: 'A library of manuscripts.',
+        category: 'culture',
+        price: 0,
+        image: '/matenadaran.jpg',
+        coordinates: undefined,
+      },
+      time: '09:30',
     });
   });
 
-  it('gives the entry its own id, not the attraction’s', async () => {
-    const trip = await tripService.createTrip(makeDraft());
+  it('sends no time when none was chosen, so the server picks the default', async () => {
+    const post = vi.spyOn(http, 'post').mockResolvedValue(makeTrip());
 
-    const updated = await tripService.addActivityToDay(trip.id, 'day-1', attraction('N1'));
+    await tripService.addActivityToDay('trip_1', 'day-1', ATTRACTION, { time: '   ' });
 
-    expect(updated.itinerary[0].activities[0].id).not.toBe('N1');
+    expect(post.mock.calls[0][1]).toMatchObject({ time: undefined });
   });
 
-  it('carries a price only when there is one', async () => {
-    const trip = await tripService.createTrip(makeDraft());
+  it('leaves the display-only fields behind', async () => {
+    const post = vi.spyOn(http, 'post').mockResolvedValue(makeTrip());
 
-    const free = await tripService.addActivityToDay(trip.id, 'day-1', attraction('N1'));
-    expect(free.itinerary[0].activities[0].priceEstimate).toBeUndefined();
+    await tripService.addActivityToDay('trip_1', 'day-1', ATTRACTION);
 
-    const paid = await tripService.addActivityToDay(
-      trip.id,
-      'day-1',
-      attraction('N2', { price: 45 }),
-    );
-    const entry = paid.itinerary[0].activities.find((a) => a.sourceActivityId === 'N2');
-    expect(entry?.priceEstimate).toBe(45);
+    // `rating` and `reviews` belong to the explorer listing, not the itinerary.
+    const sent = post.mock.calls[0][1] as { activity: Record<string, unknown> };
+    expect(sent.activity).not.toHaveProperty('rating');
+    expect(sent.activity).not.toHaveProperty('reviews');
   });
 
-  it('keeps the day in time order', async () => {
-    const trip = await tripService.createTrip(
-      makeDraft({
-        itinerary: [
-          {
-            id: 'day-1',
-            dayNumber: 1,
-            date: '2027-05-20',
-            destination: 'Ubud',
-            summary: 'Welcome',
-            activities: [
-              { id: 'a1', time: '09:00', title: 'Morning', description: '', category: 'nature' },
-              { id: 'a2', time: '18:30', title: 'Dinner', description: '', category: 'food' },
-            ],
-          },
-        ],
-      }),
-    );
-
-    const updated = await tripService.addActivityToDay(trip.id, 'day-1', attraction('N1'));
-
-    expect(updated.itinerary[0].activities.map((a) => a.time)).toEqual(['09:00', '12:00', '18:30']);
-  });
-
-  it('honours an explicit time', async () => {
-    const trip = await tripService.createTrip(makeDraft());
-
-    const updated = await tripService.addActivityToDay(trip.id, 'day-1', attraction('N1'), {
-      time: '07:15',
-    });
-
-    expect(updated.itinerary[0].activities[0].time).toBe('07:15');
-  });
-
-  it('persists immediately and bumps updatedAt', async () => {
-    const trip = await tripService.createTrip(makeDraft());
-
-    const updated = await tripService.addActivityToDay(trip.id, 'day-1', attraction('N1'));
-
-    const stored = readTripsSync().find((candidate) => candidate.id === trip.id);
-    expect(stored?.itinerary[0].activities).toHaveLength(1);
-    expect(Date.parse(updated.updatedAt)).toBeGreaterThanOrEqual(Date.parse(trip.createdAt));
-  });
-
-  it('leaves the other days alone', async () => {
-    const trip = await tripService.createTrip(
-      makeDraft({
-        itinerary: [
-          {
-            id: 'day-1',
-            dayNumber: 1,
-            date: '2027-05-20',
-            destination: 'Ubud',
-            summary: 'A',
-            activities: [],
-          },
-          {
-            id: 'day-2',
-            dayNumber: 2,
-            date: '2027-05-21',
-            destination: 'Ubud',
-            summary: 'B',
-            activities: [],
-          },
-        ],
-      }),
-    );
-
-    const updated = await tripService.addActivityToDay(trip.id, 'day-2', attraction('N1'));
-
-    expect(updated.itinerary[0].activities).toHaveLength(0);
-    expect(updated.itinerary[1].activities).toHaveLength(1);
-  });
-
-  it('refuses the same attraction twice on one day', async () => {
-    const trip = await tripService.createTrip(makeDraft());
-    await tripService.addActivityToDay(trip.id, 'day-1', attraction('N1'));
+  it('reports a missing day as ItineraryDayNotFoundError', async () => {
+    vi.spyOn(http, 'post').mockRejectedValue(apiFails(ERROR_CODES.DAY_NOT_FOUND, 404));
 
     await expect(
-      tripService.addActivityToDay(trip.id, 'day-1', attraction('N1')),
-    ).rejects.toThrow(ActivityAlreadyOnDayError);
+      tripService.addActivityToDay('trip_1', 'day_gone', ATTRACTION),
+    ).rejects.toBeInstanceOf(ItineraryDayNotFoundError);
   });
 
-  it('allows the same attraction on a different day', async () => {
-    const trip = await tripService.createTrip(
-      makeDraft({
-        itinerary: [
-          {
-            id: 'day-1',
-            dayNumber: 1,
-            date: '2027-05-20',
-            destination: 'Ubud',
-            summary: 'A',
-            activities: [],
-          },
-          {
-            id: 'day-2',
-            dayNumber: 2,
-            date: '2027-05-21',
-            destination: 'Ubud',
-            summary: 'B',
-            activities: [],
-          },
-        ],
-      }),
-    );
-    await tripService.addActivityToDay(trip.id, 'day-1', attraction('N1'));
+  it('reports a repeat as ActivityAlreadyOnDayError, naming the place', async () => {
+    vi.spyOn(http, 'post').mockRejectedValue(apiFails(ERROR_CODES.ACTIVITY_ALREADY_ON_DAY, 409));
 
-    await expect(
-      tripService.addActivityToDay(trip.id, 'day-2', attraction('N1')),
-    ).resolves.toBeDefined();
+    const caught = await tripService
+      .addActivityToDay('trip_1', 'day-1', ATTRACTION)
+      .catch((error) => error);
+
+    expect(caught).toBeInstanceOf(ActivityAlreadyOnDayError);
+    expect(caught.message).toContain('Matenadaran');
   });
 
-  it('rejects an unknown trip', async () => {
+  it('reports a missing trip as TripNotFoundError', async () => {
+    vi.spyOn(http, 'post').mockRejectedValue(apiFails(ERROR_CODES.TRIP_NOT_FOUND, 404));
+
     await expect(
-      tripService.addActivityToDay('missing', 'day-1', attraction('N1')),
-    ).rejects.toThrow(TripNotFoundError);
+      tripService.addActivityToDay('trip_gone', 'day-1', ATTRACTION),
+    ).rejects.toBeInstanceOf(TripNotFoundError);
+  });
+});
+
+describe('the active trip', () => {
+  it('reads the pointer off the current user', async () => {
+    vi.spyOn(http, 'get').mockResolvedValue({ activeTripId: 'trip_7' });
+
+    await expect(tripService.getActiveTripId()).resolves.toBe('trip_7');
   });
 
-  it('rejects an unknown day', async () => {
-    const trip = await tripService.createTrip(makeDraft());
+  it('is null when nothing has been opened', async () => {
+    vi.spyOn(http, 'get').mockResolvedValue({ activeTripId: null });
 
-    await expect(
-      tripService.addActivityToDay(trip.id, 'day-99', attraction('N1')),
-    ).rejects.toThrow(ItineraryDayNotFoundError);
+    await expect(tripService.getActiveTripId()).resolves.toBeNull();
+  });
+
+  it('records the trip', async () => {
+    const put = vi.spyOn(http, 'put').mockResolvedValue(undefined);
+
+    await tripService.setActiveTrip('trip_1');
+
+    expect(put).toHaveBeenCalledWith('/me/active-trip', { tripId: 'trip_1' });
+  });
+
+  it('clears the pointer', async () => {
+    const put = vi.spyOn(http, 'put').mockResolvedValue(undefined);
+
+    await tripService.setActiveTrip(null);
+
+    expect(put).toHaveBeenCalledWith('/me/active-trip', { tripId: null });
+  });
+});
+
+/* ------------------------------------------------- the pure helpers, unmoved */
+
+describe('minutesOf', () => {
+  it('orders a morning before an afternoon', () => {
+    expect(minutesOf('09:30')).toBeLessThan(minutesOf('14:00'));
+  });
+
+  it('sinks anything unparseable to the end', () => {
+    expect(minutesOf('later')).toBe(Number.MAX_SAFE_INTEGER);
+    expect(minutesOf('')).toBe(Number.MAX_SAFE_INTEGER);
+  });
+
+  it('ignores surrounding space', () => {
+    expect(minutesOf('  09:30 ')).toBe(570);
+  });
+});
+
+describe('toItineraryActivity', () => {
+  it('carries the source id, so a repeat can be recognised', () => {
+    const entry = toItineraryActivity(ATTRACTION, '09:30');
+
+    expect(entry.sourceActivityId).toBe('otm_matenadaran');
+    expect(entry.id).toMatch(/^act_/);
+  });
+
+  it('leaves the price off when nobody quoted one', () => {
+    // Zero means unpriced, which is not the same as free.
+    expect(toItineraryActivity(ATTRACTION, '09:30').priceEstimate).toBeUndefined();
+  });
+
+  it('keeps a real price', () => {
+    const entry = toItineraryActivity({ ...ATTRACTION, price: 18 }, '09:30');
+
+    expect(entry.priceEstimate).toBe(18);
   });
 });

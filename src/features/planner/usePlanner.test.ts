@@ -3,7 +3,7 @@
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, renderHook, waitFor } from '@testing-library/react';
-import type { TripDraft } from '../../types/trip.types';
+import type { Trip, TripDraft } from '../../types/trip.types';
 import { tripService } from '../../services/trip.service';
 import { bookingService } from '../../services/booking.service';
 import { tripStore } from '../../store/trip.store';
@@ -78,9 +78,46 @@ function withSchedule(): TripDraft {
   });
 }
 
+/**
+ * An in-memory stand-in for the trips API.
+ *
+ * These tests are about `usePlanner` — that saving is idempotent by `draftId`,
+ * and that one save files one set of bookings. Trips live in Postgres now, so
+ * the persistence they used to lean on is gone; this reproduces the one rule
+ * they actually depend on (a repeated `draftId` returns the existing trip)
+ * without standing up a database for a hook test.
+ */
+let trips: Trip[] = [];
+
+function fakeTripsApi() {
+  trips = [];
+
+  vi.spyOn(tripService, 'getTrips').mockImplementation(async () => trips);
+  vi.spyOn(tripService, 'getActiveTripId').mockResolvedValue(null);
+
+  vi.spyOn(tripService, 'createTrip').mockImplementation(async (draft) => {
+    // The server's unique constraint, in one line.
+    const existing = draft.draftId && trips.find((trip) => trip.draftId === draft.draftId);
+    if (existing) return existing;
+
+    const trip: Trip = {
+      ...draft,
+      id: `trip_${trips.length + 1}`,
+      createdAt: '2026-08-10T00:00:00.000Z',
+      updatedAt: '2026-08-10T00:00:00.000Z',
+    };
+
+    trips = [trip, ...trips];
+
+    return trip;
+  });
+}
+
 beforeEach(() => {
   vi.restoreAllMocks();
   localStorage.clear();
+  fakeTripsApi();
+  tripStore.reset();
 });
 
 describe('customiseTrip', () => {

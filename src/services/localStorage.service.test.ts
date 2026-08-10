@@ -28,6 +28,7 @@ describe('storage keys', () => {
       countries: 'ai-travel-planner:countries',
       activities: 'ai-travel-planner:activities',
       exchangeRates: 'ai-travel-planner:exchangeRates',
+      migratedFor: 'ai-travel-planner:migratedFor',
       geocodes: 'ai-travel-planner:geocodes',
       ownerUserId: 'ai-travel-planner:ownerUserId',
     });

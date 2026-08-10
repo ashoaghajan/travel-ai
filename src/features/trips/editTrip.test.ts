@@ -198,7 +198,9 @@ describe('toPatch', () => {
 
     const patch = toPatch(trip, { ...toEditDraft(trip), destinationCity: '' });
 
-    expect(patch.destinationCity).toBeUndefined();
+    // `null`, not `undefined`: the key has to survive JSON.stringify, or the
+    // server never hears that the city was cleared and keeps the old one.
+    expect(patch.destinationCity).toBeNull();
     expect(patch.destination).toBe('Indonesia');
   });
 

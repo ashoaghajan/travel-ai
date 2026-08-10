@@ -9,9 +9,10 @@ import type { Booking, BookingDraft } from '../../../types/booking.types';
 import type { Trip } from '../../../types/trip.types';
 import { STORAGE_KEYS, storageService } from '../../../services/localStorage.service';
 import { AddBookingToTripDialog } from './AddBookingToTripDialog';
+import { seedTrips } from '../../../test/seedTrips';
 
 // jsdom does not implement the native dialog methods.
-beforeEach(() => {
+beforeEach(async () => {
   HTMLDialogElement.prototype.showModal = vi.fn(function showModal(this: HTMLDialogElement) {
     this.open = true;
   });
@@ -20,7 +21,10 @@ beforeEach(() => {
   });
 
   storageService.remove(STORAGE_KEYS.bookings);
-  storageService.set(STORAGE_KEYS.trips, [makeTrip()]);
+  await seedTrips([makeTrip()]);
+
+  // Reset, then load: the store caches its first fetch, and priming it here
+  // keeps the first paint synchronous the way it was when it read storage.
 });
 
 function makeTrip(): Trip {
@@ -150,8 +154,9 @@ describe('AddBookingToTripDialog', () => {
     expect(saved.map((booking) => booking.date).sort()).toEqual(['2027-10-02', '2027-10-06']);
   });
 
-  it('is not a dead end when the reader has no trips', () => {
-    storageService.set(STORAGE_KEYS.trips, []);
+  it('is not a dead end when the reader has no trips', async () => {
+    await seedTrips([]);
+    // Seeded after the prime in `beforeEach`, so the store has to re-read.
     open();
 
     expect(screen.getByText(/kept until you make one/)).toBeInTheDocument();
@@ -196,7 +201,7 @@ describe('AddBookingToTripDialog', () => {
   });
 
   it('pulls the date back in when the trip is switched', async () => {
-    storageService.set(STORAGE_KEYS.trips, [
+    await seedTrips([
       makeTrip(),
       {
         ...makeTrip(),

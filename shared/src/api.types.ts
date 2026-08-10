@@ -47,6 +47,14 @@ export type ApiUser = {
    * is offered — doing so with no password would lock the account.
    */
   hasPassword: boolean;
+  /**
+   * The trip last opened, so a reload can offer to resume it.
+   *
+   * Returned here rather than from an endpoint of its own so that app boot
+   * stays one round trip. Null when nothing has been opened, or when that
+   * trip has since been deleted.
+   */
+  activeTripId: string | null;
 };
 
 export type GoogleCredentialRequest = {

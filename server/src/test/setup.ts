@@ -104,6 +104,11 @@ beforeEach(async () => {
   // Children first — the foreign keys are enforced.
   await prisma.refreshToken.deleteMany();
   await prisma.authIdentity.deleteMany();
+  // Before `user`, which would cascade to them anyway. Explicit because the
+  // pointer runs the other way too: `User.activeTripId` references a trip, and
+  // clearing trips first lets that go null rather than relying on the order
+  // two cascades happen to fire in.
+  await prisma.trip.deleteMany();
   await prisma.user.deleteMany();
 });
 

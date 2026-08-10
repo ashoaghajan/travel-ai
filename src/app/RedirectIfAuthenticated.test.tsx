@@ -46,6 +46,7 @@ const ADA: ApiUser = {
   createdAt: '2026-01-01T00:00:00.000Z',
   identities: [],
   hasPassword: true,
+  activeTripId: null,
 };
 
 /** Settle the session the way the app does, with only the network stubbed. */

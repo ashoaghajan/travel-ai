@@ -44,6 +44,20 @@ export const ERROR_CODES = {
 
   /* generic */
   VALIDATION_FAILED: 'VALIDATION_FAILED',
+
+  /* ------------------------------------------------------------------ trips */
+
+  TRIP_NOT_FOUND: 'TRIP_NOT_FOUND',
+  /**
+   * The trip changed under this edit.
+   *
+   * Two tabs open on one trip both read version 3 and both send a whole
+   * itinerary; without this the slower write wins and the other person's
+   * changes vanish with nothing to show for it.
+   */
+  STALE_TRIP: 'STALE_TRIP',
+  DAY_NOT_FOUND: 'DAY_NOT_FOUND',
+  ACTIVITY_ALREADY_ON_DAY: 'ACTIVITY_ALREADY_ON_DAY',
   NOT_FOUND: 'NOT_FOUND',
   RATE_LIMITED: 'RATE_LIMITED',
   INTERNAL: 'INTERNAL',

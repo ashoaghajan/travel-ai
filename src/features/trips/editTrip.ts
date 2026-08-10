@@ -2,8 +2,8 @@ import type {
   ItineraryActivity,
   ItineraryDay,
   Trip,
-  TripDraft,
   TripNote,
+  TripPatch,
 } from '../../types/trip.types';
 import type { Activity } from '../../types/travel.types';
 import { minutesOf, toItineraryActivity } from '../../services/trip.service';
@@ -172,20 +172,29 @@ export function hasErrors(errors: TripEditErrors): boolean {
  * request already carries what a partial update carries, so moving
  * `tripService.updateTrip` onto HTTP changes no caller and no shape.
  */
-export function toPatch(trip: Trip, draft: TripEditDraft): Partial<TripDraft> {
+export function toPatch(trip: Trip, draft: TripEditDraft): TripPatch {
   const clean = normalise(draft);
-  const patch: Partial<TripDraft> = {};
+  const patch: TripPatch = {};
 
   if (clean.title !== trip.title) patch.title = clean.title;
   if (clean.startDate !== trip.startDate) patch.startDate = clean.startDate;
   if (clean.endDate !== trip.endDate) patch.endDate = clean.endDate;
   if (clean.travellers !== trip.travellers) patch.travellers = clean.travellers;
 
+  /*
+   * `null` to clear, not `undefined`.
+   *
+   * `undefined` does not survive `JSON.stringify` — the key is dropped from
+   * the request body entirely, so the server sees no mention of the field and
+   * correctly leaves it alone. Clearing a trip's country was therefore
+   * impossible: the form emptied, the save succeeded, and the old value came
+   * back on reload.
+   */
   if (clean.destinationCountry !== (trip.destinationCountry ?? '')) {
-    patch.destinationCountry = clean.destinationCountry || undefined;
+    patch.destinationCountry = clean.destinationCountry || null;
   }
   if (clean.destinationCity !== (trip.destinationCity ?? '')) {
-    patch.destinationCity = clean.destinationCity || undefined;
+    patch.destinationCity = clean.destinationCity || null;
   }
 
   // `destination` is the label every card and header renders, so it follows

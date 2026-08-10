@@ -3,6 +3,8 @@ import type { ApiUser, LoginRequest, RegisterRequest } from '@ai-travel/shared';
 import { authService } from '../services/auth.service';
 import { signedOut } from '../services/http';
 import { claimLocalData, releaseLocalData } from '../services/localData.service';
+import { tripImportService } from '../services/tripImport.service';
+import { tripStore } from './trip.store';
 
 /**
  * Who is signed in.
@@ -54,7 +56,21 @@ function signIn(user: ApiUser): void {
   // Before the state change, so the stores have this account's data by the
   // time anything re-renders against it.
   claimLocalData(user.id);
+
   setState({ status: 'authenticated', user });
+
+  /*
+   * Hand over any trips this browser saved before the trips API existed.
+   *
+   * Deliberately not awaited: the redirect must not wait on an upload, and a
+   * failure must not stop anyone signing in. `tripImportService` never
+   * throws — it reports, and leaves the local data untouched so the next
+   * sign-in can retry.
+   */
+  void tripImportService.run(user.id).then((outcome) => {
+    // The store was loaded from an account that did not have these yet.
+    if (outcome.status === 'imported') void tripStore.refresh();
+  });
 }
 
 /**
@@ -65,6 +81,9 @@ signedOut.subscribe(() => {
   if (state.status === 'anonymous') return;
 
   releaseLocalData();
+  // The next reader must not see this account's trips for the moment before
+  // their own arrive.
+  tripStore.reset();
   setState(ANONYMOUS);
 });
 
@@ -134,6 +153,7 @@ export const authStore = {
     } finally {
       // Even if the server never heard about it, this browser is signed out.
       releaseLocalData();
+      tripStore.reset();
       setState(ANONYMOUS);
     }
   },

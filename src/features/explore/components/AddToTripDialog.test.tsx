@@ -7,8 +7,9 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import type { Trip } from '../../../types/trip.types';
 import type { Activity } from '../../../types/travel.types';
-import { STORAGE_KEYS, storageService } from '../../../services/localStorage.service';
 import { AddToTripDialog } from './AddToTripDialog';
+import { seedTrips } from '../../../test/seedTrips';
+import { tripStore } from '../../../store/trip.store';
 
 /**
  * Keeping a place off a trip on the other side of the world.
@@ -23,7 +24,7 @@ import { AddToTripDialog } from './AddToTripDialog';
  */
 
 // jsdom does not implement the native dialog methods.
-beforeEach(() => {
+beforeEach(async () => {
   HTMLDialogElement.prototype.showModal = vi.fn(function showModal(this: HTMLDialogElement) {
     this.open = true;
   });
@@ -31,7 +32,9 @@ beforeEach(() => {
     this.open = false;
   });
 
-  storageService.remove(STORAGE_KEYS.trips);
+  await seedTrips([]);
+  // The store caches its first load; without this a later case would still
+  // see the trips an earlier one seeded.
 });
 
 function makeTrip(overrides: Partial<Trip> = {}): Trip {
@@ -72,6 +75,19 @@ const ACTIVITY: Activity = {
   image: '/ardoukoba.jpg',
 };
 
+/**
+ * Stubs the write the dialog performs.
+ *
+ * Adding an attraction is a `POST` to the trips API now, not a localStorage
+ * mutation — an unstubbed click fails the request and never reaches `onAdded`.
+ */
+function acceptsTheActivity() {
+  return vi
+    .spyOn(tripStore, 'addActivityToDay')
+    .mockImplementation(async () => makeTrip());
+}
+
+/** Renders the dialog against whatever `seedTrips` last put in the store. */
 function open(placeCountry: string | null, onAdded = vi.fn()) {
   render(
     <MemoryRouter>
@@ -90,14 +106,14 @@ function open(placeCountry: string | null, onAdded = vi.fn()) {
 const tripOption = (name: RegExp) => screen.getByRole('option', { name });
 
 describe('a place in another country', () => {
-  it('cannot be put on a trip that goes somewhere else', () => {
-    storageService.set(STORAGE_KEYS.trips, [
+  it('cannot be put on a trip that goes somewhere else', async () => {
+    await seedTrips([
       makeTrip(),
       makeTrip({ id: 'trip_jp', title: 'Tokyo in October', destinationCountry: 'Japan' }),
     ]);
 
     // A place in Japan: the Tokyo trip can take it, the Yerevan one cannot.
-    open('Japan');
+    await open('Japan');
 
     // The Armenian trip is still listed — and says where it goes.
     expect(tripOption(/One week in Yerevan/)).toBeDisabled();
@@ -105,10 +121,10 @@ describe('a place in another country', () => {
     expect(tripOption(/Tokyo in October/)).not.toBeDisabled();
   });
 
-  it('explains itself when no trip goes there at all', () => {
-    storageService.set(STORAGE_KEYS.trips, [makeTrip()]);
+  it('explains itself when no trip goes there at all', async () => {
+    await seedTrips([makeTrip()]);
 
-    open('Djibouti');
+    await open('Djibouti');
 
     expect(screen.getByText('None of your trips go to Djibouti')).toBeInTheDocument();
     expect(screen.getByText(/Ardoukoba is in Djibouti/)).toBeInTheDocument();
@@ -119,8 +135,9 @@ describe('a place in another country', () => {
 
 describe('a place in the trip’s own country', () => {
   it('can be added as before', async () => {
-    storageService.set(STORAGE_KEYS.trips, [makeTrip()]);
-    const { onAdded } = open('Armenia');
+    await seedTrips([makeTrip()]);
+    acceptsTheActivity();
+    const { onAdded } = await open('Armenia');
 
     expect(tripOption(/One week in Yerevan/)).not.toBeDisabled();
 
@@ -129,14 +146,14 @@ describe('a place in the trip’s own country', () => {
     expect(onAdded).toHaveBeenCalledWith('One week in Yerevan');
   });
 
-  it('starts on a trip that can actually take it', () => {
+  it('starts on a trip that can actually take it', async () => {
     // The Armenian trip is first in the list, but Japan is the one on offer.
-    storageService.set(STORAGE_KEYS.trips, [
+    await seedTrips([
       makeTrip(),
       makeTrip({ id: 'trip_jp', title: 'Tokyo in October', destinationCountry: 'Japan' }),
     ]);
 
-    open('Japan');
+    await open('Japan');
 
     expect(screen.getByLabelText('Trip')).toHaveValue('trip_jp');
   });
@@ -145,8 +162,9 @@ describe('a place in the trip’s own country', () => {
 describe('a trip with no country recorded', () => {
   it('still accepts anything, because nothing can be proven about it', async () => {
     // Trips saved before `destinationCountry` existed carry only a label.
-    storageService.set(STORAGE_KEYS.trips, [makeTrip({ destinationCountry: undefined })]);
-    const { onAdded } = open('Djibouti');
+    await seedTrips([makeTrip({ destinationCountry: undefined })]);
+    acceptsTheActivity();
+    const { onAdded } = await open('Djibouti');
 
     await userEvent.click(screen.getByRole('button', { name: 'Add to trip' }));
 
@@ -155,13 +173,13 @@ describe('a trip with no country recorded', () => {
 });
 
 describe('when the browsing country is unknown', () => {
-  it('allows every trip, since there is no mismatch to show', () => {
-    storageService.set(STORAGE_KEYS.trips, [
+  it('allows every trip, since there is no mismatch to show', async () => {
+    await seedTrips([
       makeTrip(),
       makeTrip({ id: 'trip_jp', title: 'Tokyo in October', destinationCountry: 'Japan' }),
     ]);
 
-    open(null);
+    await open(null);
 
     expect(tripOption(/One week in Yerevan/)).not.toBeDisabled();
     expect(tripOption(/Tokyo in October/)).not.toBeDisabled();
