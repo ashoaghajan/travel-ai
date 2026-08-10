@@ -1,11 +1,23 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { ERROR_CODES } from '@ai-travel/shared';
 import {
   MissingApiKeyError,
   OpenTripMapError,
+  UnknownPlaceError,
   openTripMapService,
 } from './opentripmap.service';
 
-const KEY = 'test-key';
+/**
+ * The attractions client, now that it talks to our API rather than to the
+ * provider.
+ *
+ * The ranking, the filtering of unnamed places and the provider's own status
+ * codes moved to `server/src/modules/places/` along with the key, and are
+ * tested there. What is left here is the part that stayed: turning an API
+ * failure back into the error type six call sites branch on. That mapping is
+ * the whole reason those types still exist, and getting it wrong is invisible
+ * until a map silently caches an outage as geography.
+ */
 
 function jsonResponse(body: unknown, status = 200): Response {
   return {
@@ -15,14 +27,10 @@ function jsonResponse(body: unknown, status = 200): Response {
   } as Response;
 }
 
-beforeEach(() => {
-  vi.stubEnv('VITE_OPENTRIPMAP_API_KEY', KEY);
-});
-
-afterEach(() => {
-  vi.unstubAllEnvs();
-  vi.unstubAllGlobals();
-});
+/** The server's error envelope, as `http.ts` expects to read it. */
+function errorResponse(status: number, code: string, message = 'Nope.'): Response {
+  return jsonResponse({ error: { code, message, details: null } }, status);
+}
 
 function stubFetch(implementation: (url: string) => Promise<Response>) {
   const fetchMock = vi.fn((input: string | URL) => implementation(String(input)));
@@ -30,30 +38,61 @@ function stubFetch(implementation: (url: string) => Promise<Response>) {
   return fetchMock;
 }
 
-describe('API key handling', () => {
-  it('throws a clear error when the key is missing', async () => {
-    vi.stubEnv('VITE_OPENTRIPMAP_API_KEY', '');
-    stubFetch(async () => jsonResponse({}));
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
 
-    await expect(openTripMapService.findDestination('Bali')).rejects.toThrow(MissingApiKeyError);
-  });
-
-  it('never puts the key in the path', async () => {
+describe('where the requests go', () => {
+  it('asks our API, never the provider', async () => {
     const fetchMock = stubFetch(async () => jsonResponse({ lat: -8.65, lon: 115.2 }));
 
     await openTripMapService.findDestination('Bali');
 
-    const url = new URL(String(fetchMock.mock.calls[0][0]));
-    expect(url.searchParams.get('apikey')).toBe(KEY);
-    expect(url.pathname).not.toContain(KEY);
+    const url = String(fetchMock.mock.calls[0][0]);
+    expect(url).toContain('/api/places/geoname');
+    expect(url).not.toContain('opentripmap.com');
+  });
+
+  it('sends no API key of its own', async () => {
+    const fetchMock = stubFetch(async () => jsonResponse({ lat: 0, lon: 0 }));
+
+    await openTripMapService.findDestination('Bali', 'ID');
+
+    // The point of the whole change: the browser has no key to send.
+    expect(String(fetchMock.mock.calls[0][0])).not.toContain('apikey');
+  });
+
+  it('passes the search through as query parameters', async () => {
+    const fetchMock = stubFetch(async () => jsonResponse([]));
+
+    await openTripMapService.searchPlaces({
+      lat: -8.65,
+      lon: 115.2,
+      kinds: 'beaches',
+      radius: 60000,
+      limit: 40,
+      minRate: 2,
+    });
+
+    const url = new URL(String(fetchMock.mock.calls[0][0]), 'http://localhost');
+    expect(url.pathname).toContain('/places/search');
+    expect(url.searchParams.get('kinds')).toBe('beaches');
+    expect(url.searchParams.get('radius')).toBe('60000');
+    expect(url.searchParams.get('rate')).toBe('2');
+  });
+
+  it('escapes an id that contains a slash', async () => {
+    const fetchMock = stubFetch(async () => jsonResponse({ xid: 'x', name: 'Place' }));
+
+    await openTripMapService.getPlaceDetails('W311/676978');
+
+    expect(String(fetchMock.mock.calls[0][0])).toContain('W311%2F676978');
   });
 });
 
 describe('findDestination', () => {
   it('returns coordinates', async () => {
-    stubFetch(async () =>
-      jsonResponse({ name: 'Bali', lat: -8.65, lon: 115.21667, country: 'ID' }),
-    );
+    stubFetch(async () => jsonResponse({ name: 'Bali', lat: -8.65, lon: 115.21667, country: 'ID' }));
 
     await expect(openTripMapService.findDestination('Bali')).resolves.toEqual({
       name: 'Bali',
@@ -62,28 +101,52 @@ describe('findDestination', () => {
       country: 'ID',
     });
   });
+});
 
-  it('throws when the place is unknown', async () => {
-    stubFetch(async () => jsonResponse({ error: 'not found' }));
+describe('turning an API failure back into the right error', () => {
+  it('reads a 404 as a place that does not exist', async () => {
+    stubFetch(async () => errorResponse(404, ERROR_CODES.NOT_FOUND));
 
-    await expect(openTripMapService.findDestination('Atlantis')).rejects.toThrow(
-      /does not know a place/,
+    // Durable: `geocode.service` caches this answer rather than retrying it.
+    await expect(openTripMapService.findDestination('Atlantis')).rejects.toBeInstanceOf(
+      UnknownPlaceError,
     );
   });
 
-  it('reports an unauthorised key', async () => {
-    stubFetch(async () => jsonResponse({ error: 'Unauthorized' }, 401));
+  it('names the place it could not find', async () => {
+    stubFetch(async () => errorResponse(404, ERROR_CODES.NOT_FOUND));
 
-    await expect(openTripMapService.findDestination('Bali')).rejects.toThrow(/rejected the API key/);
+    await expect(openTripMapService.findDestination('Atlantis')).rejects.toThrow(/Atlantis/);
   });
 
-  it('reports a server error', async () => {
-    stubFetch(async () => jsonResponse({}, 503));
+  it('reads an unconfigured server as a missing key', async () => {
+    stubFetch(async () => errorResponse(503, ERROR_CODES.PROVIDER_NOT_CONFIGURED));
 
-    await expect(openTripMapService.findDestination('Bali')).rejects.toThrow(/returned 503/);
+    await expect(openTripMapService.findDestination('Bali')).rejects.toBeInstanceOf(
+      MissingApiKeyError,
+    );
   });
 
-  it('reports a network failure', async () => {
+  it('keeps a provider outage transient rather than durable', async () => {
+    stubFetch(async () => errorResponse(502, ERROR_CODES.INTERNAL));
+
+    const caught = await openTripMapService.findDestination('Bali').catch((error) => error);
+
+    // The distinction that matters: a 502 must NOT arrive as UnknownPlaceError,
+    // or the geocode cache remembers a timeout as "this place does not exist".
+    expect(caught).toBeInstanceOf(OpenTripMapError);
+    expect(caught).not.toBeInstanceOf(UnknownPlaceError);
+  });
+
+  it('carries the HTTP status', async () => {
+    stubFetch(async () => errorResponse(429, ERROR_CODES.RATE_LIMITED));
+
+    await expect(
+      openTripMapService.searchPlaces({ lat: 0, lon: 0, kinds: 'beaches', radius: 1000, limit: 1 }),
+    ).rejects.toMatchObject({ name: 'OpenTripMapError', status: 429 });
+  });
+
+  it('reports an unreachable server', async () => {
     stubFetch(async () => {
       throw new TypeError('Failed to fetch');
     });
@@ -91,125 +154,14 @@ describe('findDestination', () => {
     await expect(openTripMapService.findDestination('Bali')).rejects.toThrow(/Could not reach/);
   });
 
-  it('reports a timeout', async () => {
-    stubFetch(async () => {
-      const error = new Error('timed out');
-      error.name = 'TimeoutError';
-      throw error;
-    });
-
-    await expect(openTripMapService.findDestination('Bali')).rejects.toThrow(/did not respond/);
-  });
-
-  it('reports malformed JSON', async () => {
-    stubFetch(
-      async () =>
-        ({
-          ok: true,
-          status: 200,
-          json: async () => {
-            throw new SyntaxError('Unexpected token');
-          },
-        }) as unknown as Response,
-    );
-
-    await expect(openTripMapService.findDestination('Bali')).rejects.toThrow(/malformed/);
-  });
-});
-
-describe('searchPlaces', () => {
-  const searchArgs = { lat: -8.65, lon: 115.2, kinds: 'beaches', radius: 60000, limit: 40 };
-
-  it('passes the query through', async () => {
-    const fetchMock = stubFetch(async () => jsonResponse([]));
-
-    await openTripMapService.searchPlaces({ ...searchArgs, minRate: 2 });
-
-    const url = new URL(String(fetchMock.mock.calls[0][0]));
-    expect(url.pathname).toContain('/radius');
-    expect(url.searchParams.get('kinds')).toBe('beaches');
-    expect(url.searchParams.get('radius')).toBe('60000');
-    expect(url.searchParams.get('rate')).toBe('2');
-    expect(url.searchParams.get('format')).toBe('json');
-  });
-
-  it('ranks the most notable places first', async () => {
-    stubFetch(async () =>
-      jsonResponse([
-        { xid: 'a', name: 'Nearby but minor', rate: 1, kinds: 'beaches' },
-        { xid: 'b', name: 'Famous', rate: 3, kinds: 'beaches' },
-        { xid: 'c', name: 'Notable', rate: 2, kinds: 'beaches' },
-      ]),
-    );
-
-    const places = await openTripMapService.searchPlaces(searchArgs);
-
-    expect(places.map((place) => place.name)).toEqual(['Famous', 'Notable', 'Nearby but minor']);
-  });
-
-  it('drops unnamed places', async () => {
-    stubFetch(async () =>
-      jsonResponse([
-        { xid: 'a', name: '', rate: 3, kinds: 'beaches' },
-        { xid: 'b', name: '   ', rate: 3, kinds: 'beaches' },
-        { xid: 'c', name: 'Kuta Beach', rate: 2, kinds: 'beaches' },
-      ]),
-    );
-
-    const places = await openTripMapService.searchPlaces(searchArgs);
-
-    expect(places.map((place) => place.name)).toEqual(['Kuta Beach']);
-  });
-
-  it('tolerates a non-array response', async () => {
-    stubFetch(async () => jsonResponse({ error: 'nope' }));
-
-    await expect(openTripMapService.searchPlaces(searchArgs)).resolves.toEqual([]);
-  });
-});
-
-describe('getPlaceDetails', () => {
-  it('returns the full record for one place', async () => {
-    stubFetch(async () =>
-      jsonResponse({ xid: 'W1', name: 'Museum Bali', kinds: 'cultural,museums' }),
-    );
-
-    await expect(openTripMapService.getPlaceDetails('W1')).resolves.toMatchObject({
-      xid: 'W1',
-      name: 'Museum Bali',
-    });
-  });
-
-  it('escapes the id in the path', async () => {
-    const fetchMock = stubFetch(async () => jsonResponse({ xid: 'x', name: 'Place' }));
-
-    await openTripMapService.getPlaceDetails('W311/676978');
-
-    expect(String(fetchMock.mock.calls[0][0])).toContain('W311%2F676978');
-  });
-
-  it('surfaces a failure rather than a half-built record', async () => {
-    stubFetch(async () => jsonResponse({}, 404));
+  it('surfaces a details failure rather than a half-built record', async () => {
+    stubFetch(async () => errorResponse(502, ERROR_CODES.INTERNAL));
 
     await expect(openTripMapService.getPlaceDetails('missing')).rejects.toThrow(OpenTripMapError);
   });
 });
 
 describe('OpenTripMapError', () => {
-  it('carries the HTTP status', async () => {
-    stubFetch(async () => jsonResponse({}, 429));
-
-    await expect(
-      openTripMapService.searchPlaces({
-        lat: 0,
-        lon: 0,
-        kinds: 'beaches',
-        radius: 1000,
-        limit: 1,
-      }),
-    ).rejects.toMatchObject({ name: 'OpenTripMapError', status: 429 });
-  });
-
   it('is an Error', () => {
     expect(new OpenTripMapError('boom')).toBeInstanceOf(Error);
   });

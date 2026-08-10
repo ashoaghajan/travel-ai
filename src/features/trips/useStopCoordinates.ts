@@ -6,7 +6,7 @@ import { countryService } from '../../services/country.service';
 import { MissingApiKeyError } from '../../services/opentripmap.service';
 
 const MISSING_KEY_NOTICE =
-  'The map needs an OpenTripMap API key to place these stops. Add VITE_OPENTRIPMAP_API_KEY to .env.local and restart the dev server.';
+  'The map cannot place these stops: the server has no OpenTripMap key configured.';
 
 export type LocatedStop = ItineraryStop & { coordinates: LatLng };
 

@@ -82,7 +82,6 @@ let fetchMock: ReturnType<typeof vi.fn>;
 
 beforeEach(() => {
   setAccessToken('access-token');
-  weatherService.clearCache();
   fetchMock = vi.fn();
   vi.stubGlobal('fetch', fetchMock);
 });

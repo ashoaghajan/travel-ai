@@ -1,3 +1,4 @@
+import { http } from './http';
 import { STORAGE_KEYS, storageService } from './localStorage.service';
 
 /**
@@ -10,20 +11,20 @@ import { STORAGE_KEYS, storageService } from './localStorage.service';
  * "United States of America", "Turkey" vs "Türkiye"). One datasource, no
  * mapping.
  *
- * Free, keyless, and CORS-open. No React component may import this file.
+ * Fetched through our own `/api/reference/countries` rather than from the
+ * provider directly. The provider is keyless and CORS-open, so this is not
+ * about secrecy — it is so one server-side copy answers everyone instead of
+ * every browser fetching the same list for itself.
  *
- * API: https://countriesnow.space/api/v0.1/countries/iso
+ * No React component may import this file. The localStorage cache below stays:
+ * it saves a request entirely, which is still better than a fast one.
  */
-
-const ENDPOINT = 'https://countriesnow.space/api/v0.1/countries/iso';
 
 /** Borders change on a timescale that makes a week aggressive already. */
 const CACHE_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 
 /** Bump to invalidate every cached copy after a shape change. */
 const CACHE_VERSION = 1;
-
-const REQUEST_TIMEOUT_MS = 10_000;
 
 export class CountryLookupError extends Error {
   constructor(message = 'We could not load the list of countries.') {
@@ -44,31 +45,6 @@ type CountriesCache = {
   fetchedAt: string;
   countries: Country[];
 };
-
-type IsoResponse = {
-  error?: boolean;
-  data?: { name?: unknown; Iso2?: unknown }[];
-};
-
-/** Locale-aware so accented names sort where a reader expects them. */
-function byName(a: Country, b: Country): number {
-  return a.name.localeCompare(b.name);
-}
-
-function toCountries(payload: IsoResponse | null): Country[] {
-  const rows = Array.isArray(payload?.data) ? payload.data : [];
-
-  const countries = rows.flatMap((row) => {
-    const name = typeof row?.name === 'string' ? row.name.trim() : '';
-    const code = typeof row?.Iso2 === 'string' ? row.Iso2.trim().toUpperCase() : '';
-
-    // Both are load-bearing: the name keys the city lookup, the code
-    // disambiguates the city for OpenTripMap. A row missing either is unusable.
-    return name && code.length === 2 ? [{ name, code }] : [];
-  });
-
-  return countries.sort(byName);
-}
 
 function readCache(): CountriesCache | null {
   const cached = storageService.get<CountriesCache | null>(STORAGE_KEYS.countries, null);
@@ -94,25 +70,17 @@ function isFresh(cache: CountriesCache): boolean {
 let inFlight: Promise<Country[]> | null = null;
 
 async function fetchCountries(): Promise<Country[]> {
-  let response: Response;
+  let countries: Country[];
 
   try {
-    response = await fetch(ENDPOINT, { signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) });
+    countries = await http.get<Country[]>('/reference/countries');
   } catch {
     throw new CountryLookupError('Could not reach the country list.');
   }
 
-  if (!response.ok) throw new CountryLookupError();
-
-  let payload: IsoResponse;
-  try {
-    payload = (await response.json()) as IsoResponse;
-  } catch {
-    throw new CountryLookupError();
-  }
-
-  const countries = toCountries(payload);
-  if (countries.length === 0) throw new CountryLookupError();
+  // An empty list is not a valid answer — the explorer cannot offer a country
+  // picker with nothing in it, and a stale cached copy beats an empty one.
+  if (!Array.isArray(countries) || countries.length === 0) throw new CountryLookupError();
 
   return countries;
 }

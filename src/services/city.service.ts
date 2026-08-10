@@ -1,3 +1,4 @@
+import { http } from './http';
 import { cityListKey, storageService } from './localStorage.service';
 
 /**
@@ -12,12 +13,10 @@ import { cityListKey, storageService } from './localStorage.service';
  * and only the most recently used few are kept, because a handful of large
  * countries would otherwise fill a 5 MB quota shared with the user's trips.
  *
- * Free, keyless, and CORS-open. No React component may import this file.
- *
- * API: https://countriesnow.space/api/v0.1/countries/cities/q?country=<name>
+ * Fetched through our own `/api/reference/countries/:country/cities` rather
+ * than from the provider directly, so one server-side copy of a 16,000-entry
+ * list answers everyone. No React component may import this file.
  */
-
-const ENDPOINT = 'https://countriesnow.space/api/v0.1/countries/cities/q';
 
 /** City lists move slowly; a week keeps them fresh enough. */
 const CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
@@ -32,8 +31,6 @@ const CACHE_VERSION = 1;
  */
 const MAX_CACHED_COUNTRIES = 5;
 
-const REQUEST_TIMEOUT_MS = 10_000;
-
 export class CityLookupError extends Error {
   constructor(message = 'We could not load the list of cities.') {
     super(message);
@@ -46,11 +43,6 @@ type CitiesCache = {
   fetchedAt: string;
   country: string;
   cities: string[];
-};
-
-type CitiesResponse = {
-  error?: boolean;
-  data?: unknown;
 };
 
 function readCache(country: string): CitiesCache | null {
@@ -110,43 +102,21 @@ function writeCache(country: string, cities: string[]): void {
   }
 }
 
-function toCities(payload: CitiesResponse | null): string[] {
-  const rows = Array.isArray(payload?.data) ? payload.data : [];
-
-  const cities = rows.flatMap((row) => (typeof row === 'string' && row.trim() ? [row.trim()] : []));
-
-  // The source repeats a name when two regions share it; the selector has no
-  // way to tell them apart, so one entry is all it can honestly offer.
-  return [...new Set(cities)].sort((a, b) => a.localeCompare(b));
-}
-
 /** One request per country, shared by concurrent callers. */
 const inFlight = new Map<string, Promise<string[]>>();
 
 async function fetchCities(country: string): Promise<string[]> {
-  const url = `${ENDPOINT}?country=${encodeURIComponent(country)}`;
-
-  let response: Response;
   try {
-    response = await fetch(url, { signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) });
-  } catch {
-    throw new CityLookupError(`Could not reach the city list for ${country}.`);
-  }
+    const cities = await http.get<string[]>(
+      `/reference/countries/${encodeURIComponent(country)}/cities`,
+    );
 
-  if (!response.ok) throw new CityLookupError(`We could not load the cities of ${country}.`);
-
-  let payload: CitiesResponse;
-  try {
-    payload = (await response.json()) as CitiesResponse;
+    // An empty list stands: some territories genuinely have no entries, and
+    // treating that as a failure would show an error for a correct answer.
+    return Array.isArray(cities) ? cities : [];
   } catch {
     throw new CityLookupError(`We could not load the cities of ${country}.`);
   }
-
-  if (payload.error === true) {
-    throw new CityLookupError(`We could not load the cities of ${country}.`);
-  }
-
-  return toCities(payload);
 }
 
 export const cityService = {

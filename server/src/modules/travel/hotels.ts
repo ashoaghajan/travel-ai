@@ -1,8 +1,6 @@
 import type { Hotel } from '@ai-travel/shared';
-import { HttpError } from '../../errors';
-import { ERROR_CODES } from '@ai-travel/shared';
-import { env } from '../../env';
 import { isLiteApiConfigured, searchStays } from './liteapi';
+import { placesGet } from '../places/opentripmap';
 
 /**
  * Hotel listings, priced where a provider will quote them.
@@ -26,8 +24,6 @@ import { isLiteApiConfigured, searchStays } from './liteapi';
  * is a worse failure than a missing price: the reader can click through to
  * discover a missing price, but has no way to discover a wrong one.
  */
-
-const BASE_URL = 'https://api.opentripmap.com/0.1/en/places';
 
 /** How far from the city centre to look. Wide enough for resort areas. */
 const RADIUS_METRES = 15_000;
@@ -63,43 +59,9 @@ type Place = {
 
 type GeoName = { lat?: number; lon?: number; name?: string; status?: string };
 
-function apiKey(): string {
-  const key = env().OPENTRIPMAP_API_KEY;
-
-  if (!key) {
-    throw new HttpError(
-      503,
-      ERROR_CODES.PROVIDER_NOT_CONFIGURED,
-      'Hotel listings are not configured on this server.',
-    );
-  }
-
-  return key;
-}
-
-async function get<T>(path: string, query: Record<string, string | number>): Promise<T> {
-  const url = new URL(`${BASE_URL}${path}`);
-  for (const [key, value] of Object.entries(query)) url.searchParams.set(key, String(value));
-  url.searchParams.set('apikey', apiKey());
-
-  let response: Response;
-
-  try {
-    response = await fetch(url, { headers: { Accept: 'application/json' } });
-  } catch {
-    throw new HttpError(502, ERROR_CODES.INTERNAL, 'We could not reach our listings partner.');
-  }
-
-  if (!response.ok) {
-    throw new HttpError(502, ERROR_CODES.INTERNAL, 'Our listings partner returned an error.');
-  }
-
-  return (await response.json()) as T;
-}
-
 /** Where a destination is, so the radius search has a centre. */
 async function locate(destination: string): Promise<{ lat: number; lon: number } | null> {
-  const found = await get<GeoName>('/geoname', { name: destination });
+  const found = await placesGet<GeoName>('/geoname', { name: destination });
 
   if (typeof found.lat !== 'number' || typeof found.lon !== 'number') return null;
 
@@ -167,7 +129,7 @@ async function listingsFrom(
   centre: { lat: number; lon: number },
   search: HotelSearch,
 ): Promise<Hotel[]> {
-  const places = await get<Place[] | { error?: string }>('/radius', {
+  const places = await placesGet<Place[] | { error?: string }>('/radius', {
     lat: centre.lat,
     lon: centre.lon,
     radius: RADIUS_METRES,

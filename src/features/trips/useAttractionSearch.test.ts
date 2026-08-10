@@ -128,7 +128,9 @@ describe('useAttractionSearch', () => {
       expect(hook.current.isLoading).toBe(false);
     });
 
-    expect(hook.current.error).toContain('VITE_OPENTRIPMAP_API_KEY');
+    // Names the server, not a file the reader could edit — the key moved out
+    // of the bundle and there is nothing on their side to fix.
+    expect(hook.current.error).toContain('server has no OpenTripMap key');
     expect(hook.current.activities).toEqual([]);
   });
 

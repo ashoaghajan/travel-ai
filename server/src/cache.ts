@@ -1,9 +1,13 @@
 /**
- * A small TTL cache in front of the provider.
+ * A small TTL cache in front of a provider.
  *
- * The reason is quota, not latency: the token is ours, so every reader
- * refreshing a results page spends our allowance. Fares also barely move
- * minute to minute, so a short hold costs the reader nothing real.
+ * The reason is quota, not latency: the keys are ours, so every reader
+ * refreshing a results page spends our allowance. The data also barely moves
+ * — fares drift over minutes, and an attraction's address does not move at all
+ * — so a short hold costs the reader nothing real.
+ *
+ * Lives at the server root rather than inside one module because two of them
+ * now need it: the travel searches and the places lookups.
  *
  * In-process and unbounded-by-time but bounded by size — one server, one
  * cache. A second instance would want Redis, which is the same interface.

@@ -17,8 +17,9 @@ function stubFetch(implementation: (url: string) => Promise<Response>) {
   return fetchMock;
 }
 
+/** What `GET /api/reference/countries/:country/cities` answers with. */
 function citiesResponse(cities: string[]) {
-  return jsonResponse({ error: false, msg: 'ok', data: cities });
+  return jsonResponse(cities);
 }
 
 beforeEach(() => {
@@ -33,9 +34,16 @@ afterEach(() => {
   cityService.clearCache();
 });
 
+/*
+ * Sorting, de-duplication and the provider's error flag moved to
+ * `server/src/modules/places/countriesnow.ts` with the fetch, and are tested
+ * there. What is left here is the per-country localStorage cache and its
+ * eviction, which stay the client's problem — these lists are large enough
+ * that they share a quota with the reader's trips.
+ */
 describe('getCities', () => {
-  it('returns the cities of a country, sorted', async () => {
-    stubFetch(async () => citiesResponse(['Madrid', 'Barcelona', 'Alicante']));
+  it('returns what the API lists', async () => {
+    stubFetch(async () => citiesResponse(['Alicante', 'Barcelona', 'Madrid']));
 
     await expect(cityService.getCities('Spain')).resolves.toEqual([
       'Alicante',
@@ -49,19 +57,9 @@ describe('getCities', () => {
 
     await cityService.getCities('United States');
 
-    expect(String(fetchMock.mock.calls[0]?.[0])).toContain('country=United%20States');
-  });
-
-  it('de-duplicates names the source repeats', async () => {
-    stubFetch(async () => citiesResponse(['Valencia', 'Valencia', 'Madrid']));
-
-    await expect(cityService.getCities('Spain')).resolves.toEqual(['Madrid', 'Valencia']);
-  });
-
-  it('discards entries that are not usable names', async () => {
-    stubFetch(async () => citiesResponse(['Madrid', '', '   ', 42 as unknown as string]));
-
-    await expect(cityService.getCities('Spain')).resolves.toEqual(['Madrid']);
+    // A path segment now, not a query parameter — and escaped, or a country
+    // with a space in its name would split the route.
+    expect(String(fetchMock.mock.calls[0]?.[0])).toContain('/countries/United%20States/cities');
   });
 
   it('makes no request for a blank country', async () => {
@@ -200,8 +198,10 @@ describe('when the source is unavailable', () => {
     await expect(cityService.getCities('Spain')).rejects.toThrow(/Spain/);
   });
 
-  it('treats the source’s own error flag as a failure', async () => {
-    stubFetch(async () => jsonResponse({ error: true, msg: 'country not found' }));
+  it('reports a failed request rather than an empty country', async () => {
+    // The provider's own `error: true` flag is read server-side now; what
+    // reaches here is a status, and an empty list would be a lie.
+    stubFetch(async () => jsonResponse({ error: { code: 'INTERNAL', message: 'no' } }, 502));
 
     await expect(cityService.getCities('Atlantis')).rejects.toThrow(CityLookupError);
   });

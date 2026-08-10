@@ -5,7 +5,7 @@ import type { Request, Response } from 'express';
 import rateLimit, { MemoryStore } from 'express-rate-limit';
 import { z } from 'zod';
 import { airportsByCode, airportsInCountry, searchAirports } from './airports';
-import { createCache } from './cache';
+import { createCache } from '../../cache';
 import { toFlights } from './flights.mapper';
 import { searchHotels } from './hotels';
 import { isLiteApiConfigured, locateStays } from './liteapi';

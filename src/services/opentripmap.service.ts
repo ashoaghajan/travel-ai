@@ -1,17 +1,19 @@
+import { ERROR_CODES } from '@ai-travel/shared';
+import { ApiError } from './http';
+import { http } from './http';
+
 /**
- * OpenTripMap HTTP client.
+ * The attractions directory, as the SPA sees it.
  *
- * Knows the API and nothing about our domain: it returns OpenTripMap-shaped
- * data, and `activity.service.ts` maps that into the `Activity` model. No
- * React component may import this file.
+ * Every call goes to our own `/api/places/*`, which holds the OpenTripMap key
+ * and talks to the provider. The key used to be compiled into this bundle as
+ * `VITE_OPENTRIPMAP_API_KEY`, readable by anyone who loaded the site; it is
+ * now server-side and nothing here knows it exists.
  *
- * API: https://dev.opentripmap.org/docs
+ * The shapes below are still the provider's, unchanged, because
+ * `activity.service.ts` maps them into `Activity` and that composition has not
+ * moved. No React component may import this file.
  */
-
-const BASE_URL = 'https://api.opentripmap.com/0.1/en/places';
-
-/** Per-request timeout — a hung request must not leave the grid spinning. */
-const REQUEST_TIMEOUT_MS = 10_000;
 
 export class OpenTripMapError extends Error {
   /** HTTP status, when the failure came from a response rather than the network. */
@@ -38,22 +40,21 @@ export class UnknownPlaceError extends OpenTripMapError {
   }
 }
 
+/**
+ * The server has no OpenTripMap key.
+ *
+ * Kept under its old name because six call sites branch on it and the meaning
+ * is unchanged — attractions cannot be looked up until someone configures a
+ * key. Only *where* that key lives has moved.
+ */
 export class MissingApiKeyError extends OpenTripMapError {
   constructor() {
-    super('VITE_OPENTRIPMAP_API_KEY is not set. Add it to .env.local and restart the dev server.');
+    super('This server has no OpenTripMap key configured.');
     this.name = 'MissingApiKeyError';
   }
 }
 
-/**
- * A place as returned by the radius search — everything the API will give us
- * without a per-place request.
- *
- * There is deliberately no detail type here. `/xid/{id}` is the only endpoint
- * carrying a photo or prose, it takes exactly one id, and there is no bulk
- * form of it — so a grid of ten cards cost ten HTTP requests. `activity.service`
- * builds its cards from this shape instead.
- */
+/** A place as returned by the radius search, ranked most notable first. */
 export type OpenTripMapPlace = {
   xid: string;
   name: string;
@@ -72,12 +73,11 @@ export type OpenTripMapPlace = {
 };
 
 /**
- * One place in full, from `/xid/{id}`.
+ * One place in full.
  *
- * This endpoint takes exactly one id and has no bulk form, which is why the
- * grid does not use it — ten cards meant ten requests. Opening a single
- * attraction is the opposite case: one request, asked for deliberately, in
- * exchange for the prose and address the search cannot return.
+ * Deliberately not used to build lists: the provider endpoint behind this
+ * takes exactly one id and has no bulk form, so a grid of ten cards would cost
+ * ten requests. `activity.service` builds its cards from the search shape.
  */
 export type OpenTripMapPlaceDetails = {
   xid: string;
@@ -111,55 +111,28 @@ export type Destination = {
   country?: string;
 };
 
-function apiKey(): string {
-  const key = import.meta.env.VITE_OPENTRIPMAP_API_KEY;
-  if (!key) throw new MissingApiKeyError();
-  return key;
-}
-
-function buildUrl(path: string, params: Record<string, string | number>): string {
-  const url = new URL(`${BASE_URL}${path}`);
-  for (const [name, value] of Object.entries(params)) {
-    url.searchParams.set(name, String(value));
-  }
-  url.searchParams.set('apikey', apiKey());
-  return url.toString();
-}
-
-async function request<T>(path: string, params: Record<string, string | number>): Promise<T> {
-  // Built outside the try so a missing key surfaces as a configuration error
-  // rather than being reported as an unreachable network.
-  const url = buildUrl(path, params);
-
-  let response: Response;
-
-  try {
-    response = await fetch(url, {
-      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-    });
-  } catch (error) {
-    // Offline, DNS failure, CORS rejection or timeout.
-    throw new OpenTripMapError(
-      error instanceof Error && error.name === 'TimeoutError'
-        ? 'OpenTripMap did not respond in time.'
-        : 'Could not reach OpenTripMap.',
-    );
+/**
+ * Turns an API failure back into the error type this module has always thrown.
+ *
+ * The three cases stay distinguishable across the network because the server
+ * gives each its own status: a place that does not exist is a `404`, an unset
+ * key is a `503 PROVIDER_NOT_CONFIGURED`, and everything else is transient.
+ * `geocode.service` caches the first and retries the third, so collapsing them
+ * would make it remember an outage as geography.
+ */
+function asOpenTripMapError(error: unknown, placeName?: string): OpenTripMapError {
+  if (!(error instanceof ApiError)) {
+    return new OpenTripMapError('Could not reach the attractions service.');
   }
 
-  if (!response.ok) {
-    throw new OpenTripMapError(
-      response.status === 401
-        ? 'OpenTripMap rejected the API key.'
-        : `OpenTripMap returned ${response.status}.`,
-      response.status,
-    );
-  }
+  if (error.code === ERROR_CODES.PROVIDER_NOT_CONFIGURED) return new MissingApiKeyError();
 
-  try {
-    return (await response.json()) as T;
-  } catch {
-    throw new OpenTripMapError('OpenTripMap returned a malformed response.');
-  }
+  if (error.status === 404) return new UnknownPlaceError(placeName ?? 'that place');
+
+  return new OpenTripMapError(
+    error.status === 0 ? 'Could not reach the attractions service.' : error.message,
+    error.status,
+  );
 }
 
 export const openTripMapService = {
@@ -171,27 +144,21 @@ export const openTripMapService = {
    * Venezuela, and the unfiltered lookup silently picks one.
    */
   async findDestination(name: string, countryCode?: string): Promise<Destination> {
-    const result = await request<{
-      name?: string;
-      lat?: number;
-      lon?: number;
-      country?: string;
-      status?: string;
-      error?: string;
-    }>('/geoname', countryCode ? { name, country: countryCode } : { name });
-
-    if (typeof result.lat !== 'number' || typeof result.lon !== 'number') {
-      throw new UnknownPlaceError(name);
+    try {
+      return await http.get<Destination>('/places/geoname', {
+        query: { name, country: countryCode },
+      });
+    } catch (error) {
+      throw asOpenTripMapError(error, name);
     }
-
-    return { name: result.name ?? name, lat: result.lat, lon: result.lon, country: result.country };
   },
 
   /**
    * Places of the given kinds within `radius` metres, most notable first.
    *
-   * The API orders by distance, so ranking by `rate` happens here — the
-   * caller wants the best places nearby, not merely the closest.
+   * The ranking happens server-side now, with the call it belongs to — the
+   * provider orders by distance, and a reader wants the best places nearby
+   * rather than merely the closest.
    */
   async searchPlaces(options: {
     lat: number;
@@ -201,29 +168,30 @@ export const openTripMapService = {
     limit: number;
     minRate?: number;
   }): Promise<OpenTripMapPlace[]> {
-    const places = await request<OpenTripMapPlace[] | { error?: string }>('/radius', {
-      lat: options.lat,
-      lon: options.lon,
-      kinds: options.kinds,
-      radius: options.radius,
-      limit: options.limit,
-      rate: options.minRate ?? 1,
-      format: 'json',
-    });
-
-    if (!Array.isArray(places)) return [];
-
-    return places
-      .filter((place) => Boolean(place?.xid) && Boolean(place?.name?.trim()))
-      .sort((a, b) => (b.rate ?? 0) - (a.rate ?? 0));
+    try {
+      return await http.get<OpenTripMapPlace[]>('/places/search', {
+        query: {
+          lat: options.lat,
+          lon: options.lon,
+          kinds: options.kinds,
+          radius: options.radius,
+          limit: options.limit,
+          rate: options.minRate ?? 1,
+        },
+      });
+    } catch (error) {
+      throw asOpenTripMapError(error);
+    }
   },
 
-  /**
-   * Everything about one place: prose, photo, address.
-   *
-   * Deliberately not used to build lists — see `OpenTripMapPlaceDetails`.
-   */
+  /** Everything about one place: prose, photo, address. */
   async getPlaceDetails(xid: string): Promise<OpenTripMapPlaceDetails> {
-    return request<OpenTripMapPlaceDetails>(`/xid/${encodeURIComponent(xid)}`, {});
+    try {
+      return await http.get<OpenTripMapPlaceDetails>(
+        `/places/detail/${encodeURIComponent(xid)}`,
+      );
+    } catch (error) {
+      throw asOpenTripMapError(error, xid);
+    }
   },
 };

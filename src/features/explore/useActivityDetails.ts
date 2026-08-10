@@ -5,7 +5,7 @@ import { MissingApiKeyError, OpenTripMapError } from '../../services/opentripmap
 
 const GENERIC_ERROR = 'We could not load this attraction. Please try again.';
 const MISSING_KEY_ERROR =
-  'Attractions need an OpenTripMap API key. Add VITE_OPENTRIPMAP_API_KEY to .env.local and restart the dev server.';
+  'This attraction is unavailable: the server has no OpenTripMap key configured.';
 
 function describeError(error: unknown): string {
   if (error instanceof MissingApiKeyError) return MISSING_KEY_ERROR;

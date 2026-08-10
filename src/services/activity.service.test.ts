@@ -15,6 +15,7 @@ import {
 import { openTripMapService } from './opentripmap.service';
 import { OpenTripMapError } from './opentripmap.service';
 import { wikimediaService } from './wikimedia.service';
+import { http } from './http';
 
 const TTL_MS = 5 * 60 * 1000;
 
@@ -353,6 +354,91 @@ describe('getActivities', () => {
 });
 
 /* ------------------------------------------------------------ photographs */
+
+describe('bookable tours', () => {
+  /** One Viator product, as `GET /api/activities/search` returns it. */
+  function product(overrides: Record<string, unknown> = {}) {
+    return {
+      id: 'v-1',
+      title: 'Sunrise trek up Mount Batur',
+      description: 'A guided climb, starting at 2am.',
+      price: 65,
+      rating: 4.8,
+      reviews: 1240,
+      image: 'https://viator.example/batur.jpg',
+      sourceUrl: 'https://viator.example/book/v-1',
+      ...overrides,
+    };
+  }
+
+  function stubTours(results: ReturnType<typeof product>[]) {
+    return vi
+      .spyOn(http, 'get')
+      .mockResolvedValue({ results, source: 'live', quotedAt: '2026-07-28T09:00:00Z' });
+  }
+
+  it('puts priced tours above the attractions', async () => {
+    stubApi();
+    stubTours([product()]);
+
+    const { activities } = await activityService.getActivities({ destination: 'Bali' });
+
+    // A reader looking to book something finds the bookable things first.
+    expect(activities[0].title).toBe('Sunrise trek up Mount Batur');
+    expect(activities[0].price).toBe(65);
+    expect(activities[0].sourceUrl).toBe('https://viator.example/book/v-1');
+  });
+
+  it('labels every tour as culture', async () => {
+    stubApi();
+    stubTours([product()]);
+
+    const { activities } = await activityService.getActivities({ destination: 'Bali' });
+
+    // Viator's taxonomy is hundreds of tags that do not map onto the app's six
+    // categories, and guessing would mislabel things.
+    expect(activities[0].category).toBe('culture');
+  });
+
+  it('gives a tour with no photograph the category artwork', async () => {
+    stubApi();
+    stubTours([product({ image: '' })]);
+
+    const { activities } = await activityService.getActivities({ destination: 'Bali' });
+
+    expect(activities[0].image).toBeTruthy();
+  });
+
+  it('drops a product with no title', async () => {
+    stubApi();
+    stubTours([product({ title: '   ' }), product({ id: 'v-2', title: 'Real tour' })]);
+
+    const { activities } = await activityService.getActivities({ destination: 'Bali' });
+
+    expect(activities.map((activity) => activity.id)).not.toContain('v-1');
+    expect(activities[0].title).toBe('Real tour');
+  });
+
+  it('still lists the attractions when no tours are sold there', async () => {
+    stubApi();
+    stubTours([]);
+
+    const { activities } = await activityService.getActivities({ destination: 'Bali' });
+
+    // Viator sells tours; OpenTripMap lists monuments and parks. Neither
+    // replaces the other, so a city with no products still gets its places.
+    expect(activities.length).toBeGreaterThan(0);
+  });
+
+  it('still lists the attractions when the tour lookup fails', async () => {
+    stubApi();
+    vi.spyOn(http, 'get').mockRejectedValue(new Error('unreachable'));
+
+    const { activities } = await activityService.getActivities({ destination: 'Bali' });
+
+    expect(activities.length).toBeGreaterThan(0);
+  });
+});
 
 describe('photographs', () => {
   /** Two places, one of which Wikidata knows a picture of. */

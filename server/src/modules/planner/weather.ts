@@ -91,6 +91,30 @@ type GeocodeHit = {
   latitude?: number;
   longitude?: number;
   country?: string;
+  country_code?: string;
+  admin1?: string;
+  timezone?: string;
+  population?: number;
+};
+
+/**
+ * Where a named place is.
+ *
+ * The same geocoder the forecast uses, exposed on its own because "where is
+ * Abu Dhabi?" is answerable from it alone — country, region, coordinates and
+ * timezone, with nothing invented.
+ */
+export type PlaceFacts = {
+  name: string;
+  country?: string;
+  /** ISO 3166-1 alpha-2, when the provider gives one. */
+  countryCode?: string;
+  /** State, province or emirate, when the provider names one. */
+  region?: string;
+  latitude: number;
+  longitude: number;
+  timezone?: string;
+  population?: number;
 };
 
 type Forecast = {
@@ -139,6 +163,32 @@ function toDays(daily: Forecast['daily'], fallback: number): WeatherDay[] {
   }));
 }
 
+export async function findPlace(place: string, signal?: AbortSignal): Promise<PlaceFacts> {
+  const name = place.trim();
+  if (!name) throw new PlaceNotFoundError(place);
+
+  const found = await getJson<{ results?: GeocodeHit[] }>(
+    `${GEOCODE_URL}?${new URLSearchParams({ name, count: '1', language: 'en', format: 'json' })}`,
+    signal,
+  );
+
+  const hit = found.results?.[0];
+  if (!hit || hit.latitude === undefined || hit.longitude === undefined) {
+    throw new PlaceNotFoundError(name);
+  }
+
+  return {
+    name: hit.name ?? name,
+    country: hit.country,
+    countryCode: hit.country_code,
+    region: hit.admin1,
+    latitude: hit.latitude,
+    longitude: hit.longitude,
+    timezone: hit.timezone,
+    population: hit.population,
+  };
+}
+
 export async function getWeather(
   place: string,
   days = 1,
@@ -153,15 +203,7 @@ export async function getWeather(
   const hit = cache.get(key);
   if (hit && Date.now() - hit.at < CACHE_TTL_MS) return hit.report;
 
-  const found = await getJson<{ results?: GeocodeHit[] }>(
-    `${GEOCODE_URL}?${new URLSearchParams({ name, count: '1', language: 'en', format: 'json' })}`,
-    signal,
-  );
-
-  const place0 = found.results?.[0];
-  if (!place0 || place0.latitude === undefined || place0.longitude === undefined) {
-    throw new PlaceNotFoundError(name);
-  }
+  const place0 = await findPlace(name, signal);
 
   const forecast = await getJson<Forecast>(
     `${FORECAST_URL}?${new URLSearchParams({
@@ -179,7 +221,9 @@ export async function getWeather(
   if (temperature === undefined) throw new WeatherUnavailableError();
 
   const report: WeatherReport = {
-    place: place0.name ?? name,
+    // `findPlace` already fell back to the requested name when the provider
+    // gave none, so this is always a real string by here.
+    place: place0.name,
     country: place0.country,
     temperature: Math.round(temperature),
     description: describeWeatherCode(forecast.current?.weather_code ?? -1),

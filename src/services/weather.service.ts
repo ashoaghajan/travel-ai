@@ -1,21 +1,16 @@
+import { ApiError, http } from './http';
+
 /**
- * Weather, from Open-Meteo.
+ * Weather, through our own `/api/weather`.
  *
- * Chosen because it needs no key and no signup — the planner can answer "what
- * is the weather in Abu Dhabi?" on a fresh clone with nothing configured,
- * which is the same bar `country.service` and `city.service` already meet.
- * Its free tier asks only for non-commercial use and reasonable volume.
+ * Open-Meteo is keyless, so this did not move server-side for secrecy — it
+ * moved so the browser makes no third-party request of its own, and so the
+ * server's existing weather client (the one the planner's `get_weather` tool
+ * uses) answers both callers from one cache. Two implementations of "what is
+ * the weather in X" would drift.
  *
- * Two calls: its own geocoder resolves the name, then the forecast endpoint
- * answers for that point. Deliberately not `geocodeService` — that one is
- * OpenTripMap, needs a key, and returns attractions as readily as cities.
+ * No React component may import this file.
  */
-
-const GEOCODE_URL = 'https://geocoding-api.open-meteo.com/v1/search';
-const FORECAST_URL = 'https://api.open-meteo.com/v1/forecast';
-
-/** Long enough to spare the free tier a burst, short enough to stay true. */
-const CACHE_TTL_MS = 10 * 60 * 1000;
 
 export class WeatherUnavailableError extends Error {
   constructor() {
@@ -34,8 +29,11 @@ export class PlaceNotFoundError extends Error {
 export type WeatherReport = {
   /** The place as the provider names it, e.g. "Abu Dhabi". */
   place: string;
-  /** ISO 3166-1 alpha-2, when the provider gives one. */
-  countryCode?: string;
+  /**
+   * The country's name. No country *code* here, unlike `PlaceFacts` — the
+   * forecast endpoint does not carry one, nothing ever read it, and a field
+   * that is always `undefined` is worse than an absent one.
+   */
   country?: string;
   /** Degrees Celsius, now. */
   temperature: number;
@@ -46,51 +44,6 @@ export type WeatherReport = {
   low: number;
 };
 
-/**
- * WMO weather codes, as words.
- *
- * Open-Meteo answers with a number; nobody wants to read "code 61". Grouped
- * rather than enumerated to the last variant — "light rain" is the useful
- * answer, and "light freezing drizzle" is not worth four more branches.
- */
-const WEATHER_CODES: [codes: number[], text: string][] = [
-  [[0], 'clear'],
-  [[1, 2], 'mostly clear'],
-  [[3], 'overcast'],
-  [[45, 48], 'foggy'],
-  [[51, 53, 55, 56, 57], 'drizzly'],
-  [[61, 63, 66, 80, 81], 'rainy'],
-  [[65, 82], 'heavy rain'],
-  [[71, 73, 75, 77, 85, 86], 'snowy'],
-  [[95, 96, 99], 'thundery'],
-];
-
-export function describeWeatherCode(code: number): string {
-  return WEATHER_CODES.find(([codes]) => codes.includes(code))?.[1] ?? 'unsettled';
-}
-
-type Cached = { at: number; report: WeatherReport };
-
-/**
- * In memory only, unlike the other caches here.
- *
- * Weather is the one answer in this app that is wrong within the hour, so it
- * has no business surviving a reload in localStorage.
- */
-const cache = new Map<string, Cached>();
-
-type GeocodeHit = {
-  name?: string;
-  latitude?: number;
-  longitude?: number;
-  country?: string;
-  country_code?: string;
-  admin1?: string;
-  timezone?: string;
-  population?: number;
-};
-
-/** A place as the provider knows it — enough to answer "where is X?". */
 export type PlaceFacts = {
   name: string;
   country?: string;
@@ -103,97 +56,69 @@ export type PlaceFacts = {
   population?: number;
 };
 
-async function getJson<T>(url: string, signal?: AbortSignal): Promise<T> {
-  const response = await fetch(url, { signal });
-  if (!response.ok) throw new WeatherUnavailableError();
+/** What the endpoint answers with: a forecast spanning one or more days. */
+type ApiWeatherReport = {
+  place: string;
+  country?: string;
+  temperature: number;
+  description: string;
+  forecast?: { high: number; low: number }[];
+};
 
-  return (await response.json()) as T;
+/**
+ * A name that resolves to nothing is the one failure worth distinguishing —
+ * the planner repeats it back ("I could not find anywhere called X") rather
+ * than reporting that the lookup broke. The server sends it as a 404.
+ */
+function asWeatherError(error: unknown, place: string): Error {
+  if (error instanceof ApiError && error.status === 404) return new PlaceNotFoundError(place);
+
+  return new WeatherUnavailableError();
 }
 
 export const weatherService = {
   /**
    * Where a named place is.
    *
-   * The same geocoder the forecast uses, exposed on its own because "where is
-   * Abu Dhabi?" is answerable from it alone — country, region, coordinates and
+   * Answerable from the geocoder alone — country, region, coordinates and
    * timezone, with nothing invented.
    */
   async findPlace(place: string, signal?: AbortSignal): Promise<PlaceFacts> {
     const name = place.trim();
     if (!name) throw new PlaceNotFoundError(place);
 
-    const found = await getJson<{ results?: GeocodeHit[] }>(
-      `${GEOCODE_URL}?${new URLSearchParams({ name, count: '1', language: 'en', format: 'json' })}`,
-      signal,
-    );
-
-    const hit = found.results?.[0];
-    if (!hit || hit.latitude === undefined || hit.longitude === undefined) {
-      throw new PlaceNotFoundError(name);
+    try {
+      return await http.get<PlaceFacts>('/weather/place', { query: { place: name }, signal });
+    } catch (error) {
+      throw asWeatherError(error, name);
     }
-
-    return {
-      name: hit.name ?? name,
-      country: hit.country,
-      countryCode: hit.country_code,
-      region: hit.admin1,
-      latitude: hit.latitude,
-      longitude: hit.longitude,
-      timezone: hit.timezone,
-      population: hit.population,
-    };
   },
 
-  /**
-   * Today's weather for a named place.
-   *
-   * Throws `PlaceNotFoundError` when the name resolves to nothing — that is an
-   * answer the planner can repeat back, unlike a generic failure.
-   */
+  /** Today's weather for a named place. */
   async getWeather(place: string, signal?: AbortSignal): Promise<WeatherReport> {
     const name = place.trim();
     if (!name) throw new PlaceNotFoundError(place);
 
-    const key = name.toLowerCase();
-    const hit = cache.get(key);
-    if (hit && Date.now() - hit.at < CACHE_TTL_MS) return hit.report;
+    let report: ApiWeatherReport;
 
-    const place0 = await weatherService.findPlace(name, signal);
+    try {
+      report = await http.get<ApiWeatherReport>('/weather', { query: { place: name }, signal });
+    } catch (error) {
+      throw asWeatherError(error, name);
+    }
 
-    const forecast = await getJson<{
-      current?: { temperature_2m?: number; weather_code?: number };
-      daily?: { temperature_2m_max?: number[]; temperature_2m_min?: number[] };
-    }>(
-      `${FORECAST_URL}?${new URLSearchParams({
-        latitude: String(place0.latitude),
-        longitude: String(place0.longitude),
-        current: 'temperature_2m,weather_code',
-        daily: 'temperature_2m_max,temperature_2m_min',
-        forecast_days: '1',
-        timezone: 'auto',
-      })}`,
-      signal,
-    );
+    // The endpoint speaks in days because the planner's tool asks for a span.
+    // This screen only ever wants today, so the range is read off the first
+    // day and falls back to the current reading when the forecast is empty.
+    const today = report.forecast?.[0];
 
-    const temperature = forecast.current?.temperature_2m;
-    if (temperature === undefined) throw new WeatherUnavailableError();
-
-    const report: WeatherReport = {
-      place: place0.name,
-      country: place0.country,
-      countryCode: place0.countryCode,
-      temperature: Math.round(temperature),
-      description: describeWeatherCode(forecast.current?.weather_code ?? -1),
-      high: Math.round(forecast.daily?.temperature_2m_max?.[0] ?? temperature),
-      low: Math.round(forecast.daily?.temperature_2m_min?.[0] ?? temperature),
+    return {
+      place: report.place,
+      country: report.country,
+      temperature: report.temperature,
+      description: report.description,
+      high: today?.high ?? report.temperature,
+      low: today?.low ?? report.temperature,
     };
-
-    cache.set(key, { at: Date.now(), report });
-    return report;
-  },
-
-  /** Only for tests and a hard refresh — the TTL handles the normal case. */
-  clearCache(): void {
-    cache.clear();
   },
 };

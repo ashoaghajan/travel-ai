@@ -4,5 +4,27 @@
   "rules": {
     "react/rules-of-hooks": "error",
     "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
+  },
+  "overrides": [
+    {
+      "files": ["src/**/*.ts", "src/**/*.tsx"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": ["express", "express/*", "express-*", "@prisma/*", "prisma", "*/server/*"],
+                "message": "Server-only package. npm workspaces hoist express and @prisma/client into the root node_modules, so these import cleanly from src/ and then ship a server package to the browser. Reach the server over HTTP through src/services/http.ts instead."
+              },
+              {
+                "group": ["@ai-travel/shared/schemas", "@ai-travel/shared/schemas/*"],
+                "message": "zod schemas are a separate export path so the validation library stays out of the client bundle. Import types from '@ai-travel/shared'; keep client-side form checks hand-written."
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
 }

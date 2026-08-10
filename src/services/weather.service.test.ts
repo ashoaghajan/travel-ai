@@ -1,95 +1,65 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import {
-  PlaceNotFoundError,
-  WeatherUnavailableError,
-  describeWeatherCode,
-  weatherService,
-} from './weather.service';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { ERROR_CODES } from '@ai-travel/shared';
+import { PlaceNotFoundError, WeatherUnavailableError, weatherService } from './weather.service';
 
-const GEOCODE_HIT = {
-  results: [
-    {
-      name: 'Abu Dhabi',
-      latitude: 24.45,
-      longitude: 54.39,
-      country: 'United Arab Emirates',
-      country_code: 'AE',
-      admin1: 'Abu Dhabi Emirate',
-      timezone: 'Asia/Dubai',
-      population: 603_492,
-    },
-  ],
-};
+/**
+ * The weather client, now that it talks to our API rather than to Open-Meteo.
+ *
+ * The provider conversation — geocode, then forecast — lives in
+ * `server/src/modules/planner/weather.ts` and is tested there. What is left
+ * here is the part that stayed: reading today's range out of a multi-day
+ * forecast, and keeping "no such place" distinguishable from "the lookup
+ * broke". The planner says different sentences for those two, so collapsing
+ * them changes what a reader is told.
+ */
 
-const FORECAST = {
-  current: { temperature_2m: 33.6, weather_code: 0 },
-  daily: { temperature_2m_max: [38.2], temperature_2m_min: [29.4] },
-};
-
-function ok(body: unknown) {
-  return { ok: true, json: async () => body } as Response;
+function jsonResponse(body: unknown, status = 200): Response {
+  return {
+    ok: status >= 200 && status < 300,
+    status,
+    json: async () => body,
+  } as Response;
 }
 
-let fetchMock: ReturnType<typeof vi.fn>;
+function errorResponse(status: number, code: string): Response {
+  return jsonResponse({ error: { code, message: 'Nope.', details: null } }, status);
+}
 
-beforeEach(() => {
-  weatherService.clearCache();
-  fetchMock = vi.fn();
+function stubFetch(implementation: (url: string) => Promise<Response>) {
+  const fetchMock = vi.fn((input: string | URL) => implementation(String(input)));
   vi.stubGlobal('fetch', fetchMock);
-});
+  return fetchMock;
+}
+
+const FORECAST = {
+  place: 'Abu Dhabi',
+  country: 'United Arab Emirates',
+  temperature: 34,
+  description: 'clear',
+  forecast: [{ date: '2026-08-10', high: 38, low: 29, description: 'clear', precipitationMm: 0 }],
+};
 
 afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-describe('findPlace', () => {
-  it('answers with what the provider knows', async () => {
-    fetchMock.mockResolvedValueOnce(ok(GEOCODE_HIT));
-
-    await expect(weatherService.findPlace('Abu Dhabi')).resolves.toEqual({
-      name: 'Abu Dhabi',
-      country: 'United Arab Emirates',
-      countryCode: 'AE',
-      region: 'Abu Dhabi Emirate',
-      latitude: 24.45,
-      longitude: 54.39,
-      timezone: 'Asia/Dubai',
-      population: 603_492,
-    });
-  });
-
-  it('refuses an empty name without asking the provider', async () => {
-    await expect(weatherService.findPlace('  ')).rejects.toThrow(PlaceNotFoundError);
-    expect(fetchMock).not.toHaveBeenCalled();
-  });
-
-  it('throws when the name resolves to nothing', async () => {
-    fetchMock.mockResolvedValueOnce(ok({ results: [] }));
-
-    await expect(weatherService.findPlace('Atlantis')).rejects.toThrow(PlaceNotFoundError);
-  });
-
-  it('throws when a hit carries no coordinates', async () => {
-    fetchMock.mockResolvedValueOnce(ok({ results: [{ name: 'Nowhere' }] }));
-
-    await expect(weatherService.findPlace('Nowhere')).rejects.toThrow(PlaceNotFoundError);
-  });
-
-  it('surfaces a provider outage as its own error', async () => {
-    fetchMock.mockResolvedValueOnce({ ok: false } as Response);
-
-    await expect(weatherService.findPlace('Abu Dhabi')).rejects.toThrow(WeatherUnavailableError);
-  });
-});
-
 describe('getWeather', () => {
-  it('reports the current conditions, rounded', async () => {
-    fetchMock.mockResolvedValueOnce(ok(GEOCODE_HIT)).mockResolvedValueOnce(ok(FORECAST));
+  it('asks our API, never the provider', async () => {
+    const fetchMock = stubFetch(async () => jsonResponse(FORECAST));
+
+    await weatherService.getWeather('Abu Dhabi');
+
+    const url = String(fetchMock.mock.calls[0][0]);
+    expect(url).toContain('/api/weather');
+    expect(url).not.toContain('open-meteo.com');
+  });
+
+  it("reads today's range out of the forecast", async () => {
+    stubFetch(async () => jsonResponse(FORECAST));
 
     await expect(weatherService.getWeather('Abu Dhabi')).resolves.toEqual({
       place: 'Abu Dhabi',
       country: 'United Arab Emirates',
-      countryCode: 'AE',
       temperature: 34,
       description: 'clear',
       high: 38,
@@ -97,48 +67,78 @@ describe('getWeather', () => {
     });
   });
 
-  it('caches, so a repeated question spares the free tier', async () => {
-    fetchMock.mockResolvedValueOnce(ok(GEOCODE_HIT)).mockResolvedValueOnce(ok(FORECAST));
-
-    await weatherService.getWeather('Abu Dhabi');
-    await weatherService.getWeather('abu dhabi');
-
-    // Two calls for the first question, none for the second.
-    expect(fetchMock).toHaveBeenCalledTimes(2);
-  });
-
-  it('falls back to the current temperature when there is no daily range', async () => {
-    fetchMock
-      .mockResolvedValueOnce(ok(GEOCODE_HIT))
-      .mockResolvedValueOnce(ok({ current: { temperature_2m: 20, weather_code: 3 } }));
+  it('falls back to the current reading when the forecast is empty', async () => {
+    stubFetch(async () => jsonResponse({ ...FORECAST, forecast: [] }));
 
     const report = await weatherService.getWeather('Abu Dhabi');
-    expect(report).toMatchObject({ temperature: 20, high: 20, low: 20, description: 'overcast' });
+
+    // Better than showing a high of `undefined°C` in a sentence the planner
+    // reads back to the user.
+    expect(report.high).toBe(34);
+    expect(report.low).toBe(34);
   });
 
-  it('throws when the forecast carries no temperature', async () => {
-    fetchMock.mockResolvedValueOnce(ok(GEOCODE_HIT)).mockResolvedValueOnce(ok({ current: {} }));
+  it('reports an unknown place as its own kind of failure', async () => {
+    stubFetch(async () => errorResponse(404, ERROR_CODES.NOT_FOUND));
 
-    await expect(weatherService.getWeather('Abu Dhabi')).rejects.toThrow(WeatherUnavailableError);
+    // The planner answers "I could not find a place called X" for this, and
+    // "the weather service is unreachable" for anything else.
+    await expect(weatherService.getWeather('Atlantis')).rejects.toBeInstanceOf(PlaceNotFoundError);
   });
 
-  it('refuses an empty name', async () => {
-    await expect(weatherService.getWeather('   ')).rejects.toThrow(PlaceNotFoundError);
+  it('reports an outage as unavailable rather than unknown', async () => {
+    stubFetch(async () => errorResponse(502, ERROR_CODES.INTERNAL));
+
+    const caught = await weatherService.getWeather('Abu Dhabi').catch((error) => error);
+
+    expect(caught).toBeInstanceOf(WeatherUnavailableError);
+    expect(caught).not.toBeInstanceOf(PlaceNotFoundError);
+  });
+
+  it('rejects a blank name without asking the server', async () => {
+    const fetchMock = stubFetch(async () => jsonResponse(FORECAST));
+
+    await expect(weatherService.getWeather('   ')).rejects.toBeInstanceOf(PlaceNotFoundError);
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });
 
-describe('describeWeatherCode', () => {
-  it('turns the WMO codes into words', () => {
-    expect(describeWeatherCode(0)).toBe('clear');
-    expect(describeWeatherCode(2)).toBe('mostly clear');
-    expect(describeWeatherCode(45)).toBe('foggy');
-    expect(describeWeatherCode(61)).toBe('rainy');
-    expect(describeWeatherCode(75)).toBe('snowy');
-    expect(describeWeatherCode(95)).toBe('thundery');
+describe('findPlace', () => {
+  const FACTS = {
+    name: 'Abu Dhabi',
+    country: 'United Arab Emirates',
+    countryCode: 'AE',
+    region: 'Abu Dhabi',
+    latitude: 24.45,
+    longitude: 54.38,
+    timezone: 'Asia/Dubai',
+    population: 603_492,
+  };
+
+  it('returns the facts the geocoder gives', async () => {
+    stubFetch(async () => jsonResponse(FACTS));
+
+    await expect(weatherService.findPlace('Abu Dhabi')).resolves.toEqual(FACTS);
   });
 
-  it('has a word for a code it does not know', () => {
-    // Better than showing "code 99" to someone asking about their holiday.
-    expect(describeWeatherCode(-1)).toBe('unsettled');
+  it('asks the place endpoint', async () => {
+    const fetchMock = stubFetch(async () => jsonResponse(FACTS));
+
+    await weatherService.findPlace('Abu Dhabi');
+
+    expect(String(fetchMock.mock.calls[0][0])).toContain('/api/weather/place');
+  });
+
+  it('reports an unknown place', async () => {
+    stubFetch(async () => errorResponse(404, ERROR_CODES.NOT_FOUND));
+
+    await expect(weatherService.findPlace('Atlantis')).rejects.toBeInstanceOf(PlaceNotFoundError);
+  });
+
+  it('rejects a blank name without asking the server', async () => {
+    const fetchMock = stubFetch(async () => jsonResponse(FACTS));
+
+    await expect(weatherService.findPlace('')).rejects.toBeInstanceOf(PlaceNotFoundError);
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });

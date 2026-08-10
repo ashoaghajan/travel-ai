@@ -17,15 +17,15 @@ function stubFetch(implementation: (url: string) => Promise<Response>) {
   return fetchMock;
 }
 
-/** The shape CountriesNow returns from /countries/iso. */
-function isoResponse(rows: { name: string; Iso2: string }[]) {
-  return jsonResponse({ error: false, msg: 'ok', data: rows });
+/** What `GET /api/reference/countries` answers with, already mapped. */
+function isoResponse(rows: { name: string; code: string }[]) {
+  return jsonResponse(rows);
 }
 
 const ROWS = [
-  { name: 'Spain', Iso2: 'ES' },
-  { name: 'Albania', Iso2: 'AL' },
-  { name: 'Japan', Iso2: 'JP' },
+  { name: 'Albania', code: 'AL' },
+  { name: 'Japan', code: 'JP' },
+  { name: 'Spain', code: 'ES' },
 ];
 
 beforeEach(() => {
@@ -40,38 +40,18 @@ afterEach(() => {
   countryService.clearCache();
 });
 
+/*
+ * The provider's own shape — its `Iso2` spelling, its unsorted order, its rows
+ * missing a name or a code — is no longer this file's business. That mapping
+ * moved to `server/src/modules/places/countriesnow.ts` along with the fetch,
+ * and is tested there. What remains here is the localStorage cache, which is
+ * still the client's and still saves a request entirely.
+ */
 describe('getCountries', () => {
-  it('returns every country the source lists', async () => {
+  it('returns every country the API lists', async () => {
     stubFetch(async () => isoResponse(ROWS));
 
     await expect(countryService.getCountries()).resolves.toHaveLength(3);
-  });
-
-  it('sorts alphabetically', async () => {
-    stubFetch(async () => isoResponse(ROWS));
-
-    const countries = await countryService.getCountries();
-
-    expect(countries.map((country) => country.name)).toEqual(['Albania', 'Japan', 'Spain']);
-  });
-
-  it('normalises the ISO code to upper case', async () => {
-    stubFetch(async () => isoResponse([{ name: 'Spain', Iso2: 'es' }]));
-
-    expect((await countryService.getCountries())[0]).toEqual({ name: 'Spain', code: 'ES' });
-  });
-
-  it('drops a row missing either half', async () => {
-    stubFetch(async () =>
-      isoResponse([
-        { name: 'Spain', Iso2: 'ES' },
-        { name: '', Iso2: 'XX' },
-        { name: 'Nowhere', Iso2: '' },
-        { name: 'Bad', Iso2: 'TOOLONG' },
-      ] as { name: string; Iso2: string }[]),
-    );
-
-    expect(await countryService.getCountries()).toEqual([{ name: 'Spain', code: 'ES' }]);
   });
 
   it('caches under the documented key', async () => {

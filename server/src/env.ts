@@ -69,14 +69,18 @@ const schema = z.object({
   TRAVELPAYOUTS_MARKER: z.string().min(1).optional(),
 
   /**
-   * OpenTripMap — the places directory behind hotel listings.
+   * OpenTripMap — the places directory behind hotel listings and the
+   * attractions explorer.
    *
-   * The same key the SPA already compiles in as `VITE_OPENTRIPMAP_API_KEY`,
-   * so it is not a secret in any meaningful sense; it lives here because the
-   * hotel search runs server-side, where one cache can serve every reader.
+   * The only copy of this key. It was previously compiled into the browser
+   * bundle as `VITE_OPENTRIPMAP_API_KEY` and readable by anyone who loaded the
+   * site, so any key used before `/api/places` existed is public and has to be
+   * rotated rather than relocated.
    *
-   * Optional: without it `GET /api/hotels/search` answers
-   * `PROVIDER_NOT_CONFIGURED` and the client falls back to sample stays.
+   * Optional: without it `GET /api/hotels/search` falls back to sample stays,
+   * and `GET /api/places/*` answers `PROVIDER_NOT_CONFIGURED`, which the
+   * explorer reports as a server configuration problem rather than an empty
+   * result.
    */
   OPENTRIPMAP_API_KEY: z.string().min(1).optional(),
 

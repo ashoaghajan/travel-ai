@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { plannerService } from './planner.service';
 import { weatherService } from './weather.service';
 
@@ -29,10 +29,6 @@ const FACTS = {
   longitude: 44.51,
   timezone: 'Asia/Yerevan',
 };
-
-beforeEach(() => {
-  weatherService.clearCache();
-});
 
 afterEach(() => {
   vi.restoreAllMocks();

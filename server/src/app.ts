@@ -4,6 +4,10 @@ import cookieParser from 'cookie-parser';
 import { errorHandler, notFoundHandler } from './errors';
 import { authRouter } from './modules/auth/auth.routes';
 import { meRouter } from './modules/auth/me.routes';
+import { imagesRouter } from './modules/places/images.routes';
+import { placesRouter } from './modules/places/places.routes';
+import { referenceRouter } from './modules/places/reference.routes';
+import { weatherRouter } from './modules/places/weather.routes';
 import { plannerRouter } from './modules/planner/planner.routes';
 import { ratesRouter } from './modules/rates/rates.routes';
 import { travelRouter } from './modules/travel/travel.routes';
@@ -39,6 +43,13 @@ export function createApp(): Express {
   app.use('/api', travelRouter);
   // Reference data too, and the least guarded thing here: see its docblock.
   app.use('/api', ratesRouter);
+  // Facts about places in the world: attractions, the country and city lists,
+  // and their photographs. The first of these holds the OpenTripMap key, which
+  // is why the browser no longer needs one.
+  app.use('/api', placesRouter);
+  app.use('/api', referenceRouter);
+  app.use('/api', imagesRouter);
+  app.use('/api', weatherRouter);
   // Same root-level mounting, same reason. Unlike the routes above it, this one
   // authenticates and streams — see the module docblock.
   app.use('/api', plannerRouter);

@@ -1,5 +1,15 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { toPlainText, wikimediaService } from './wikimedia.service';
+import { wikimediaService } from './wikimedia.service';
+
+/**
+ * The client half of the photograph lookup.
+ *
+ * The Wikidata and Commons conversation lives in
+ * `server/src/modules/places/wikimedia.ts` and is tested there. What is left
+ * here is small but load-bearing: a grid must never fail because a decorative
+ * photograph could not be fetched, and a large grid must stay inside the
+ * endpoint's id cap.
+ */
 
 function jsonResponse(body: unknown, status = 200): Response {
   return {
@@ -15,221 +25,94 @@ function stubFetch(implementation: (url: string) => Promise<Response>) {
   return fetchMock;
 }
 
-/** One Wikidata entity carrying a P18 image claim. */
-function entity(fileName: string) {
-  return { claims: { P18: [{ mainsnak: { datavalue: { value: fileName } } }] } };
-}
-
-/** One Commons page for a file. */
-function page(fileName: string, overrides: Record<string, unknown> = {}) {
-  return {
-    title: `File:${fileName}`,
-    imageinfo: [
-      {
-        thumburl: `https://upload.example/${fileName}`,
-        descriptionurl: `https://commons.example/File:${fileName}`,
-        extmetadata: {
-          Artist: { value: '<a href="/wiki/User:Someone">Someone</a>' },
-          LicenseShortName: { value: 'CC BY-SA 4.0' },
-        },
-        ...overrides,
-      },
-    ],
-  };
-}
+const IMAGE = {
+  url: 'https://upload.example/A.jpg',
+  descriptionUrl: 'https://commons.example/File:A.jpg',
+  author: 'Someone',
+  license: 'CC BY-SA 4.0',
+};
 
 afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-describe('toPlainText', () => {
-  it('reduces a metadata fragment to its words', () => {
-    expect(toPlainText('<a href="/wiki/User:PHGCOM" class="x">PHGCOM</a>')).toBe('PHGCOM');
+describe('getImages', () => {
+  it('keys the photographs by entity id', async () => {
+    stubFetch(async () => jsonResponse({ Q1: IMAGE }));
+
+    const images = await wikimediaService.getImages(['Q1']);
+
+    expect(images.get('Q1')).toEqual(IMAGE);
   });
 
-  it('decodes the entities Commons escapes', () => {
-    expect(toPlainText('Tom &amp; Jerry&#039;s &quot;photo&quot;')).toBe(`Tom & Jerry's "photo"`);
-  });
+  it('asks our API, never Wikimedia', async () => {
+    const fetchMock = stubFetch(async () => jsonResponse({}));
 
-  it('collapses the whitespace left behind by stripped markup', () => {
-    expect(toPlainText('<p>  Jakub   </p>\n<span> Hałun </span>')).toBe('Jakub Hałun');
-  });
-});
+    await wikimediaService.getImages(['Q1']);
 
-describe('getImageFileNames', () => {
-  it('maps entity ids to file names', async () => {
-    stubFetch(async () =>
-      jsonResponse({ entities: { Q1: entity('Bali Museum.jpg'), Q2: entity('Sanur.jpg') } }),
-    );
-
-    await expect(wikimediaService.getImageFileNames(['Q1', 'Q2'])).resolves.toEqual(
-      new Map([
-        ['Q1', 'Bali Museum.jpg'],
-        ['Q2', 'Sanur.jpg'],
-      ]),
-    );
-  });
-
-  it('leaves out entities with no image claim', async () => {
-    stubFetch(async () => jsonResponse({ entities: { Q1: entity('A.jpg'), Q2: { claims: {} } } }));
-
-    const files = await wikimediaService.getImageFileNames(['Q1', 'Q2']);
-
-    expect(files.has('Q2')).toBe(false);
-  });
-
-  it('asks for no more than fifty ids per request', async () => {
-    const fetchMock = stubFetch(async () => jsonResponse({ entities: {} }));
-    const ids = Array.from({ length: 120 }, (_, index) => `Q${index}`);
-
-    await wikimediaService.getImageFileNames(ids);
-
-    expect(fetchMock).toHaveBeenCalledTimes(3);
-    for (const call of fetchMock.mock.calls) {
-      const requested = new URL(String(call[0])).searchParams.get('ids')?.split('|') ?? [];
-      expect(requested.length).toBeLessThanOrEqual(50);
-    }
+    const url = String(fetchMock.mock.calls[0][0]);
+    expect(url).toContain('/api/images/wikidata');
+    expect(url).not.toContain('wikidata.org');
   });
 
   it('makes no request for an empty list', async () => {
     const fetchMock = stubFetch(async () => jsonResponse({}));
 
-    await expect(wikimediaService.getImageFileNames([])).resolves.toEqual(new Map());
+    await expect(wikimediaService.getImages([])).resolves.toEqual(new Map());
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it('asks Wikimedia to send CORS headers', async () => {
-    const fetchMock = stubFetch(async () => jsonResponse({ entities: {} }));
+  it('asks about each entity once', async () => {
+    const fetchMock = stubFetch(async () => jsonResponse({}));
 
-    await wikimediaService.getImageFileNames(['Q1']);
+    await wikimediaService.getImages(['Q1', 'Q1', 'Q2']);
 
-    expect(new URL(String(fetchMock.mock.calls[0][0])).searchParams.get('origin')).toBe('*');
-  });
-});
-
-describe('getImageInfo', () => {
-  it('returns the thumbnail with its attribution', async () => {
-    stubFetch(async () => jsonResponse({ query: { pages: [page('Bali Museum.jpg')] } }));
-
-    const images = await wikimediaService.getImageInfo(['Bali Museum.jpg']);
-
-    expect(images.get('Bali Museum.jpg')).toEqual({
-      url: 'https://upload.example/Bali Museum.jpg',
-      descriptionUrl: 'https://commons.example/File:Bali Museum.jpg',
-      author: 'Someone',
-      license: 'CC BY-SA 4.0',
-    });
+    const ids = new URL(String(fetchMock.mock.calls[0][0]), 'http://x').searchParams.get('ids');
+    expect(ids).toBe('Q1,Q2');
   });
 
-  it('falls back to the full-size url when Commons cannot make a thumbnail', async () => {
-    stubFetch(async () =>
-      jsonResponse({
-        query: {
-          pages: [
-            page('Map.svg', { thumburl: undefined, url: 'https://upload.example/Map.svg' }),
-          ],
-        },
-      }),
-    );
+  it('splits a grid larger than the endpoint accepts', async () => {
+    const fetchMock = stubFetch(async () => jsonResponse({}));
+    const ids = Array.from({ length: 250 }, (_, index) => `Q${index}`);
 
-    expect((await wikimediaService.getImageInfo(['Map.svg'])).get('Map.svg')?.url).toBe(
-      'https://upload.example/Map.svg',
-    );
+    await wikimediaService.getImages(ids);
+
+    // The endpoint caps a request at 100 ids and would reject the lot.
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    for (const call of fetchMock.mock.calls) {
+      const requested = new URL(String(call[0]), 'http://x').searchParams.get('ids')?.split(',');
+      expect(requested?.length).toBeLessThanOrEqual(100);
+    }
   });
 
-  it('skips a file Commons will not serve at all', async () => {
-    stubFetch(async () =>
-      jsonResponse({ query: { pages: [{ title: 'File:Gone.jpg', imageinfo: undefined }] } }),
-    );
-
-    await expect(wikimediaService.getImageInfo(['Gone.jpg'])).resolves.toEqual(new Map());
-  });
-
-  it('omits attribution fields the file has no metadata for', async () => {
-    stubFetch(async () =>
-      jsonResponse({ query: { pages: [page('A.jpg', { extmetadata: {} })] } }),
-    );
-
-    const image = (await wikimediaService.getImageInfo(['A.jpg'])).get('A.jpg');
-
-    expect(image?.author).toBeUndefined();
-    expect(image?.license).toBeUndefined();
-  });
-
-  it('requests a card-sized thumbnail', async () => {
-    const fetchMock = stubFetch(async () => jsonResponse({ query: { pages: [] } }));
-
-    await wikimediaService.getImageInfo(['A.jpg']);
-
-    const params = new URL(String(fetchMock.mock.calls[0][0])).searchParams;
-    expect(params.get('titles')).toBe('File:A.jpg');
-    expect(Number(params.get('iiurlwidth'))).toBeGreaterThan(0);
-  });
-});
-
-describe('getImages', () => {
-  it('resolves both stages into one lookup', async () => {
-    stubFetch(async (url) =>
-      url.includes('wikidata')
-        ? jsonResponse({ entities: { Q1: entity('Bali Museum.jpg') } })
-        : jsonResponse({ query: { pages: [page('Bali Museum.jpg')] } }),
-    );
-
-    const images = await wikimediaService.getImages(['Q1']);
-
-    expect(images.get('Q1')?.url).toBe('https://upload.example/Bali Museum.jpg');
-    expect(images.get('Q1')?.license).toBe('CC BY-SA 4.0');
-  });
-
-  it('asks Commons about each file once when entities share a photo', async () => {
-    const fetchMock = stubFetch(async (url) =>
-      url.includes('wikidata')
-        ? jsonResponse({ entities: { Q1: entity('Shared.jpg'), Q2: entity('Shared.jpg') } })
-        : jsonResponse({ query: { pages: [page('Shared.jpg')] } }),
-    );
-
-    const images = await wikimediaService.getImages(['Q1', 'Q2']);
-
-    expect(images.size).toBe(2);
-    const commons = fetchMock.mock.calls.find((call) => String(call[0]).includes('commons'));
-    expect(new URL(String(commons?.[0])).searchParams.get('titles')).toBe('File:Shared.jpg');
-  });
-
-  it('drops an entity whose file Commons does not return', async () => {
-    stubFetch(async (url) =>
-      url.includes('wikidata')
-        ? jsonResponse({ entities: { Q1: entity('Missing.jpg') } })
-        : jsonResponse({ query: { pages: [] } }),
-    );
-
-    await expect(wikimediaService.getImages(['Q1'])).resolves.toEqual(new Map());
-  });
-});
-
-describe('when Wikimedia is unavailable', () => {
-  it('returns nothing rather than failing the screen', async () => {
+  it('returns nothing rather than failing the grid', async () => {
     stubFetch(async () => {
-      throw new Error('offline');
+      throw new TypeError('Failed to fetch');
     });
 
+    // A card falls back to its own category artwork. An error state over a
+    // missing decorative photograph would be wildly out of proportion.
     await expect(wikimediaService.getImages(['Q1'])).resolves.toEqual(new Map());
   });
 
-  it('treats an error status as no image', async () => {
-    stubFetch(async () => jsonResponse({}, 503));
+  it('keeps the photographs from batches that did succeed', async () => {
+    const ids = Array.from({ length: 150 }, (_, index) => `Q${index}`);
 
-    await expect(wikimediaService.getImages(['Q1'])).resolves.toEqual(new Map());
-  });
-
-  it('survives a malformed response', async () => {
-    stubFetch(async () => {
-      const response = jsonResponse({});
-      response.json = async () => {
-        throw new Error('not json');
-      };
-      return response;
+    stubFetch(async (url) => {
+      if (url.includes('Q100')) throw new Error('offline');
+      return jsonResponse({ Q1: IMAGE });
     });
 
+    const images = await wikimediaService.getImages(ids);
+
+    // One failed batch must not discard the ninety-nine cards that did resolve.
+    expect(images.get('Q1')).toEqual(IMAGE);
+  });
+
+  it('ignores an entry with no url', async () => {
+    stubFetch(async () => jsonResponse({ Q1: { descriptionUrl: 'x' } }));
+
+    // A card rendering `<img src="undefined">` is worse than one with no photo.
     await expect(wikimediaService.getImages(['Q1'])).resolves.toEqual(new Map());
   });
 });
