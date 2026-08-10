@@ -12,6 +12,7 @@ import { ratesService } from '../../services/rates.service';
 import { resetCurrencyStore } from '../../store/currency.store';
 import { ActivityCard } from '../cards/ActivityCard';
 import { CurrencySelect } from './CurrencySelect';
+import { settingsService } from '../../services/settings.service';
 
 /**
  * The picker, wired to a real priced card.
@@ -60,7 +61,21 @@ function renderPricedScreen() {
   );
 }
 
+/**
+ * The settings round trip, without a server.
+ *
+ * `setDisplayCurrency` writes through the API now and refreshes the cache from
+ * the response — so an unstubbed switch fails the request and the currency
+ * never changes. This stands in for the server agreeing.
+ */
+function settingsSaveSucceeds() {
+  vi.spyOn(settingsService, 'save').mockImplementation(async (patch) =>
+    settingsService.adopt({ ...settingsService.getSettings(), ...patch }),
+  );
+}
+
 beforeEach(() => {
+  settingsSaveSucceeds();
   storageService.remove(STORAGE_KEYS.settings);
   storageService.remove(STORAGE_KEYS.exchangeRates);
   vi.spyOn(ratesService, 'readSync').mockReturnValue(RATES);

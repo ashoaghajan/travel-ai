@@ -6,4 +6,5 @@
  * in the feature's rules module, not a shared schema.
  */
 export * from './auth.schemas';
+export * from './settings.schemas';
 export * from './trip.schemas';

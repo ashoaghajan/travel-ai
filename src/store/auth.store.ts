@@ -3,6 +3,7 @@ import type { ApiUser, LoginRequest, RegisterRequest } from '@ai-travel/shared';
 import { authService } from '../services/auth.service';
 import { signedOut } from '../services/http';
 import { claimLocalData, releaseLocalData } from '../services/localData.service';
+import { settingsService } from '../services/settings.service';
 import { tripImportService } from '../services/tripImport.service';
 import { tripStore } from './trip.store';
 
@@ -57,6 +58,18 @@ function signIn(user: ApiUser): void {
   // time anything re-renders against it.
   claimLocalData(user.id);
 
+  /*
+   * The account's own preferences, which arrived with it.
+   *
+   * `GET /api/me` carries settings and the active trip precisely so that
+   * starting the app is one request rather than three. Adopting them here,
+   * before the state change, means the theme and the currency are already
+   * right by the time anything renders — and priming the active trip stops
+   * the trip store fetching what we are already holding.
+   */
+  settingsService.adopt(user.settings);
+  tripStore.primeActiveTrip(user.activeTripId);
+
   setState({ status: 'authenticated', user });
 
   /*
@@ -81,9 +94,10 @@ signedOut.subscribe(() => {
   if (state.status === 'anonymous') return;
 
   releaseLocalData();
-  // The next reader must not see this account's trips for the moment before
-  // their own arrive.
+  // The next reader must not see this account's trips, or have their theme
+  // painted, for the moment before their own arrive.
   tripStore.reset();
+  settingsService.clearCache();
   setState(ANONYMOUS);
 });
 
@@ -154,6 +168,7 @@ export const authStore = {
       // Even if the server never heard about it, this browser is signed out.
       releaseLocalData();
       tripStore.reset();
+      settingsService.clearCache();
       setState(ANONYMOUS);
     }
   },

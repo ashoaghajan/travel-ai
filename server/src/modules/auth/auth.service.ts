@@ -2,9 +2,10 @@ import { hash, verify } from '@node-rs/argon2';
 import { ERROR_CODES } from '@ai-travel/shared';
 import type { ApiIdentity, ApiUser } from '@ai-travel/shared';
 import { toEmailKey } from '@ai-travel/shared/schemas';
-import type { AuthIdentity, User } from '@prisma/client';
+import type { AuthIdentity, User, UserSettings } from '@prisma/client';
 import { prisma } from '../../prisma';
 import { conflict, unauthorized } from '../../errors';
+import { toApiSettings } from '../settings/settings.service';
 import {
   createRefreshToken,
   hashRefreshToken,
@@ -69,7 +70,18 @@ export type IssuedSession = {
  * bare `User`; when it is absent the list is simply empty rather than wrong —
  * only `GET /api/me` and the sign-in responses need it populated.
  */
-export function toApiUser(user: User, identities: AuthIdentity[] = []): ApiUser {
+/**
+ * `settings` is passed in rather than looked up here.
+ *
+ * This is a pure mapper — every caller already has the row in hand or can
+ * include it in the query it was making anyway, and a lookup hidden inside a
+ * mapper is a query nobody can see when they read the call site.
+ */
+export function toApiUser(
+  user: User,
+  identities: AuthIdentity[] = [],
+  settings: UserSettings | null = null,
+): ApiUser {
   return {
     id: user.id,
     name: user.name,
@@ -82,6 +94,7 @@ export function toApiUser(user: User, identities: AuthIdentity[] = []): ApiUser 
     })),
     hasPassword: user.passwordHash !== null,
     activeTripId: user.activeTripId,
+    settings: toApiSettings(settings),
   };
 }
 
@@ -125,7 +138,11 @@ export async function issueSession(
   const { token, expiresIn } = signAccessToken(user.id);
 
   return {
-    user: toApiUser(user, await loadIdentities(user.id)),
+    user: toApiUser(
+      user,
+      await loadIdentities(user.id),
+      await prisma.userSettings.findUnique({ where: { userId: user.id } }),
+    ),
     accessToken: token,
     expiresIn,
     refreshToken: raw,

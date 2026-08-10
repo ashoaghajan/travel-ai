@@ -48,6 +48,7 @@ describe('POST /api/auth/register', () => {
       'identities',
       'isGuest',
       'name',
+      'settings',
     ]);
   });
 

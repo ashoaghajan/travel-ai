@@ -27,6 +27,27 @@ export type ApiIdentity = {
 };
 
 /** The signed-in person, as `GET /api/me` and the auth endpoints return them. */
+/**
+ * App preferences, as the wire carries them.
+ *
+ * Deliberately the same shape as the SPA's own `AppSettings`, so the client can
+ * hold what it is given rather than mapping it. Every field has a default, so
+ * an account that has never opened the settings screen still gets a complete
+ * record.
+ */
+export type ApiSettings = {
+  theme: 'system' | 'light' | 'dark';
+  /**
+   * ISO 4217. Display only: prices are quoted and stored in USD and converted
+   * at render time.
+   */
+  currency: string;
+  notifications: {
+    tripReminders: boolean;
+    priceAlerts: boolean;
+  };
+};
+
 export type ApiUser = {
   id: string;
   name: string;
@@ -47,6 +68,11 @@ export type ApiUser = {
    * is offered — doing so with no password would lock the account.
    */
   hasPassword: boolean;
+  /**
+   * App preferences, returned with the account rather than from an endpoint of
+   * their own — see `activeTripId` below for why boot is one request.
+   */
+  settings: ApiSettings;
   /**
    * The trip last opened, so a reload can offer to resume it.
    *

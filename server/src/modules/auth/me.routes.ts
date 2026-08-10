@@ -20,13 +20,13 @@ meRouter.get('/', async (request, response) => {
   // without a second round trip.
   const user = await prisma.user.findUnique({
     where: { id: userIdOf(request) },
-    include: { identities: true },
+    include: { identities: true, settings: true },
   });
 
   // A live token for a deleted account: rare, but it must not 500.
   if (!user) throw notFound('That account no longer exists.');
 
-  response.json(toApiUser(user, user.identities));
+  response.json(toApiUser(user, user.identities, user.settings));
 });
 
 meRouter.patch('/', async (request, response) => {
@@ -35,8 +35,8 @@ meRouter.patch('/', async (request, response) => {
   const user = await prisma.user.update({
     where: { id: userIdOf(request) },
     data: patch,
-    include: { identities: true },
+    include: { identities: true, settings: true },
   });
 
-  response.json(toApiUser(user, user.identities));
+  response.json(toApiUser(user, user.identities, user.settings));
 });

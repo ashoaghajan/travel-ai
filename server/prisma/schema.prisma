@@ -61,4 +61,158 @@ model User {
   refreshTokens RefreshToken[]
   identities    AuthIdentity[]
   trips         Trip[]         @relation("OwnedTrips")
+  settings      UserSettings?
+}
+
+/// App preferences, one row per account.
+///
+/// Columns rather than a JSON blob, unlike `Trip.itinerary`: the shape is tiny
+/// and fixed, every field is scalar, and nothing about it resembles a document.
+/// The reason the itinerary is JSON — whole-value replacement of a nested,
+/// never-queried structure — applies to none of this.
+model UserSettings {
+  userId String @id
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  /// 'system' | 'light' | 'dark'. A string, not an enum — see the header.
+  theme String @default("system")
+
+  /// ISO 4217, e.g. 'USD'. Display only: prices are quoted and stored in USD
+  /// and converted at render time, so this changes what a reader sees and
+  /// nothing about what anything cost.
+  currency String @default("USD")
+
+  tripReminders Boolean @default(true)
+  priceAlerts   Boolean @default(false)
+
+  updatedAt DateTime @updatedAt
+}
+
+/// One saved trip, with its whole itinerary in a single JSON column.
+model Trip {
+  /// Client-format (`trip_<uuid>`), not a database default.
+  ///
+  /// The client mints ids for trips and for the days and activities inside
+  /// them, and the localStorage import depends on preserving them: keeping the
+  /// same id is what makes that endpoint idempotent, so re-running it cannot
+  /// duplicate a trip.
+  id     String @id
+  userId String
+  user   User   @relation("OwnedTrips", fields: [userId], references: [id], onDelete: Cascade)
+
+  /// Identifies the generated draft this trip came from.
+  ///
+  /// The idempotency key for saving: a double click, a second tab, or the same
+  /// conversation after a reload all carry the same draft, and the unique
+  /// constraint below is what makes the second save return the first trip
+  /// rather than create a twin. Nullable because a hand-built trip has no
+  /// draft — and Postgres treats NULLs as distinct, so any number of them
+  /// coexist under that constraint.
+  draftId String?
+
+  title       String
+  destination String
+
+  /// Both nullable: a trip saved before these existed carries only
+  /// `destination`, and three places resolve that at read time. Do not
+  /// backfill them during the import — a guess here becomes a wrong country
+  /// filter in the explorer.
+  destinationCountry String?
+  destinationCity    String?
+
+  /// `YYYY-MM-DD` strings, not `DateTime`.
+  ///
+  /// A trip's dates are calendar days, not instants. Stored as timestamps they
+  /// acquire a timezone, and a trip starting the 2nd in Yerevan becomes the
+  /// 1st for a reader in New York.
+  startDate String
+  endDate   String
+
+  travellers Int
+  coverImage String
+
+  /// `ItineraryDay[]`. Validated by zod on every write — see the header.
+  itinerary Json
+
+  /// `TripNote[]`. Nullable, because a trip saved before notes existed carries
+  /// none and the client reads a missing list as an empty one rather than
+  /// forcing a migration. Notes live on the trip rather than in their own
+  /// table for the same reason the itinerary does: nothing queries across
+  /// them, and they are meaningless without the trip.
+  notes Json?
+
+  /// Display estimates, not money. `Float` rather than `Decimal` because
+  /// `Prisma.Decimal` serialises to an object and would need a mapper.
+  flightsEstimate    Float?
+  hotelsEstimate     Float?
+  activitiesEstimate Float?
+
+  /// Bumped on every write, checked on every patch.
+  ///
+  /// Two tabs editing one trip would otherwise silently overwrite each other:
+  /// both read version 3, both send a whole itinerary, and the slower write
+  /// wins with no sign that the other happened.
+  version Int @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  activeFor User[] @relation("ActiveTrip")
+
+  @@unique([userId, draftId])
+  @@index([userId, createdAt(sort: Desc)])
+}
+
+/// One external account someone can sign in with.
+///
+/// Keyed on the provider's own id rather than on email, which Google
+/// explicitly recommends: a Google account's email address can change, and
+/// following it would either lose the link or hand the account to whoever
+/// inherits the old address.
+model AuthIdentity {
+  id     String @id @default(uuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  /// 'google' today. A string rather than an enum — SQLite has none.
+  provider String
+  /// Google's `sub` claim.
+  providerUserId String
+
+  /// As the provider reported it, for display on the profile screen. Not used
+  /// for lookup, and not kept in step with the account's own email.
+  email String?
+
+  createdAt DateTime @default(now())
+
+  @@unique([provider, providerUserId])
+  @@index([userId])
+}
+
+/// One issued refresh token. Rotated on every use; never reused.
+model RefreshToken {
+  id     String @id @default(uuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  /// sha256 of the token. The raw value exists only in the client's cookie,
+  /// so a leaked database cannot be replayed against us.
+  tokenHash String @unique
+
+  /// Every token descended from one sign-in. Replaying any dead member kills
+  /// the whole family — that is the theft signal.
+  familyId String
+
+  expiresAt DateTime
+  revokedAt DateTime?
+  /// The token this one was rotated into, for tracing a family.
+  replacedById String?
+
+  userAgent String?
+  ip        String?
+
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([familyId])
 }

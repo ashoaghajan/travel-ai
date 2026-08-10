@@ -55,10 +55,16 @@ function Harness() {
   return null;
 }
 
-/** Writes a preference the way the settings screen does. */
+/**
+ * Writes a preference the way the settings screen does.
+ *
+ * Through `adopt`, which is the cache write the screen's save ends in — the
+ * theme is painted from the cache, because the blocking script in `index.html`
+ * has to know it before any request could have finished.
+ */
 function choose(theme: ThemePreference) {
   act(() => {
-    settingsService.saveSettings({ ...settingsService.getSettings(), theme });
+    settingsService.adopt({ ...settingsService.getSettings(), theme });
   });
 }
 
@@ -75,7 +81,7 @@ afterEach(() => {
 describe('useAppliedTheme', () => {
   it('paints the stored preference on mount', () => {
     stubMatchMedia(false);
-    settingsService.saveSettings({ ...settingsService.getSettings(), theme: 'dark' });
+    settingsService.adopt({ ...settingsService.getSettings(), theme: 'dark' });
 
     render(<Harness />);
 

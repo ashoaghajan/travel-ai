@@ -10,6 +10,7 @@ import { referenceRouter } from './modules/places/reference.routes';
 import { weatherRouter } from './modules/places/weather.routes';
 import { plannerRouter } from './modules/planner/planner.routes';
 import { ratesRouter } from './modules/rates/rates.routes';
+import { settingsRouter } from './modules/settings/settings.routes';
 import { travelRouter } from './modules/travel/travel.routes';
 import { migrateRouter } from './modules/trips/migrate.routes';
 import { activeTripRouter, tripsRouter } from './modules/trips/trips.routes';
@@ -47,6 +48,7 @@ export function createApp(): Express {
   // Claims the trips a browser saved before there was anywhere else to put
   // them. Carries its own body limit — see the module.
   app.use('/api', migrateRouter);
+  app.use('/api', settingsRouter);
   // Unauthenticated, and mounted at the root of /api because its paths are
   // domain-shaped (`/flights/search`) rather than grouped under one noun.
   app.use('/api', travelRouter);

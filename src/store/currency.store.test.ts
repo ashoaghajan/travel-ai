@@ -7,6 +7,7 @@ import type { ExchangeRates } from '@ai-travel/shared';
 import { STORAGE_KEYS, storageService } from '../services/localStorage.service';
 import { ratesService } from '../services/rates.service';
 import { resetCurrencyStore, setDisplayCurrency, useMoney } from './currency.store';
+import { settingsService } from '../services/settings.service';
 
 /**
  * Switching currency, and the two ways that can go wrong.
@@ -34,7 +35,21 @@ const RATES: ExchangeRates = {
   isStale: false,
 };
 
+/**
+ * The settings round trip, without a server.
+ *
+ * `setDisplayCurrency` writes through the API now and refreshes the cache from
+ * the response — so an unstubbed switch fails the request and the currency
+ * never changes. This stands in for the server agreeing.
+ */
+function settingsSaveSucceeds() {
+  vi.spyOn(settingsService, 'save').mockImplementation(async (patch) =>
+    settingsService.adopt({ ...settingsService.getSettings(), ...patch }),
+  );
+}
+
 beforeEach(() => {
+  settingsSaveSucceeds();
   storageService.remove(STORAGE_KEYS.settings);
   storageService.remove(STORAGE_KEYS.exchangeRates);
   resetCurrencyStore();

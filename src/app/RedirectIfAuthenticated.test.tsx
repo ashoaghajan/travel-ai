@@ -47,6 +47,11 @@ const ADA: ApiUser = {
   identities: [],
   hasPassword: true,
   activeTripId: null,
+  settings: {
+    theme: 'system' as const,
+    currency: 'USD',
+    notifications: { tripReminders: true, priceAlerts: false },
+  },
 };
 
 /** Settle the session the way the app does, with only the network stubbed. */

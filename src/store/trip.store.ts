@@ -116,6 +116,17 @@ export const tripStore = {
     activeTripResource.set(id);
   },
 
+  /**
+   * Adopt the active-trip pointer that came back with the account.
+   *
+   * `GET /api/me` already carries it, so fetching it again would make boot two
+   * requests for one answer. Setting it here also marks the resource ready, so
+   * the first subscriber does not trigger a load at all.
+   */
+  primeActiveTrip(tripId: string | null): void {
+    activeTripResource.set(tripId);
+  },
+
   /** Refetch both lists — after a sign-in, or after the local-data import. */
   async refresh(): Promise<void> {
     await Promise.all([tripsResource.refresh(), activeTripResource.refresh()]);

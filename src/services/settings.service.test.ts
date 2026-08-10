@@ -1,9 +1,29 @@
 /**
  * @vitest-environment jsdom
  */
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { STORAGE_KEYS, storageService } from './localStorage.service';
 import { DEFAULT_SETTINGS, settingsService } from './settings.service';
+import { ApiError, http } from './http';
+
+/**
+ * App preferences.
+ *
+ * The account owns these now, but `localStorage` still holds a copy — and that
+ * copy has one specific job: the blocking script in `index.html` reads it to
+ * paint the theme before the first frame. Nothing fetched can meet that
+ * deadline, so `getSettings()` stays synchronous and possibly one load stale,
+ * while writes go to the server and refresh the cache from its answer.
+ */
+
+beforeEach(() => {
+  localStorage.clear();
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
+  localStorage.clear();
+});
 
 describe('getSettings', () => {
   it('returns the defaults when nothing is stored', () => {
@@ -26,8 +46,8 @@ describe('getSettings', () => {
     expect(settingsService.getSettings().currency).toBe('USD');
   });
 
-  it('returns what was saved', () => {
-    settingsService.saveSettings({
+  it('returns what the account was last known to hold', () => {
+    settingsService.adopt({
       theme: 'dark',
       currency: 'AMD',
       notifications: { tripReminders: false, priceAlerts: true },
@@ -64,10 +84,85 @@ describe('getSettings', () => {
   });
 });
 
-describe('saveSettings', () => {
-  it('writes under the settings key', () => {
-    settingsService.saveSettings(DEFAULT_SETTINGS);
+describe('adopt', () => {
+  it('caches what came back with the account', () => {
+    settingsService.adopt({ ...DEFAULT_SETTINGS, theme: 'dark' });
+
+    // Written synchronously, because the next page load's blocking script
+    // reads this key before anything could be fetched.
     expect(localStorage.getItem(STORAGE_KEYS.settings)).not.toBeNull();
+    expect(settingsService.getSettings().theme).toBe('dark');
+  });
+});
+
+describe('save', () => {
+  it('sends only the fields that changed', async () => {
+    const put = vi.spyOn(http, 'put').mockResolvedValue({ ...DEFAULT_SETTINGS, theme: 'dark' });
+
+    await settingsService.save({ theme: 'dark' });
+
+    // The settings screen writes one toggle at a time; the server merges.
+    expect(put).toHaveBeenCalledWith('/settings', { theme: 'dark' });
+  });
+
+  it('caches what the server answered, not what was sent', async () => {
+    vi.spyOn(http, 'put').mockResolvedValue({
+      ...DEFAULT_SETTINGS,
+      theme: 'dark',
+      currency: 'AMD',
+    });
+
+    await settingsService.save({ theme: 'dark' });
+
+    // The response is the whole record. Merging towards it instead is how a
+    // screen ends up showing a preference the database does not hold.
+    expect(settingsService.getSettings().currency).toBe('AMD');
+  });
+
+  it('leaves the cache alone when the save fails', async () => {
+    settingsService.adopt({ ...DEFAULT_SETTINGS, theme: 'light' });
+    vi.spyOn(http, 'put').mockRejectedValue(new ApiError(502, 'INTERNAL' as never, 'Nope.'));
+
+    await expect(settingsService.save({ theme: 'dark' })).rejects.toBeInstanceOf(ApiError);
+
+    // A preference on screen that was never stored is worse than one that
+    // visibly refused to change.
+    expect(settingsService.getSettings().theme).toBe('light');
+  });
+
+  it('survives storage refusing the write', async () => {
+    vi.spyOn(http, 'put').mockResolvedValue({ ...DEFAULT_SETTINGS, theme: 'dark' });
+    vi.spyOn(storageService, 'set').mockImplementation(() => {
+      throw new Error('QuotaExceededError');
+    });
+
+    // The preference applied for this session; only the pre-paint read on the
+    // next load degrades, and it degrades to the default theme.
+    await expect(settingsService.save({ theme: 'dark' })).resolves.toMatchObject({
+      theme: 'dark',
+    });
+  });
+});
+
+describe('load', () => {
+  it('refreshes the cache from the server', async () => {
+    vi.spyOn(http, 'get').mockResolvedValue({ ...DEFAULT_SETTINGS, currency: 'EUR' });
+
+    await settingsService.load();
+
+    expect(settingsService.getSettings().currency).toBe('EUR');
+  });
+});
+
+describe('clearCache', () => {
+  it('forgets the previous reader’s preferences', () => {
+    settingsService.adopt({ ...DEFAULT_SETTINGS, theme: 'dark' });
+
+    settingsService.clearCache();
+
+    // Sign-out: the next person at this browser must not have someone else's
+    // theme painted for them before their own settings arrive.
+    expect(settingsService.getSettings()).toEqual(DEFAULT_SETTINGS);
   });
 });
 
@@ -76,7 +171,7 @@ describe('subscribe', () => {
     const listener = vi.fn();
     const unsubscribe = settingsService.subscribe(listener);
 
-    settingsService.saveSettings({ ...DEFAULT_SETTINGS, theme: 'dark' });
+    settingsService.adopt({ ...DEFAULT_SETTINGS, theme: 'dark' });
 
     expect(listener).toHaveBeenCalledTimes(1);
     unsubscribe();

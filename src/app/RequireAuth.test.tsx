@@ -56,6 +56,11 @@ const ADA: ApiUser = {
   identities: [],
   hasPassword: true,
   activeTripId: null,
+  settings: {
+    theme: 'system' as const,
+    currency: 'USD',
+    notifications: { tripReminders: true, priceAlerts: false },
+  },
 };
 
 /**

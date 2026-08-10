@@ -1,6 +1,6 @@
 # Backend Integration — Closing the localStorage Gaps
 
-> **Status:** Milestone 1 complete. Five milestones, in the order listed.
+> **Status:** Milestones 1-3 complete. Five milestones, in the order listed.
 > Temporary working document — delete once the milestones land.
 
 ## Milestones at a glance
@@ -8,8 +8,8 @@
 | # | Milestone | Size | Depends on |
 |---|---|---|---|
 | 1 | [Proxy third-party APIs](#milestone-1--proxy-the-third-party-apis-rotate-the-leaked-key) ✅ done | small | — |
-| 2 | [Trips in Postgres](#milestone-2--trips-in-postgres) | large | — |
-| 3 | [Settings and active trip on `/api/me`](#milestone-3--settings-and-active-trip-on-apime) | small | 2 |
+| 2 | [Trips in Postgres](#milestone-2--trips-in-postgres) ✅ done | large | — |
+| 3 | [Settings and active trip on `/api/me`](#milestone-3--settings-and-active-trip-on-apime) ✅ done | small | 2 |
 | 4 | [Bookings in Postgres](#milestone-4--bookings-in-postgres) | medium | 2 |
 | 5 | [Saved activities, chat history, recent searches](#milestone-5--saved-activities-chat-history-recent-searches) | medium | 2 |
 

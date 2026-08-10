@@ -119,13 +119,18 @@ export function useDisplayCurrency(): CurrencyCode {
  * Switch currency.
  *
  * Writes through settings, which every subscriber is already listening to, so
- * the change reaches every price in the app — and every other open tab.
+ * the change reaches every price in the app — every other open tab, and now
+ * every other device.
+ *
+ * Fire-and-forget on purpose. The cache is written from the server's response,
+ * so a failed save simply leaves the previous currency in place; blocking a
+ * dropdown on a round trip would make switching feel broken on a slow
+ * connection, and prices are a display preference rather than a record.
  */
 export function setDisplayCurrency(currency: CurrencyCode): void {
-  const settings = settingsService.getSettings();
-  if (settings.currency === currency) return;
+  if (settingsService.getSettings().currency === currency) return;
 
-  settingsService.saveSettings({ ...settings, currency });
+  void settingsService.save({ currency }).catch(() => undefined);
 
   // Dram was picked but the day's table never loaded — the reader has asked
   // for something the app cannot yet do, so this is the moment to try again
