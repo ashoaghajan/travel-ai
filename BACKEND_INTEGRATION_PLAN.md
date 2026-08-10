@@ -1,6 +1,6 @@
 # Backend Integration — Closing the localStorage Gaps
 
-> **Status:** Milestones 1-4 complete. Five milestones, in the order listed.
+> **Status:** All five milestones complete. Delete this file once the follow-on below is done.
 > Temporary working document — delete once the milestones land.
 
 ## Milestones at a glance
@@ -11,7 +11,7 @@
 | 2 | [Trips in Postgres](#milestone-2--trips-in-postgres) ✅ done | large | — |
 | 3 | [Settings and active trip on `/api/me`](#milestone-3--settings-and-active-trip-on-apime) ✅ done | small | 2 |
 | 4 | [Bookings in Postgres](#milestone-4--bookings-in-postgres) ✅ done | medium | 2 |
-| 5 | [Saved activities, chat history, recent searches](#milestone-5--saved-activities-chat-history-recent-searches) | medium | 2 |
+| 5 | [Saved activities, chat history, recent searches](#milestone-5--saved-activities-chat-history-recent-searches) ✅ done | medium | 2 |
 
 Milestone 1 is independent of the rest and goes first because it is the only security issue.
 Milestone 2 carries the shared cost of making the stores asynchronous, which is why 3–5 depend

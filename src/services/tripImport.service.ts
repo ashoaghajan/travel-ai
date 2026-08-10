@@ -53,6 +53,24 @@ function readLocalBookings(): Booking[] {
   return Array.isArray(bookings) ? bookings : [];
 }
 
+/** The shortlist, the recent searches and the conversation, as stored. */
+function readLocalLibrary() {
+  const saved = storageService.get<{ activity: unknown; savedAt?: string }[]>(
+    STORAGE_KEYS.savedActivities,
+    [],
+  );
+
+  const searches = storageService.get<{ flights?: unknown[] }>(STORAGE_KEYS.recentSearches, {});
+
+  const chat = storageService.get<{ messages?: unknown[] } | null>(STORAGE_KEYS.chatHistory, null);
+
+  return {
+    savedActivities: Array.isArray(saved) ? saved : [],
+    searches: Array.isArray(searches?.flights) ? searches.flights : [],
+    chatMessages: Array.isArray(chat?.messages) ? chat.messages : [],
+  };
+}
+
 function readMarker(): Marker | null {
   return storageService.get<Marker | null>(STORAGE_KEYS.migratedFor, null);
 }
@@ -79,7 +97,16 @@ function writeMarker(userId: string, imported: number): void {
  * local backup" for when they are satisfied.
  */
 function archiveImportedKeys(userId: string): void {
-  for (const key of [STORAGE_KEYS.trips, STORAGE_KEYS.activeTripId, STORAGE_KEYS.bookings]) {
+  const keys = [
+    STORAGE_KEYS.trips,
+    STORAGE_KEYS.activeTripId,
+    STORAGE_KEYS.bookings,
+    STORAGE_KEYS.savedActivities,
+    STORAGE_KEYS.recentSearches,
+    STORAGE_KEYS.chatHistory,
+  ];
+
+  for (const key of keys) {
     const value = storageService.get<unknown>(key, undefined);
     if (value === undefined) continue;
 
@@ -109,11 +136,20 @@ export const tripImportService = {
 
     const trips = readLocalTrips();
     const bookings = readLocalBookings();
+    const library = readLocalLibrary();
 
     // The common case by far, and it must cost nothing: a new account on a
-    // fresh browser has nothing to hand over. Bookings count too — someone can
-    // have saved a fare without ever creating a trip.
-    if (trips.length === 0 && bookings.length === 0) {
+    // fresh browser has nothing to hand over. All five count — someone can
+    // have shortlisted an attraction, or held a conversation, without ever
+    // creating a trip.
+    const hasSomething =
+      trips.length > 0 ||
+      bookings.length > 0 ||
+      library.savedActivities.length > 0 ||
+      library.searches.length > 0 ||
+      library.chatMessages.length > 0;
+
+    if (!hasSomething) {
       writeMarker(userId, 0);
       return { status: 'skipped' };
     }
@@ -125,6 +161,7 @@ export const tripImportService = {
         trips,
         bookings,
         activeTripId,
+        ...library,
       });
 
       archiveImportedKeys(userId);

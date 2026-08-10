@@ -1,61 +1,97 @@
 import { useSyncExternalStore } from 'react';
 import type { Activity } from '../types/travel.types';
-import { STORAGE_KEYS, storageService } from '../services/localStorage.service';
-import { readSavedSync, savedActivityService } from '../services/savedActivity.service';
+import { savedActivityService } from '../services/savedActivity.service';
 import type { SavedActivity } from '../services/savedActivity.service';
+import { createResource } from './createResource';
+import type { ResourceSnapshot } from './createResource';
+import { broadcast, onBroadcast } from './broadcast';
 
 /**
  * Shared read model for saved attractions.
  *
  * Components read through `useSavedActivities()` / `useIsActivitySaved()` and
- * write through `savedActivityStore`. The cache refreshes from the storage
- * subscription, so a save made anywhere — the card, the details page, another
- * tab — reaches every subscriber at once.
+ * write through `savedActivityStore`. Every write replaces the list with the
+ * one the server answered with, so the shortlist on screen is the shortlist
+ * that exists — including the server's own cap, which the client cannot
+ * predict.
  */
 
-let cache: SavedActivity[] = readSavedSync();
-const listeners = new Set<() => void>();
+/** Module-level so the identity is stable — see `createResource`. */
+const EMPTY_SAVED: SavedActivity[] = [];
 
-storageService.subscribe(STORAGE_KEYS.savedActivities, () => {
-  cache = readSavedSync();
-  listeners.forEach((listener) => listener());
+const saved = createResource<SavedActivity[]>({
+  empty: EMPTY_SAVED,
+  load: () => savedActivityService.getSaved(),
 });
 
-function subscribe(listener: () => void): () => void {
-  listeners.add(listener);
-  return () => listeners.delete(listener);
-}
+onBroadcast('savedActivities', () => {
+  void saved.refresh();
+});
 
-/** Stable reference between changes — required by `useSyncExternalStore`. */
-function getSnapshot(): SavedActivity[] {
-  return cache;
-}
+const select = (): SavedActivity[] => saved.getSnapshot().data;
 
 export const savedActivityStore = {
-  subscribe,
-  getSnapshot,
+  subscribe: saved.subscribe,
+  getSnapshot: saved.getSnapshot,
 
   async save(activity: Activity): Promise<void> {
-    await savedActivityService.save(activity);
+    saved.set(await savedActivityService.save(activity));
+    broadcast('savedActivities');
   },
 
   async remove(activityId: string): Promise<void> {
-    await savedActivityService.remove(activityId);
+    saved.set(await savedActivityService.remove(activityId));
+    broadcast('savedActivities');
   },
 
-  /** Returns whether the attraction is saved after the toggle. */
+  /**
+   * Saves if absent, removes if present. Returns whether it is now saved.
+   *
+   * The decision is made here, from the list already in hand. It used to be
+   * made in the service by reading storage synchronously, which is not a
+   * question a fetched list can answer without a round trip nobody needs.
+   */
   async toggle(activity: Activity): Promise<boolean> {
-    return savedActivityService.toggle(activity);
+    const isSaved = select().some((entry) => entry.activity.id === activity.id);
+
+    if (isSaved) {
+      await savedActivityStore.remove(activity.id);
+      return false;
+    }
+
+    await savedActivityStore.save(activity);
+    return true;
+  },
+
+  /** Refetch — after a sign-in, or after the local-data import. */
+  async refresh(): Promise<void> {
+    await saved.refresh();
+  },
+
+  /** Sign-out: the next reader must not see this account's shortlist. */
+  reset(): void {
+    saved.reset();
   },
 };
 
 /** Saved attractions, newest first. */
 export function useSavedActivities(): SavedActivity[] {
-  return useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
+  return useSyncExternalStore(saved.subscribe, select, select);
+}
+
+/**
+ * The list plus whether it has arrived.
+ *
+ * `ActivityDetailsPage` needs this: the heart icon reads "unsaved" while the
+ * list is still in flight, which is a claim rather than a blank.
+ */
+export function useSavedActivitiesResource(): ResourceSnapshot<SavedActivity[]> {
+  return useSyncExternalStore(saved.subscribe, saved.getSnapshot, saved.getSnapshot);
 }
 
 /** Whether one attraction is saved, kept in step with every other view of it. */
 export function useIsActivitySaved(activityId: string | undefined): boolean {
-  const saved = useSavedActivities();
-  return activityId ? saved.some((entry) => entry.activity.id === activityId) : false;
+  const list = useSavedActivities();
+
+  return activityId ? list.some((entry) => entry.activity.id === activityId) : false;
 }

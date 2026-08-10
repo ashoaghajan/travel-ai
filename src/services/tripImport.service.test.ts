@@ -86,10 +86,15 @@ describe('a successful import', () => {
 
     // Bookings travel with the trips they belong to, in one payload — see the
     // migration route for why they cannot be two calls.
+    // Everything travels in one payload: the marker that stops this running
+    // twice is one marker, so a second call would be locked out by the first.
     expect(post).toHaveBeenCalledWith('/migrate/local', {
       trips: [makeTrip()],
       bookings: [],
       activeTripId: 'trip_1',
+      savedActivities: [],
+      searches: [],
+      chatMessages: [],
     });
   });
 

@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { PlannerMessage } from '../types/planner.types';
 import { STORAGE_KEYS, storageService } from './localStorage.service';
 import { chatService } from './chat.service';
+import { http } from './http';
 
 const SEED: PlannerMessage[] = [{ id: 'seed', author: 'ai', content: 'Where to?' }];
 
@@ -113,5 +114,62 @@ describe('subscribe', () => {
 
     expect(listener).toHaveBeenCalledTimes(1);
     unsubscribe();
+  });
+});
+
+describe('the account\'s copy', () => {
+  it('sends the conversation to the server', () => {
+    const put = vi.spyOn(http, 'put').mockResolvedValue(undefined);
+
+    chatService.saveMessages(conversation);
+
+    expect(put).toHaveBeenCalledWith('/conversations/current', { messages: conversation });
+  });
+
+  it('keeps the conversation on screen when the save fails', async () => {
+    vi.spyOn(http, 'put').mockRejectedValue(new Error('offline'));
+
+    // Fire-and-forget: a dropped save costs the reader nothing they can see,
+    // where blocking each turn on a round trip would make the planner slow.
+    expect(() => chatService.saveMessages(conversation)).not.toThrow();
+    expect(chatService.getMessages([])).toEqual(conversation);
+  });
+
+  it('adopts what the server holds', async () => {
+    vi.spyOn(http, 'get').mockResolvedValue({ messages: [{ id: 'remote', author: 'ai', content: 'From the server' }] });
+
+    await chatService.load();
+
+    expect(chatService.getMessages([])).toEqual([
+      { id: 'remote', author: 'ai', content: 'From the server' },
+    ]);
+  });
+
+  it('does not overwrite the cache with an empty conversation', () => {
+    chatService.saveMessages(conversation);
+
+    // A new device reading an account that has never used the planner would
+    // otherwise wipe the conversation this browser is holding.
+    chatService.adopt([]);
+
+    expect(chatService.getMessages([])).toEqual(conversation);
+  });
+
+  it('tells the server when the conversation is cleared', () => {
+    const remove = vi.spyOn(http, 'delete').mockResolvedValue(undefined);
+
+    chatService.clear();
+
+    expect(remove).toHaveBeenCalledWith('/conversations/current');
+  });
+
+  it('forgets the cache on sign-out without deleting the conversation', () => {
+    const remove = vi.spyOn(http, 'delete').mockResolvedValue(undefined);
+    chatService.saveMessages(conversation);
+
+    chatService.clearCache();
+
+    expect(chatService.getMessages([])).toEqual([]);
+    expect(remove).not.toHaveBeenCalled();
   });
 });

@@ -108,6 +108,9 @@ beforeEach(async () => {
   // pointer runs the other way too: `User.activeTripId` references a trip, and
   // clearing trips first lets that go null rather than relying on the order
   // two cascades happen to fire in.
+  await prisma.chatHistory.deleteMany();
+  await prisma.recentSearch.deleteMany();
+  await prisma.savedActivity.deleteMany();
   await prisma.booking.deleteMany();
   await prisma.userSettings.deleteMany();
   await prisma.trip.deleteMany();

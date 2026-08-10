@@ -1,9 +1,16 @@
-import { createTripSchema, importBookingSchema } from '@ai-travel/shared/schemas';
+import {
+  chatHistorySchema,
+  createTripSchema,
+  flightSearchSchema,
+  importBookingSchema,
+  savedActivitySchema,
+} from '@ai-travel/shared/schemas';
 import { Prisma } from '@prisma/client';
 import express, { Router } from 'express';
 import type { Request, Response } from 'express';
 import { z } from 'zod';
 import { prisma } from '../../prisma';
+import { fingerprintOf } from '../library/library.service';
 import { requireAuth, userIdOf } from '../auth/requireAuth';
 
 /**
@@ -50,6 +57,20 @@ const payloadSchema = z.object({
    * failed.
    */
   bookings: z.array(importBookingSchema).max(500).default([]),
+  /**
+   * The shortlist, the recent searches and the conversation.
+   *
+   * In the same payload as everything else, because the marker that stops this
+   * running twice is one marker: importing them separately would mean either
+   * several markers to keep in step, or a second call that the first one has
+   * already locked out.
+   */
+  savedActivities: z
+    .array(z.object({ activity: savedActivitySchema, savedAt: z.string().max(100).optional() }))
+    .max(200)
+    .default([]),
+  searches: z.array(flightSearchSchema).max(20).default([]),
+  chatMessages: chatHistorySchema.shape.messages.default([]),
 });
 
 export type MigrateResponse = {
@@ -161,6 +182,53 @@ migrateRouter.post(
             url: booking.url,
             source: (booking.source ?? Prisma.DbNull) as Prisma.InputJsonValue,
           },
+        });
+      }
+
+      for (const entry of payload.savedActivities) {
+        const savedAt = entry.savedAt ? new Date(entry.savedAt) : new Date();
+
+        await tx.savedActivity.upsert({
+          where: { userId_activityId: { userId, activityId: entry.activity.id } },
+          update: {},
+          create: {
+            userId,
+            activityId: entry.activity.id,
+            category: entry.activity.category,
+            title: entry.activity.title,
+            activity: entry.activity as Prisma.InputJsonValue,
+            savedAt: Number.isNaN(savedAt.getTime()) ? new Date() : savedAt,
+          },
+        });
+      }
+
+      /*
+       * Searches oldest-first, so the newest ends up newest.
+       *
+       * The client keeps them most-recent-first, and each write here stamps
+       * `searchedAt` with now — so importing them in the order held would put
+       * the oldest search at the top of the reader's list.
+       */
+      for (const query of [...payload.searches].reverse()) {
+        const fingerprint = fingerprintOf(query);
+
+        await tx.recentSearch.upsert({
+          where: { userId_kind_fingerprint: { userId, kind: 'flight', fingerprint } },
+          update: {},
+          create: {
+            userId,
+            kind: 'flight',
+            fingerprint,
+            query: query as Prisma.InputJsonValue,
+          },
+        });
+      }
+
+      if (payload.chatMessages.length > 0) {
+        await tx.chatHistory.upsert({
+          where: { userId },
+          update: {},
+          create: { userId, messages: payload.chatMessages as Prisma.InputJsonValue },
         });
       }
 

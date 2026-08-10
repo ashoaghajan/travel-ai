@@ -1,10 +1,11 @@
 /**
  * @vitest-environment jsdom
  */
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { FlightSearchQuery } from '../types/travel.types';
 import { STORAGE_KEYS, storageService } from './localStorage.service';
 import { searchService } from './search.service';
+import { http } from './http';
 
 function query(overrides: Partial<FlightSearchQuery> = {}): FlightSearchQuery {
   return {
@@ -17,6 +18,10 @@ function query(overrides: Partial<FlightSearchQuery> = {}): FlightSearchQuery {
     ...overrides,
   };
 }
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
 
 describe('getLastFlightSearch', () => {
   it('is null on a first visit', () => {
@@ -97,5 +102,70 @@ describe('clear', () => {
     searchService.clear();
 
     expect(searchService.getRecentFlightSearches()).toEqual([]);
+  });
+});
+
+describe('the account\'s copy', () => {
+  it('sends the search to the server', () => {
+    const post = vi.spyOn(http, 'post').mockResolvedValue([]);
+
+    searchService.saveFlightSearch(query());
+
+    expect(post).toHaveBeenCalledWith('/searches/flights', { query: query() });
+  });
+
+  it('replaces the cache with the list the server answered with', async () => {
+    const fromServer = [query({ from: 'AUH' })];
+    vi.spyOn(http, 'post').mockResolvedValue(fromServer);
+
+    searchService.saveFlightSearch(query());
+    await vi.waitFor(() => expect(searchService.getRecentFlightSearches()).toEqual(fromServer));
+  });
+
+  it('keeps the local copy when the save never lands', async () => {
+    vi.spyOn(http, 'post').mockRejectedValue(new Error('offline'));
+
+    searchService.saveFlightSearch(query());
+
+    // Written to the cache first, so the next visit is right even when the
+    // request fails — this is a convenience, not a record.
+    expect(searchService.getLastFlightSearch()).toEqual(query());
+  });
+
+  it('adopts what the server holds', async () => {
+    const fromServer = [query({ to: 'LHR' })];
+    vi.spyOn(http, 'get').mockResolvedValue(fromServer);
+
+    await searchService.load();
+
+    expect(searchService.getRecentFlightSearches()).toEqual(fromServer);
+  });
+
+  it('does not overwrite the cache with an empty list', () => {
+    searchService.adopt([query()]);
+
+    // A new device reading an account that has never searched would otherwise
+    // wipe what this browser is holding.
+    searchService.adopt([]);
+
+    expect(searchService.getLastFlightSearch()).toEqual(query());
+  });
+
+  it('tells the server when the searches are cleared', () => {
+    const remove = vi.spyOn(http, 'delete').mockResolvedValue(undefined);
+
+    searchService.clear();
+
+    expect(remove).toHaveBeenCalledWith('/searches');
+  });
+
+  it('forgets the cache on sign-out without deleting the searches', () => {
+    const remove = vi.spyOn(http, 'delete').mockResolvedValue(undefined);
+    searchService.adopt([query()]);
+
+    searchService.clearCache();
+
+    expect(searchService.getLastFlightSearch()).toBeNull();
+    expect(remove).not.toHaveBeenCalled();
   });
 });

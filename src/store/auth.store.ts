@@ -3,9 +3,12 @@ import type { ApiUser, LoginRequest, RegisterRequest } from '@ai-travel/shared';
 import { authService } from '../services/auth.service';
 import { signedOut } from '../services/http';
 import { claimLocalData, releaseLocalData } from '../services/localData.service';
+import { chatService } from '../services/chat.service';
+import { searchService } from '../services/search.service';
 import { settingsService } from '../services/settings.service';
 import { tripImportService } from '../services/tripImport.service';
 import { bookingStore } from './booking.store';
+import { savedActivityStore } from './savedActivity.store';
 import { tripStore } from './trip.store';
 
 /**
@@ -71,6 +74,17 @@ function signIn(user: ApiUser): void {
   settingsService.adopt(user.settings);
   tripStore.primeActiveTrip(user.activeTripId);
 
+  /*
+   * The conversation and the recent searches, which are read synchronously.
+   *
+   * Both seed component state on the first render — the planner's message list
+   * and the flight form — so they cannot wait for a resource to resolve.
+   * Fetched here and written into their caches, which corrects them within a
+   * frame of signing in rather than on the visit after.
+   */
+  void chatService.load().catch(() => undefined);
+  void searchService.load().catch(() => undefined);
+
   setState({ status: 'authenticated', user });
 
   /*
@@ -87,6 +101,7 @@ function signIn(user: ApiUser): void {
 
     void tripStore.refresh();
     void bookingStore.refresh();
+    void savedActivityStore.refresh();
   });
 }
 
@@ -102,7 +117,10 @@ signedOut.subscribe(() => {
   // painted, for the moment before their own arrive.
   tripStore.reset();
   bookingStore.reset();
+  savedActivityStore.reset();
   settingsService.clearCache();
+  chatService.clearCache();
+  searchService.clearCache();
   setState(ANONYMOUS);
 });
 
@@ -174,7 +192,10 @@ export const authStore = {
       releaseLocalData();
       tripStore.reset();
       bookingStore.reset();
+      savedActivityStore.reset();
       settingsService.clearCache();
+      chatService.clearCache();
+      searchService.clearCache();
       setState(ANONYMOUS);
     }
   },

@@ -61,8 +61,11 @@ model User {
   refreshTokens RefreshToken[]
   identities    AuthIdentity[]
   trips         Trip[]         @relation("OwnedTrips")
-  settings      UserSettings?
-  bookings      Booking[]
+  settings        UserSettings?
+  bookings        Booking[]
+  savedActivities SavedActivity[]
+  recentSearches  RecentSearch[]
+  chatHistory     ChatHistory?
 }
 
 /// App preferences, one row per account.
@@ -289,4 +292,77 @@ model RefreshToken {
 
   @@index([userId])
   @@index([familyId])
+}
+
+/// An attraction the reader bookmarked from the explorer.
+///
+/// The whole `Activity` is stored, not just its id. The explorer's own cache
+/// expires in five minutes and is keyed to one city, so an id alone would
+/// leave a saved item unrenderable the moment the reader looked elsewhere —
+/// the list would need a network round trip per row to draw itself.
+model SavedActivity {
+  id     String @id @default(uuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  /// The provider's own id — an OpenTripMap xid, or a Viator product id.
+  activityId String
+
+  /// Promoted out of the payload so the shortlist can be filtered in SQL
+  /// without reading every row's JSON.
+  category String
+  title    String
+
+  /// The whole `Activity`, as the explorer had it. See the model docblock.
+  activity Json
+
+  savedAt DateTime @default(now())
+
+  /// Saving the same attraction again moves it to the top rather than
+  /// duplicating it — an upsert, which needs this to have something to
+  /// conflict on.
+  @@unique([userId, activityId])
+  @@index([userId, savedAt(sort: Desc)])
+}
+
+/// One flight search the reader ran, so a return visit reopens where they were.
+model RecentSearch {
+  id     String @id @default(uuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  /// 'flight' today. A string, like every other kind in this schema.
+  kind String @default("flight")
+
+  /// The whole `FlightSearchQuery`. JSON because it mirrors a form's shape,
+  /// which will change, and nothing queries inside it.
+  query Json
+
+  /// The server-side form of the client's `isSameFlightSearch` — the same
+  /// route on the same dates for the same party is one search, not five.
+  fingerprint String
+
+  searchedAt DateTime @default(now())
+
+  @@unique([userId, kind, fingerprint])
+  @@index([userId, searchedAt(sort: Desc)])
+}
+
+/// The planner conversation, so a reload resumes rather than restarts.
+///
+/// One row per account holding the whole message list, rather than the
+/// `Conversation` + `ChatMessage` pair `STAGE_2_PLAN.md` sketched. That design
+/// supports several named conversations and ordered rows; the app has exactly
+/// one conversation and only ever reads and writes it whole. This is the same
+/// call as `Trip.itinerary` for the same reasons — nothing queries inside it,
+/// and a relational shape would buy ordering machinery for a list that already
+/// arrives in order.
+model ChatHistory {
+  userId String @id
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  /// `PlannerMessage[]`.
+  messages Json
+
+  updatedAt DateTime @updatedAt
 }

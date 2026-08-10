@@ -1,14 +1,26 @@
 /**
  * @vitest-environment jsdom
  */
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Activity } from '../types/travel.types';
-import { STORAGE_KEYS, storageService } from './localStorage.service';
-import {
-  readIsSaved,
-  readSavedSync,
-  savedActivityService,
-} from './savedActivity.service';
+import { savedActivityService } from './savedActivity.service';
+import type { SavedActivity } from './savedActivity.service';
+import { http } from './http';
+
+/**
+ * The shortlist client.
+ *
+ * What this file used to test — re-saving moving an entry to the top, the
+ * 200-row cap, dropping a hand-edited record — moved to
+ * `server/src/modules/library/`, where it runs against a real database. Two of
+ * those are better there than here: the cap was client-enforced, so a second
+ * device grew straight past it, and rows do not arrive half-written from
+ * Postgres.
+ *
+ * What is left is the request each method makes, and the one property that
+ * matters to every caller: a write answers with the whole list, so the screen
+ * shows the shortlist that exists rather than the one it predicted.
+ */
 
 function activity(id: string, title = `Place ${id}`): Activity {
   return {
@@ -23,130 +35,67 @@ function activity(id: string, title = `Place ${id}`): Activity {
   };
 }
 
-beforeEach(() => {
-  vi.useFakeTimers();
-  vi.setSystemTime(new Date('2026-07-28T09:00:00Z'));
-});
+function saved(id: string): SavedActivity {
+  return { activity: activity(id), savedAt: '2026-07-28T09:00:00.000Z' };
+}
 
 afterEach(() => {
-  vi.useRealTimers();
   vi.restoreAllMocks();
 });
 
-describe('saving', () => {
-  it('starts empty', async () => {
-    await expect(savedActivityService.getSaved()).resolves.toEqual([]);
+describe('getSaved', () => {
+  it('asks the shortlist endpoint', async () => {
+    const get = vi.spyOn(http, 'get').mockResolvedValue([saved('a')]);
+
+    await expect(savedActivityService.getSaved()).resolves.toHaveLength(1);
+    expect(get).toHaveBeenCalledWith('/saved-activities');
+  });
+});
+
+describe('save', () => {
+  it('puts the attraction under its own id', async () => {
+    const put = vi.spyOn(http, 'put').mockResolvedValue([saved('otm_cascade')]);
+
+    await savedActivityService.save(activity('otm_cascade'));
+
+    // A `PUT` keyed by id, not a `POST`: saving something already saved moves
+    // it to the top rather than adding a second copy.
+    expect(put).toHaveBeenCalledWith('/saved-activities/otm_cascade', {
+      activity: activity('otm_cascade'),
+    });
   });
 
-  it('persists under the documented key', async () => {
-    await savedActivityService.save(activity('N1'));
+  it('escapes an id that would otherwise split the path', async () => {
+    const put = vi.spyOn(http, 'put').mockResolvedValue([]);
 
-    expect(STORAGE_KEYS.savedActivities).toBe('ai-travel-planner:savedActivities');
-    expect(localStorage.getItem(STORAGE_KEYS.savedActivities)).toContain('N1');
+    await savedActivityService.save(activity('W311/676978'));
+
+    expect(put.mock.calls[0][0]).toBe('/saved-activities/W311%2F676978');
   });
 
-  it('stores the whole card, not just the id', async () => {
-    await savedActivityService.save(activity('N1', 'Museum Bali'));
+  it('answers with the whole shortlist', async () => {
+    vi.spyOn(http, 'put').mockResolvedValue([saved('a'), saved('b')]);
 
-    const [entry] = await savedActivityService.getSaved();
-
-    expect(entry.activity.title).toBe('Museum Bali');
-    expect(entry.activity.image).toBe('city.jpg');
-    expect(entry.savedAt).toBe('2026-07-28T09:00:00.000Z');
+    // Including the server's own cap, which the client cannot predict.
+    await expect(savedActivityService.save(activity('a'))).resolves.toHaveLength(2);
   });
+});
 
-  it('keeps the newest first', async () => {
-    await savedActivityService.save(activity('N1'));
-    await savedActivityService.save(activity('N2'));
+describe('remove', () => {
+  it('deletes by id and answers with what is left', async () => {
+    const remove = vi.spyOn(http, 'delete').mockResolvedValue([saved('b')]);
 
-    const saved = await savedActivityService.getSaved();
-
-    expect(saved.map((entry) => entry.activity.id)).toEqual(['N2', 'N1']);
+    await expect(savedActivityService.remove('a')).resolves.toEqual([saved('b')]);
+    expect(remove).toHaveBeenCalledWith('/saved-activities/a');
   });
+});
 
-  it('re-saving refreshes the copy and moves it to the top', async () => {
-    await savedActivityService.save(activity('N1', 'Old title'));
-    await savedActivityService.save(activity('N2'));
-
-    await savedActivityService.save(activity('N1', 'New title'));
-
-    const saved = await savedActivityService.getSaved();
-    expect(saved).toHaveLength(2);
-    expect(saved[0].activity.title).toBe('New title');
-  });
-
-  it('removes one entry, leaving the rest', async () => {
-    await savedActivityService.save(activity('N1'));
-    await savedActivityService.save(activity('N2'));
-
-    await savedActivityService.remove('N1');
-
-    expect((await savedActivityService.getSaved()).map((entry) => entry.activity.id)).toEqual([
-      'N2',
-    ]);
-  });
-
-  it('removing something absent is harmless', async () => {
-    await savedActivityService.save(activity('N1'));
-
-    await expect(savedActivityService.remove('nope')).resolves.toHaveLength(1);
-  });
-
-  it('clears everything', async () => {
-    await savedActivityService.save(activity('N1'));
+describe('clear', () => {
+  it('empties the shortlist', async () => {
+    const remove = vi.spyOn(http, 'delete').mockResolvedValue(undefined);
 
     await savedActivityService.clear();
 
-    expect(await savedActivityService.getSaved()).toEqual([]);
-  });
-
-  it('caps the list so it cannot grow without bound', async () => {
-    for (let index = 0; index < 205; index += 1) {
-      await savedActivityService.save(activity(`N${index}`));
-    }
-
-    expect(await savedActivityService.getSaved()).toHaveLength(200);
-  });
-});
-
-describe('toggle', () => {
-  it('saves when absent and reports it saved', async () => {
-    await expect(savedActivityService.toggle(activity('N1'))).resolves.toBe(true);
-    expect(readIsSaved('N1')).toBe(true);
-  });
-
-  it('removes when present and reports it unsaved', async () => {
-    await savedActivityService.save(activity('N1'));
-
-    await expect(savedActivityService.toggle(activity('N1'))).resolves.toBe(false);
-    expect(readIsSaved('N1')).toBe(false);
-  });
-});
-
-describe('reading a corrupt store', () => {
-  it('treats unparseable storage as empty', async () => {
-    localStorage.setItem(STORAGE_KEYS.savedActivities, 'not json');
-
-    await expect(savedActivityService.getSaved()).resolves.toEqual([]);
-  });
-
-  it('ignores a value that is not a list', async () => {
-    storageService.set(STORAGE_KEYS.savedActivities, { nope: true });
-
-    expect(readSavedSync()).toEqual([]);
-  });
-
-  it('drops entries that are not shaped like a saved activity', async () => {
-    storageService.set(STORAGE_KEYS.savedActivities, [
-      { activity: activity('N1'), savedAt: '2026-07-28T09:00:00.000Z' },
-      { activity: { id: 'N2' }, savedAt: '2026-07-28T09:00:00.000Z' },
-      { savedAt: '2026-07-28T09:00:00.000Z' },
-      null,
-      'nonsense',
-    ]);
-
-    const saved = await savedActivityService.getSaved();
-
-    expect(saved.map((entry) => entry.activity.id)).toEqual(['N1']);
+    expect(remove).toHaveBeenCalledWith('/saved-activities');
   });
 });
