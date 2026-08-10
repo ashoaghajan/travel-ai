@@ -3,7 +3,7 @@ import { Card } from '../common/Card';
 import { Button } from '../common/Button';
 import { ExternalLinkIcon, MapPinIcon, StarIcon, PlusIcon } from '../common/icons';
 import { cx } from '../../utils/cx';
-import { formatCurrency } from '../../utils/currency';
+import { useMoney } from '../../store/currency.store';
 import type { Hotel } from '../../types/travel.types';
 import styles from './HotelCard.module.css';
 
@@ -42,6 +42,7 @@ export function HotelCard({
   className,
 }: HotelCardProps) {
   const { name, location, category, rating, reviews, pricePerNight, image, bookingUrl } = hotel;
+  const money = useMoney();
   const [imageFailed, setImageFailed] = useState(false);
 
   return (
@@ -100,7 +101,7 @@ export function HotelCard({
             <p className={styles.unpriced}>Price on partner site</p>
           ) : (
             <p className={styles.priceGroup}>
-              <span className={styles.price}>{formatCurrency(pricePerNight)}</span>
+              <span className={styles.price}>{money.format(pricePerNight)}</span>
               <span className={styles.perNight}>/ night</span>
             </p>
           )}
@@ -135,7 +136,7 @@ export function HotelCard({
               aria-label={
                 pricePerNight === null
                   ? `Check prices for ${name} in ${location}, on our partner's site`
-                  : `Book ${name} at ${formatCurrency(pricePerNight)} a night, on our partner's site`
+                  : `Book ${name} at ${money.format(pricePerNight)} a night, on our partner's site`
               }
             >
               {pricePerNight === null ? 'Check price' : 'Book'}

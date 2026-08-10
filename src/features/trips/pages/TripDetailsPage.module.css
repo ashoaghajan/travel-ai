@@ -4,6 +4,32 @@
   min-height: 100%;
 }
 
+/*
+ * The tab strip and the currency picker, on one line where there is room.
+ *
+ * Column-reverse below 768px rather than a wrapped row: the tab strip already
+ * scrolls horizontally on a phone, so leaving the picker on the same line
+ * would put it beyond the right edge of that scroll. Reversed so the picker
+ * stays above the tabs, next to the heading it qualifies rather than adrift
+ * between the tabs and the panel they control.
+ */
+.tabRow {
+  display: flex;
+  flex-direction: column-reverse;
+  align-items: flex-start;
+  gap: var(--space-sm);
+  min-width: 0;
+}
+
+@media (min-width: 768px) {
+  .tabRow {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-lg);
+  }
+}
+
 .content {
   display: flex;
   flex-direction: column;

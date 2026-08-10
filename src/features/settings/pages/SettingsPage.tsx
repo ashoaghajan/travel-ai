@@ -1,4 +1,5 @@
 import { PageHeader } from '../../../components/layout/PageHeader';
+import { CurrencySelect } from '../../../components/common/CurrencySelect';
 import { Switch } from '../../../components/common/Switch';
 import { settingsService } from '../../../services/settings.service';
 import { useTrips } from '../../../store/trip.store';
@@ -70,6 +71,13 @@ export function SettingsPage() {
               ))}
             </div>
           </fieldset>
+        </SettingsSection>
+
+        <SettingsSection
+          title="Currency"
+          description="Prices are quoted in US dollars and converted for display. Rates refresh daily."
+        >
+          <CurrencySelect variant="field" label="Show prices in" />
         </SettingsSection>
 
         <SettingsSection

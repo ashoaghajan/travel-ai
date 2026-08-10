@@ -14,14 +14,28 @@ describe('getSettings', () => {
     expect(DEFAULT_SETTINGS.theme).toBe('system');
   });
 
+  it('defaults to the currency every price is already quoted in', () => {
+    expect(DEFAULT_SETTINGS.currency).toBe('USD');
+  });
+
+  it('discards a stored currency that is no longer offered', () => {
+    storageService.set(STORAGE_KEYS.settings, { currency: 'XBT' });
+
+    // Left alone it would reach the formatter, fall back to dollars, and be
+    // shown under a currency the picker cannot even display.
+    expect(settingsService.getSettings().currency).toBe('USD');
+  });
+
   it('returns what was saved', () => {
     settingsService.saveSettings({
       theme: 'dark',
+      currency: 'AMD',
       notifications: { tripReminders: false, priceAlerts: true },
     });
 
     expect(settingsService.getSettings()).toEqual({
       theme: 'dark',
+      currency: 'AMD',
       notifications: { tripReminders: false, priceAlerts: true },
     });
   });
@@ -31,6 +45,7 @@ describe('getSettings', () => {
 
     expect(settingsService.getSettings()).toEqual({
       theme: 'light',
+      currency: DEFAULT_SETTINGS.currency,
       notifications: DEFAULT_SETTINGS.notifications,
     });
   });

@@ -2,9 +2,9 @@ import { Card } from '../common/Card';
 import { Button } from '../common/Button';
 import { ExternalLinkIcon, PlusIcon } from '../common/icons';
 import { cx } from '../../utils/cx';
-import { formatCurrency } from '../../utils/currency';
 import { formatStops } from '../../utils/duration';
 import { formatShortDate } from '../../utils/date';
+import { useMoney } from '../../store/currency.store';
 import type { Flight } from '../../types/travel.types';
 import styles from './FlightResultCard.module.css';
 
@@ -64,6 +64,8 @@ export function FlightResultCard({
     returnLeg,
   } = flight;
 
+  const money = useMoney();
+
   return (
     <Card as={as} padding="lg" elevation="soft" className={cx(styles.card, className)}>
       <div className={styles.top}>
@@ -112,7 +114,7 @@ export function FlightResultCard({
 
       <div className={styles.priceRow}>
         <p className={styles.priceGroup}>
-          <span className={styles.price}>{formatCurrency(price)}</span>
+          <span className={styles.price}>{money.format(price)}</span>
           <span className={styles.perPerson}>per person</span>
         </p>
 
@@ -142,7 +144,7 @@ export function FlightResultCard({
              * that default are not sponsored, so it stays as it is.
              */
             rel="sponsored noopener"
-            aria-label={`Book ${airline} from ${from} to ${to} for ${formatCurrency(price)} per person, on our partner's site`}
+            aria-label={`Book ${airline} from ${from} to ${to} for ${money.format(price)} per person, on our partner's site`}
           >
             Book
           </Button>

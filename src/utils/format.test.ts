@@ -1,24 +1,25 @@
 import { describe, expect, it } from 'vitest';
 import { formatBytes } from './bytes';
-import { formatCurrency } from './currency';
+import { usdFormatter } from './currency';
 import { cx } from './cx';
 
-describe('formatCurrency', () => {
+/** Conversion has its own suite in `currency.test.ts`; this is the dollar case. */
+describe('usdFormatter', () => {
   it('formats whole dollars with a thousands separator', () => {
-    expect(formatCurrency(2248)).toBe('$2,248');
+    expect(usdFormatter.format(2248)).toBe('$2,248');
   });
 
   it('drops the cents', () => {
-    expect(formatCurrency(1124.4)).toBe('$1,124');
-    expect(formatCurrency(1124.6)).toBe('$1,125');
+    expect(usdFormatter.format(1124.4)).toBe('$1,124');
+    expect(usdFormatter.format(1124.6)).toBe('$1,125');
   });
 
   it('handles zero', () => {
-    expect(formatCurrency(0)).toBe('$0');
+    expect(usdFormatter.format(0)).toBe('$0');
   });
 
   it('formats a four-figure total', () => {
-    expect(formatCurrency(3898)).toBe('$3,898');
+    expect(usdFormatter.format(3898)).toBe('$3,898');
   });
 });
 

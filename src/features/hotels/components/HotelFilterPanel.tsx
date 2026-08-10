@@ -1,6 +1,6 @@
 import { Card } from '../../../components/common/Card';
 import { Button } from '../../../components/common/Button';
-import { formatCurrency } from '../../../utils/currency';
+import { useMoney } from '../../../store/currency.store';
 import {
   EMPTY_HOTEL_FILTERS,
   MAX_PRICE_OPTIONS,
@@ -19,6 +19,7 @@ export type HotelFilterPanelProps = {
 /** Price and rating filters revealed by the toolbar's Filter button. */
 export function HotelFilterPanel({ id, filters, onChange }: HotelFilterPanelProps) {
   const hasFilters = countActiveFilters(filters) > 0;
+  const money = useMoney();
 
   return (
     <Card id={id} padding="lg" elevation="soft" className={styles.panel}>
@@ -37,7 +38,7 @@ export function HotelFilterPanel({ id, filters, onChange }: HotelFilterPanelProp
           <option value="">Any price</option>
           {MAX_PRICE_OPTIONS.map((price) => (
             <option key={price} value={price}>
-              Up to {formatCurrency(price)}
+              Up to {money.format(price)}
             </option>
           ))}
         </select>

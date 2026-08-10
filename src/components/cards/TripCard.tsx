@@ -8,6 +8,7 @@ import { CalendarIcon, MapPinIcon, TrashIcon, UsersIcon, WalletIcon } from '../c
 import { cx } from '../../utils/cx';
 import { formatDateRange } from '../../utils/date';
 import { formatDayCount, formatTravellers, formatTripTotal, tripTotal } from '../../utils/trip';
+import { useMoney } from '../../store/currency.store';
 import type { Booking } from '../../types/booking.types';
 import type { Trip } from '../../types/trip.types';
 import styles from './TripCard.module.css';
@@ -46,7 +47,8 @@ export function TripCard({
   className,
 }: TripCardProps) {
   const [isConfirming, setIsConfirming] = useState(false);
-  const total = formatTripTotal(tripTotal(trip, bookings));
+  const money = useMoney();
+  const total = formatTripTotal(tripTotal(trip, bookings), money);
 
   return (
     <Card as={as} padding="none" elevation="card" className={cx(styles.card, className)}>

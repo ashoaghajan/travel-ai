@@ -22,8 +22,14 @@
 }
 
 /**
- * Cards run horizontally (DESIGN_SPEC Screen 2) and scroll rather than wrap,
- * so the strip behaves the same on a phone and a wide dashboard.
+ * Cards run horizontally (DESIGN_SPEC Screen 2) and scroll rather than wrap.
+ *
+ * That is right on a phone, where a strip of days is a familiar gesture and
+ * there is no room for a second row. It was wrong on a wide screen: the chat
+ * column is capped at 900px for readability, so a seven-day itinerary hid
+ * three or four days behind a thin scrollbar while the page around it sat
+ * empty. Scrolling to see what already fits is a cost with nothing bought.
+ * The 1024px block below wraps the strip into a grid instead.
  */
 .row {
   display: flex;
@@ -58,5 +64,21 @@
 @media (min-width: 768px) {
   .card {
     flex-basis: 232px;
+  }
+}
+
+/*
+ * Wide enough for a second row, so the days wrap and all of them are visible
+ * at once. `auto-fill` rather than a fixed count: the column this sits in is
+ * not the same width on every screen, and the number of days is whatever the
+ * trip is. Scroll snapping and the scroll container go with it — there is
+ * nothing left to scroll.
+ */
+@media (min-width: 1024px) {
+  .row {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    overflow-x: visible;
+    scroll-snap-type: none;
   }
 }

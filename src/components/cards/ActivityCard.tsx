@@ -4,7 +4,7 @@ import { Card } from '../common/Card';
 import { Button } from '../common/Button';
 import { ExternalLinkIcon, PlusIcon, StarIcon } from '../common/icons';
 import { cx } from '../../utils/cx';
-import { formatCurrency } from '../../utils/currency';
+import { useMoney } from '../../store/currency.store';
 import { CATEGORY_IMAGES } from '../../assets/category-images';
 import type { Activity } from '../../types/travel.types';
 import styles from './ActivityCard.module.css';
@@ -53,6 +53,7 @@ export function ActivityCard({
   className,
 }: ActivityCardProps) {
   const { title, description, price, rating, reviews, image, category, imageCredit } = activity;
+  const money = useMoney();
 
   // Photographs come from Wikimedia, so the URL can rot between the cache
   // being written and the card being drawn. Falling back to the category
@@ -119,7 +120,7 @@ export function ActivityCard({
 
         {price > 0 ? (
           <p className={styles.priceRow}>
-            <span className={styles.price}>{formatCurrency(price)}</span>
+            <span className={styles.price}>{money.format(price)}</span>
             <span className={styles.perPerson}>per person</span>
           </p>
         ) : bookingUrl ? (

@@ -13,7 +13,7 @@ import {
   stayGaps,
   stayPriceBasis,
 } from '../../../utils/booking';
-import { formatCurrency } from '../../../utils/currency';
+import { useMoney } from '../../../store/currency.store';
 import { formatDateRange, nightsBetween } from '../../../utils/date';
 import { formatNightCount, tripPricing } from '../../../utils/trip';
 import styles from './AddBookingToTripDialog.module.css';
@@ -79,6 +79,7 @@ export function AddBookingToTripDialog({
   onAdded,
 }: AddBookingToTripDialogProps) {
   const [first, ...rest] = drafts;
+  const money = useMoney();
   const trips = useTrips();
   const bookings = useBookings();
   const dialogRef = useRef<HTMLDialogElement>(null);
@@ -342,7 +343,7 @@ export function AddBookingToTripDialog({
               {nights > 0
                 ? // Who the figure covers, said where the reader commits to it.
                   `${formatNightCount(nights)}${
-                    stayPrice !== null ? ` · ${formatCurrency(stayPrice)}` : ''
+                    stayPrice !== null ? ` · ${money.format(stayPrice)}` : ''
                   }${chosen ? ` for ${describeOccupancy(chosen.travellers)}` : ''}`
                 : 'Pick the day you check out.'}
             </p>

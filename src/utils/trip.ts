@@ -2,7 +2,7 @@ import type { Booking } from '../types/booking.types';
 import type { ItineraryDay, LatLng, Trip } from '../types/trip.types';
 import type { BookingTotals, TripPricing } from './booking';
 import { bookingTotals } from './booking';
-import { formatCurrency } from './currency';
+import type { MoneyFormatter } from './currency';
 import { nightsBetween } from './date';
 import { centroidOf, isPlottable } from './map';
 
@@ -134,12 +134,12 @@ export function tripTotal(trip: Trip, bookings: Booking[]): TripTotal {
  * as an estimate, which is what it is. Without this the eleven guesses on an
  * AI-planned trip would add up to a figure labelled as spent.
  */
-export function formatTripTotal(total: TripTotal): string | null {
+export function formatTripTotal(total: TripTotal, money: MoneyFormatter): string | null {
   if (total.basis === 'none') return null;
 
   const isCommitted = total.basis === 'bookings' && !total.hasSample;
 
-  return `${formatCurrency(total.amount)} ${isCommitted ? 'saved' : 'estimated'}`;
+  return `${money.format(total.amount)} ${isCommitted ? 'saved' : 'estimated'}`;
 }
 
 export type ItineraryStop = {

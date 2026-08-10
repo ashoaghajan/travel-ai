@@ -1,6 +1,6 @@
 import type { Booking, BookingKind, PriceBasis } from '../types/booking.types';
 import type { ItineraryDay } from '../types/trip.types';
-import { formatMoney } from './currency';
+import type { MoneyFormatter } from './currency';
 import { addDays, formatShortDate, fromIsoDate, nightsBetween, toIsoDate } from './date';
 
 /** Human label for each kind, singular. */
@@ -327,7 +327,11 @@ export function bookingAmount(booking: Booking, trip?: TripPricing): number | un
  * eye: four nights at $116 next to a trip total of $1,190 looks like an error
  * in the total rather than a rate that has to be multiplied.
  */
-export function describeBookingAmount(booking: Booking, trip?: TripPricing): string | null {
+export function describeBookingAmount(
+  booking: Booking,
+  money: MoneyFormatter,
+  trip?: TripPricing,
+): string | null {
   if (booking.price === undefined) return null;
 
   const basis = bookingPriceBasis(booking, trip);
@@ -335,7 +339,7 @@ export function describeBookingAmount(booking: Booking, trip?: TripPricing): str
 
   const noun = basis.unit === 'nightly' ? 'night' : 'traveller';
 
-  return `${formatMoney(booking.price)} × ${basis.units} ${noun}${basis.units === 1 ? '' : 's'}`;
+  return `${money.formatExact(booking.price)} × ${basis.units} ${noun}${basis.units === 1 ? '' : 's'}`;
 }
 
 /** What a set of bookings comes to, and what that figure is made of. */

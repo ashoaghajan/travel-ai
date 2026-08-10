@@ -18,7 +18,7 @@ import type {
 import type { ItineraryActivity, ItineraryDay, Trip } from '../types/trip.types';
 import { CATEGORY_IMAGES } from '../assets/category-images';
 import { createId } from '../utils/id';
-import { formatMoney } from '../utils/currency';
+import { usdFormatter } from '../utils/currency';
 import { nightsBetween } from '../utils/date';
 import { STORAGE_KEYS, storageService } from './localStorage.service';
 
@@ -359,7 +359,16 @@ export function flightToBookingDrafts(
 
   const outPrice = isRoundTrip ? Math.round((flight.price / 2) * 100) / 100 : flight.price;
   const backPrice = Math.round((flight.price - outPrice) * 100) / 100;
-  const half = isRoundTrip ? ` · half of a ${formatMoney(flight.price)} round trip` : '';
+  /*
+   * Dollars, deliberately, and not the reader's display currency.
+   *
+   * This string is written into the saved booking rather than rendered from
+   * it, so whatever it says is frozen at the moment of saving. Baking in a
+   * converted figure would leave a booking permanently quoting a currency the
+   * reader has since switched away from, at a rate that has since moved. What
+   * it records is what the provider quoted, which was dollars.
+   */
+  const half = isRoundTrip ? ` · half of a ${usdFormatter.formatExact(flight.price)} round trip` : '';
 
   const outbound: BookingDraft = {
     tripId,

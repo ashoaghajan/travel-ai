@@ -1,0 +1,44 @@
+.wrap {
+  display: flex;
+  min-width: 0;
+}
+
+/* Beside a heading: label hidden, control sized to its content. */
+.inline {
+  align-items: center;
+  flex: none;
+}
+
+/* On a settings screen: label and control on one row, like `Switch`. */
+.field {
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-lg);
+}
+
+.label {
+  font-size: var(--font-sm);
+  font-weight: var(--font-weight-medium);
+  cursor: pointer;
+}
+
+.select {
+  min-width: 0;
+  padding: var(--space-xs) var(--space-sm);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+  background-color: var(--color-surface);
+  color: var(--color-text-main);
+  font-size: var(--font-sm);
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.select:hover {
+  border-color: var(--color-primary);
+}
+
+.select:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}

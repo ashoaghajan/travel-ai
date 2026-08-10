@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Booking } from '../types/booking.types';
 import type { ItineraryDay, LatLng, Trip } from '../types/trip.types';
+import { usdFormatter } from './currency';
 import {
   calculateTripCosts,
   formatDayCount,
@@ -338,11 +339,11 @@ describe('tripTotal', () => {
 
 describe('formatTripTotal', () => {
   it('says what a saved total is', () => {
-    expect(formatTripTotal(tripTotal(trip(), [booking({ price: 828 })]))).toBe('$828 saved');
+    expect(formatTripTotal(tripTotal(trip(), [booking({ price: 828 })]), usdFormatter)).toBe('$828 saved');
   });
 
   it('says when it is only an estimate', () => {
-    expect(formatTripTotal(tripTotal(trip(), []))).toBe('$3,898 estimated');
+    expect(formatTripTotal(tripTotal(trip(), []), usdFormatter)).toBe('$3,898 estimated');
   });
 
   it('says nothing when there is nothing to claim', () => {
@@ -353,7 +354,7 @@ describe('formatTripTotal', () => {
       itinerary: [],
     });
 
-    expect(formatTripTotal(tripTotal(bare, []))).toBeNull();
+    expect(formatTripTotal(tripTotal(bare, []), usdFormatter)).toBeNull();
   });
 
   it('will not call a total built on an invented price "saved"', () => {
@@ -369,7 +370,7 @@ describe('formatTripTotal', () => {
 
     // The figure is still the bookings', not the planner's whole-trip estimate
     // — but nobody has spent it, so it must not read as money committed.
-    expect(formatTripTotal(tripTotal(trip(), [guessed]))).toBe('$40 estimated');
+    expect(formatTripTotal(tripTotal(trip(), [guessed]), usdFormatter)).toBe('$40 estimated');
   });
 
   it('lets one invented price taint a total that also holds a real one', () => {
@@ -385,7 +386,7 @@ describe('formatTripTotal', () => {
     });
 
     // Still tainted: one guess in the sum is enough, whatever else is in it.
-    expect(formatTripTotal(tripTotal(trip(), [guessed, booking({ price: 828 })]))).toBe(
+    expect(formatTripTotal(tripTotal(trip(), [guessed, booking({ price: 828 })]), usdFormatter)).toBe(
       '$868 estimated',
     );
   });

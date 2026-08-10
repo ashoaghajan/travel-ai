@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Booking } from '../types/booking.types';
 import type { ItineraryDay } from '../types/trip.types';
+import { usdFormatter } from './currency';
 import {
   bookingAmount,
   bookingKindLabel,
@@ -226,28 +227,28 @@ describe('bookingTotals', () => {
 
 describe('describeBookingAmount', () => {
   it('shows how a nightly rate became a stay', () => {
-    expect(describeBookingAmount(hotelRow(116))).toBe('$116 × 4 nights');
+    expect(describeBookingAmount(hotelRow(116), usdFormatter)).toBe('$116 × 4 nights');
   });
 
   // Cents kept on purpose: $182 × 2 would read as $364, not the $363 quoted.
   it('keeps the cents on a half fare', () => {
     const leg = makeBooking({ price: 181.5, priceBasis: { unit: 'perPerson', units: 2 } });
 
-    expect(describeBookingAmount(leg)).toBe('$181.50 × 2 travellers');
+    expect(describeBookingAmount(leg, usdFormatter)).toBe('$181.50 × 2 travellers');
   });
 
   it('says nothing when the price is already the line total', () => {
-    expect(describeBookingAmount(makeBooking({ price: 420 }))).toBeNull();
+    expect(describeBookingAmount(makeBooking({ price: 420 }), usdFormatter)).toBeNull();
   });
 
   it('says nothing for a single unit, rather than "× 1"', () => {
     const single = makeBooking({ price: 90, priceBasis: { unit: 'nightly', units: 1 } });
 
-    expect(describeBookingAmount(single)).toBeNull();
+    expect(describeBookingAmount(single, usdFormatter)).toBeNull();
   });
 
   it('says nothing when there is no price at all', () => {
-    expect(describeBookingAmount(makeBooking({ price: undefined }))).toBeNull();
+    expect(describeBookingAmount(makeBooking({ price: undefined }), usdFormatter)).toBeNull();
   });
 });
 

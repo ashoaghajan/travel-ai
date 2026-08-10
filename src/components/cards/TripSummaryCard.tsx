@@ -2,7 +2,6 @@ import { Card } from '../common/Card';
 import { CardImage } from '../common/CardImage';
 import { Button } from '../common/Button';
 import { cx } from '../../utils/cx';
-import { formatCurrency } from '../../utils/currency';
 import { formatDateRange } from '../../utils/date';
 import {
   calculateTripCosts,
@@ -11,6 +10,7 @@ import {
   tripPricing,
   tripTotal,
 } from '../../utils/trip';
+import { useMoney } from '../../store/currency.store';
 import { bookingTotals } from '../../utils/booking';
 import type { TripPricing } from '../../utils/booking';
 import type { Booking, BookingKind } from '../../types/booking.types';
@@ -77,6 +77,7 @@ export function TripSummaryCard({
 }: TripSummaryCardProps) {
   const costs = calculateTripCosts(trip);
   const total = tripTotal(trip, bookings);
+  const money = useMoney();
 
   /*
    * Which of the two totals this card is showing.
@@ -123,13 +124,13 @@ export function TripSummaryCard({
               {rows.map((row) => (
                 <div key={row.id} className={styles.row}>
                   <dt className={styles.label}>{row.label}</dt>
-                  <dd className={styles.value}>{formatCurrency(row.amount)}</dd>
+                  <dd className={styles.value}>{money.format(row.amount)}</dd>
                 </div>
               ))}
 
               <div className={cx(styles.row, styles.totalRow)}>
                 <dt className={styles.totalLabel}>Total USD</dt>
-                <dd className={styles.totalValue}>{formatCurrency(total.amount)}</dd>
+                <dd className={styles.totalValue}>{money.format(total.amount)}</dd>
               </div>
             </dl>
 

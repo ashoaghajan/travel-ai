@@ -7,6 +7,7 @@ import { Card } from '../../../components/common/Card';
 import { EmptyState } from '../../../components/common/EmptyState';
 import { Skeleton } from '../../../components/common/Skeleton';
 import { Tabs } from '../../../components/common/Tabs';
+import { CurrencySelect } from '../../../components/common/CurrencySelect';
 import { tabId, tabPanelId } from '../../../components/common/tabs.helpers';
 import { TripRouteMap } from '../components/TripRouteMap';
 import { IconButton } from '../../../components/common/IconButton';
@@ -30,6 +31,7 @@ import { useEditTrip } from '../useEditTrip';
 import { useStopCoordinates } from '../useStopCoordinates';
 import { useBookingCoordinates } from '../useBookingCoordinates';
 import { useTripBookings } from '../../../store/booking.store';
+import { useMoney } from '../../../store/currency.store';
 import { bookingKindLabel } from '../../../utils/booking';
 import { cx } from '../../../utils/cx';
 import { destinationLabel, hasErrors } from '../editTrip';
@@ -162,6 +164,7 @@ function TripDetailsView({ trip }: { trip: Trip }) {
   // Booked hotels and attractions, as their own pins. An attraction brings its
   // point from the explorer; a hotel is geocoded from its name.
   const tripBookings = useTripBookings(trip.id);
+  const money = useMoney();
 
   /*
    * Dates, party, and what it comes to. The cost joins the other two because
@@ -171,7 +174,7 @@ function TripDetailsView({ trip }: { trip: Trip }) {
   const headerSubtitle = [
     formatDateRange(trip.startDate, trip.endDate),
     formatTravellers(trip.travellers),
-    formatTripTotal(tripTotal(trip, tripBookings)),
+    formatTripTotal(tripTotal(trip, tripBookings), money),
   ]
     .filter(Boolean)
     .join(' · ');
@@ -277,13 +280,23 @@ function TripDetailsView({ trip }: { trip: Trip }) {
           </div>
         ) : null}
 
-        <Tabs
-          items={TRIP_TABS}
-          activeId={activeTab}
-          onChange={selectTab}
-          idPrefix={TAB_ID_PREFIX}
-          label="Trip sections"
-        />
+        {/*
+          The currency picker sits on the tab row rather than in the header.
+          It belongs beside the prices it governs — the schedule's costs are
+          directly below it — and the header already carries three controls,
+          which is as many as fits a phone.
+        */}
+        <div className={styles.tabRow}>
+          <Tabs
+            items={TRIP_TABS}
+            activeId={activeTab}
+            onChange={selectTab}
+            idPrefix={TAB_ID_PREFIX}
+            label="Trip sections"
+          />
+
+          <CurrencySelect label="Show prices in" />
+        </div>
 
         <div
           role="tabpanel"

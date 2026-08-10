@@ -32,6 +32,14 @@ export const STORAGE_KEYS = {
   /** Place name → coordinates for the trip map. Reference data, not user data. */
   geocodes: 'ai-travel-planner:geocodes',
   /**
+   * Cached exchange rates — reference data, not user data.
+   *
+   * Held so a reload repaints converted prices immediately instead of showing
+   * dollars until the network answers, which would look like the currency
+   * preference had been forgotten.
+   */
+  exchangeRates: 'ai-travel-planner:exchangeRates',
+  /**
    * Which account the user data above currently belongs to.
    *
    * Trips are still device-local while accounts are real, so something has to

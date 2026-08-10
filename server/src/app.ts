@@ -5,6 +5,7 @@ import { errorHandler, notFoundHandler } from './errors';
 import { authRouter } from './modules/auth/auth.routes';
 import { meRouter } from './modules/auth/me.routes';
 import { plannerRouter } from './modules/planner/planner.routes';
+import { ratesRouter } from './modules/rates/rates.routes';
 import { travelRouter } from './modules/travel/travel.routes';
 import { serveSpa } from './static';
 
@@ -36,6 +37,8 @@ export function createApp(): Express {
   // Unauthenticated, and mounted at the root of /api because its paths are
   // domain-shaped (`/flights/search`) rather than grouped under one noun.
   app.use('/api', travelRouter);
+  // Reference data too, and the least guarded thing here: see its docblock.
+  app.use('/api', ratesRouter);
   // Same root-level mounting, same reason. Unlike the routes above it, this one
   // authenticates and streams — see the module docblock.
   app.use('/api', plannerRouter);

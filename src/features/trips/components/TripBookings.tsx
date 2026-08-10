@@ -25,7 +25,7 @@ import {
 } from '../../../utils/booking';
 import type { TripPricing } from '../../../utils/booking';
 import { tripPricing, tripTotal } from '../../../utils/trip';
-import { formatCurrency } from '../../../utils/currency';
+import { useMoney } from '../../../store/currency.store';
 import { cx } from '../../../utils/cx';
 import { BOOKING_AVATARS } from '../../../assets/booking-avatars';
 import styles from './TripBookings.module.css';
@@ -53,6 +53,7 @@ export type TripBookingsProps = {
  */
 export function TripBookings({ trip }: TripBookingsProps) {
   const tripId = trip.id;
+  const money = useMoney();
   const bookings = useTripBookings(tripId);
   const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -234,7 +235,7 @@ export function TripBookings({ trip }: TripBookingsProps) {
               {/* Labelled, because a bold figure sitting beside a booking
                   count otherwise reads as the price of one of them. */}
               {' · Trip total '}
-              <strong className={styles.total}>{formatCurrency(amount)}</strong>
+              <strong className={styles.total}>{money.format(amount)}</strong>
               {/* What the figure is made of, before what is missing from it —
                   a total built on the planner's guesses must not read as money
                   committed, which is the same claim the header makes. */}
@@ -312,13 +313,14 @@ function BookingRow({
   onToggleBooked: () => void;
   onRemove: () => void;
 }) {
+  const money = useMoney();
   const name = booking.title || `this ${bookingKindLabel(booking.kind).toLowerCase()}`;
   const link = booking.url || booking.source?.bookingUrl;
   // An invented price must never be presented as what something costs.
   const isSamplePrice = booking.source?.priceSource === 'sample';
 
   const amount = bookingAmount(booking, pricing);
-  const workings = describeBookingAmount(booking, pricing);
+  const workings = describeBookingAmount(booking, money, pricing);
 
   const isStay = booking.kind === 'hotel';
 
@@ -449,7 +451,7 @@ function BookingRow({
             total on the reader's own arithmetic. */}
         {amount !== undefined ? (
           <p className={styles.price}>
-            {formatCurrency(amount)}
+            {money.format(amount)}
             {workings ? <span className={styles.workings}>{workings}</span> : null}
             {isSamplePrice ? <span className={styles.sample}>sample price</span> : null}
           </p>
