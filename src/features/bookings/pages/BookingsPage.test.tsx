@@ -65,7 +65,9 @@ describe('BookingsPage', () => {
     // The banner and the form have to agree on the first paint.
     expect(screen.getByText(TRIP.title)).toBeInTheDocument();
     expect(screen.getByLabelText(/depart/i)).toHaveValue('2027-09-14');
-    expect(screen.getByLabelText(/return/i)).toHaveValue('2027-09-16');
+    // Anchored: the Flights tab's return *step* is labelled "Return: …" too,
+    // and it is a button rather than the date this asserts.
+    expect(screen.getByLabelText('Return')).toHaveValue('2027-09-16');
   });
 
   it('takes the party from the trip rather than the stale search', () => {
@@ -80,9 +82,10 @@ describe('BookingsPage', () => {
     // A trip knows where you are going, never where you leave from — this is
     // the one field the search is allowed to win.
     //
-    // `getAllBy`, because the screen carries two "From" fields: this form's,
-    // and the per-leg one the Flights tab adds underneath it.
-    expect(screen.getAllByLabelText(/^from/i)[0]).toHaveValue('AUH');
+    // `getBy`, singular: the screen has exactly one "From" now. The Flights
+    // tab used to add a second one under its leg toggle, and the whole point
+    // of the stepper replacing it is that the route is asked for once.
+    expect(screen.getByLabelText(/^from/i)).toHaveValue('AUH');
   });
 
   it('falls back to the last search when filling for no trip', () => {

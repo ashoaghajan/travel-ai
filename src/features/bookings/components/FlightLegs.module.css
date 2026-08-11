@@ -1,68 +1,99 @@
-.legs {
-  display: inline-flex;
-  gap: var(--space-2xs, 4px);
-  padding: var(--space-2xs, 4px);
-  background: var(--color-surface-muted, #f1f2f6);
-  border-radius: var(--radius-pill, 999px);
-}
-
-.leg {
-  padding: var(--space-xs) var(--space-md);
-  border: none;
-  border-radius: var(--radius-pill, 999px);
-  background: transparent;
-  color: var(--color-text-muted);
-  font-size: var(--font-sm);
-  font-weight: var(--font-weight-medium, 500);
-  cursor: pointer;
-}
-
-.leg[aria-pressed='true'] {
-  background: var(--color-surface, #fff);
-  color: var(--color-primary, #6d3bf5);
-  box-shadow: var(--shadow-sm, 0 1px 2px rgb(16 24 40 / 8%));
-}
-
-.fields {
+/*
+ * The two steps of a round trip. A row above a phone, stacked below — the
+ * route line under each label is too long to sit two-up on a narrow screen.
+ */
+.steps {
   display: grid;
-  gap: var(--space-sm);
-  margin-top: var(--space-sm);
-  /* Two ends of one journey: side by side above a phone, stacked below. */
+  gap: var(--space-xs);
+  margin: 0;
+  padding: 0;
+  list-style: none;
   grid-template-columns: 1fr;
 }
 
 @media (min-width: 640px) {
-  .fields {
+  .steps {
     grid-template-columns: 1fr 1fr;
   }
 }
 
-.field {
+.step {
   min-width: 0;
 }
 
-.label {
-  display: block;
-  margin-bottom: var(--space-2xs, 4px);
-  font-size: var(--font-xs);
-  font-weight: var(--font-weight-medium, 500);
-  color: var(--color-text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-}
-
-.control {
+.trigger {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
   width: 100%;
   padding: var(--space-sm) var(--space-md);
   border: 1px solid var(--color-border, #e4e7ec);
   border-radius: var(--radius-md, 10px);
   background: var(--color-surface, #fff);
-  color: var(--color-text-main);
-  font-size: var(--font-md);
+  color: var(--color-text-muted);
+  text-align: left;
+  cursor: pointer;
 }
 
-.date {
-  margin-top: var(--space-xs);
+/* The step on screen, which is also the one the fares below belong to. */
+.trigger[aria-current='step'] {
+  border-color: var(--color-primary, #6d3bf5);
+  color: var(--color-text-main);
+  box-shadow: var(--shadow-sm, 0 1px 2px rgb(16 24 40 / 8%));
+}
+
+.marker {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 24px;
+  height: 24px;
+  border-radius: var(--radius-pill, 999px);
+  background: var(--color-surface-muted, #f1f2f6);
+  color: var(--color-text-muted);
+  font-size: var(--font-xs);
+  font-weight: var(--font-weight-semibold, 600);
+}
+
+.trigger[aria-current='step'] .marker {
+  background: var(--color-primary, #6d3bf5);
+  color: #fff;
+}
+
+/*
+ * A step already taken keeps its tick whether or not it is the one on screen —
+ * that is the whole point of it, and it must not read as "done" only while
+ * being looked at.
+ */
+.markerDone,
+.trigger[aria-current='step'] .markerDone {
+  background: var(--color-surface-muted, #f1f2f6);
+  color: var(--color-success, #16a34a);
+}
+
+.body {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.label {
+  font-size: var(--font-sm);
+  font-weight: var(--font-weight-medium, 500);
+  color: inherit;
+}
+
+.route {
+  font-size: var(--font-xs);
+  color: var(--color-text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* One-way: what is being priced, with no step to choose. */
+.single {
+  margin: 0;
   font-size: var(--font-sm);
   color: var(--color-text-muted);
 }

@@ -117,9 +117,10 @@ export type BookingContext = {
   /**
    * The destination country, as the trip names it — "Armenia", not "AM".
    *
-   * Carried so the destination airport picker can offer that country's
-   * airports and only those: a trip to Armenia is not flown into Georgia, and
-   * a picker that offers it invites a booking nobody wants.
+   * Carried so a trip that names only a city can still be flown to: it is
+   * what `useDestinationAirport` narrows the airport search to. That country
+   * and only that country — a trip to Armenia is not flown into Georgia, and
+   * resolving one there would price a journey nobody asked for.
    */
   destinationCountry: string | null;
   /** ISO calendar date, `YYYY-MM-DD`. */

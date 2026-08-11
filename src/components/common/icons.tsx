@@ -365,6 +365,15 @@ export function ExternalLinkIcon(props: IconProps) {
   );
 }
 
+/** A step already taken — stands in for its number in the flight stepper. */
+export function CheckIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="m4.8 12.5 4.8 4.8L19.2 7.7" />
+    </Icon>
+  );
+}
+
 /** Trailing affordance on the primary call to action. */
 export function ArrowRightIcon(props: IconProps) {
   return (

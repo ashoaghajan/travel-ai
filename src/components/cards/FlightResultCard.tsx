@@ -21,6 +21,14 @@ export type FlightResultCardProps = {
    * Omit it and the card renders exactly as it always did.
    */
   onAddToTrip?: () => void;
+  /**
+   * Fires as the reader leaves for the partner.
+   *
+   * Not a claim that anything was booked — the partner never tells us that.
+   * It is the moment the caller knows this fare is the one being taken, which
+   * is what the booking screen's outbound-then-return stepper moves on.
+   */
+  onBook?: () => void;
   /** Already attached to the trip the screen is filling for. */
   isOnTrip?: boolean;
   className?: string;
@@ -47,6 +55,7 @@ export function FlightResultCard({
   flight,
   as = 'div',
   onAddToTrip,
+  onBook,
   isOnTrip = false,
   className,
 }: FlightResultCardProps) {
@@ -137,6 +146,7 @@ export function FlightResultCard({
             size="md"
             className={styles.book}
             href={bookingUrl}
+            onClick={onBook}
             trailingIcon={<ExternalLinkIcon size={16} />}
             /*
              * `sponsored` is the correct value for a paid affiliate link, and

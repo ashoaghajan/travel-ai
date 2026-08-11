@@ -26,9 +26,11 @@ import { categoryLabel } from '../../explore/activity.filters';
 import { BOOKING_TABS } from '../partner.filters';
 import { buildActivityUrl } from '../partner.links';
 import { useBookingDeals } from '../useBookingDeals';
+import { useDestinationAirport } from '../useDestinationAirport';
+import { hasReturnLeg, legRoute } from '../flight.legs';
+import type { FlightLeg } from '../flight.legs';
 import { AddBookingToTripDialog } from './AddBookingToTripDialog';
 import { FlightLegs } from './FlightLegs';
-import type { FlightLegSelection } from './FlightLegs';
 import styles from './BookingBrowser.module.css';
 
 const SKELETON_COUNT = 3;
@@ -88,17 +90,51 @@ export function BookingBrowser({
   const bookings = useBookings();
 
   /*
-   * Which flight the reader is choosing, and between which airports.
-   *
-   * Held here rather than in `FlightLegs` because the search below is driven
-   * by it: the panel and the results have to agree on which leg is on screen.
+   * The airport a trip flies into, when only its city is known. Nothing on
+   * screen; see `useDestinationAirport` for why it survived the picker.
    */
-  const [legs, setLegs] = useState<FlightLegSelection>(() => ({
-    leg: 'outbound',
-    from: context.originCode ?? '',
-    to: context.destinationCode ?? '',
-    date: context.departDate ?? '',
-  }));
+  const resolvedDestination = useDestinationAirport(context);
+
+  const searched: BookingContext = resolvedDestination
+    ? { ...context, destinationCode: resolvedDestination }
+    : context;
+
+  /*
+   * Which flight the reader is choosing.
+   *
+   * The step only — where it flies is not a choice, it is `legRoute(searched)`.
+   * Held here rather than in `FlightLegs` because the search below is driven by
+   * it: the stepper and the results have to agree on which leg is on screen.
+   */
+  const [leg, setLeg] = useState<FlightLeg>('outbound');
+
+  /** Legs whose fare has been taken — what makes the stepper a stepper. */
+  const [chosenLegs, setChosenLegs] = useState<readonly FlightLeg[]>([]);
+
+  const hasReturn = hasReturnLeg(searched);
+
+  /*
+   * Derived rather than corrected in an effect: a search edited from round trip
+   * to one way leaves no return step to be standing on, and reading it back as
+   * `outbound` is instant where an effect would render one frame of fares for a
+   * leg that no longer exists.
+   */
+  const activeLeg: FlightLeg = hasReturn ? leg : 'outbound';
+
+  /*
+   * A new search is a new journey, so the reader starts at step one again with
+   * nothing chosen. Keyed on the route itself: changing only the party size or
+   * the hotel tab must not throw away which legs are done.
+   */
+  const route = legRoute(searched, activeLeg);
+  const journey = `${searched.originCode ?? ''}|${searched.destinationCode ?? ''}|${searched.departDate ?? ''}|${searched.returnDate ?? ''}`;
+  const [seenJourney, setSeenJourney] = useState(journey);
+
+  if (seenJourney !== journey) {
+    setSeenJourney(journey);
+    setLeg('outbound');
+    setChosenLegs([]);
+  }
 
   /*
    * The context the fare search actually runs against.
@@ -110,19 +146,43 @@ export function BookingBrowser({
   const flightContext: BookingContext =
     activeTab === 'flights'
       ? {
-          ...context,
+          ...searched,
           tripType: 'one-way',
-          originCode: legs.from || null,
-          destinationCode: legs.to || null,
-          departDate: legs.date || null,
+          originCode: route.from || null,
+          destinationCode: route.to || null,
+          departDate: route.date || null,
           returnDate: null,
         }
-      : context;
+      : searched;
 
   const deals = useBookingDeals(flightContext, activeTab);
 
   // A list: a round-trip fare is two flights, and each becomes its own booking.
   const [pendingDrafts, setPendingDrafts] = useState<BookingDraft[] | null>(null);
+
+  /**
+   * Which leg the open dialog is filing a fare for, if it is filing one at all.
+   *
+   * Captured when the dialog opens rather than read from `activeLeg` when it
+   * closes, so a step ticks for the fare that was actually chosen — and stays
+   * null for a hotel or an activity, which have no legs.
+   */
+  const [pendingLeg, setPendingLeg] = useState<FlightLeg | null>(null);
+
+  /**
+   * A fare taken for a leg: tick it, and move on to the way home.
+   *
+   * Called from both actions, because both are how a fare gets taken. "Book"
+   * leaves for the partner in a new tab and nothing comes back to say whether
+   * the checkout completed — but the reader who returns to this one is looking
+   * for the return flight, not the outbound they just paid for. Advancing is a
+   * guess either way; this is the one that is usually right, and the step they
+   * came from stays one click away.
+   */
+  function takeLeg(taken: FlightLeg) {
+    setChosenLegs((current) => (current.includes(taken) ? current : [...current, taken]));
+    if (taken === 'outbound' && hasReturn) setLeg('return');
+  }
 
   const results =
     activeTab === 'flights'
@@ -202,9 +262,10 @@ export function BookingBrowser({
         {/* Chosen before the fares, because it decides which fares these are. */}
         {activeTab === 'flights' ? (
           <FlightLegs
-            context={context}
-            value={legs}
-            onChange={setLegs}
+            context={searched}
+            value={activeLeg}
+            onChange={setLeg}
+            chosen={chosenLegs}
             className={styles.legs}
           />
         ) : null}
@@ -219,8 +280,11 @@ export function BookingBrowser({
                 <PriceNote
                   source={deals.source}
                   quotedAt={deals.quotedAt}
+                  // Against the leg's own day, not the trip's — on the return
+                  // step every fare would otherwise look like a near date.
                   datesVary={deals.flights.some(
-                    (flight) => flight.departureDate && flight.departureDate !== context.departDate,
+                    (flight) =>
+                      flight.departureDate && flight.departureDate !== flightContext.departDate,
                   )}
                 />
               )}
@@ -276,11 +340,14 @@ export function BookingBrowser({
                         onAddToTrip={
                           deals.source === 'sample'
                             ? undefined
-                            : () =>
+                            : () => {
                                 setPendingDrafts(
                                   flightToBookingDrafts(flight, flightContext, tripId, deals.source),
-                                )
+                                );
+                                setPendingLeg(activeLeg);
+                              }
                         }
+                        onBook={() => takeLeg(activeLeg)}
                         isOnTrip={isResultOnTrip(bookings, tripId, flight.id)}
                       />
                     ))
@@ -342,8 +409,19 @@ export function BookingBrowser({
       {pendingDrafts ? (
         <AddBookingToTripDialog
           drafts={pendingDrafts}
-          onClose={() => setPendingDrafts(null)}
-          onAdded={onAdded}
+          onClose={() => {
+            setPendingDrafts(null);
+            setPendingLeg(null);
+          }}
+          /*
+           * The step advances here rather than where the dialog is opened: a
+           * reader who opens it and backs out has not chosen that fare, and
+           * moving them on to the return would be the app deciding for them.
+           */
+          onAdded={(label) => {
+            if (pendingLeg) takeLeg(pendingLeg);
+            onAdded?.(label);
+          }}
         />
       ) : null}
     </div>
