@@ -69,6 +69,18 @@ export const ERROR_CODES = {
   BOOKING_NOT_FOUND: 'BOOKING_NOT_FOUND',
   BOOKING_ALREADY_ON_TRIP: 'BOOKING_ALREADY_ON_TRIP',
   ACTIVITY_ALREADY_ON_DAY: 'ACTIVITY_ALREADY_ON_DAY',
+  /* ------------------------------------------------------------------ lobby */
+
+  MESSAGE_NOT_FOUND: 'MESSAGE_NOT_FOUND',
+  /**
+   * Someone tried to withdraw a message they did not write.
+   *
+   * A 403 rather than a 404, unlike a trip belonging to another account: the
+   * message is on their screen already, so there is no existence to conceal
+   * and pretending it is missing would only be confusing.
+   */
+  MESSAGE_NOT_YOURS: 'MESSAGE_NOT_YOURS',
+
   NOT_FOUND: 'NOT_FOUND',
   RATE_LIMITED: 'RATE_LIMITED',
   INTERNAL: 'INTERNAL',

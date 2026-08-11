@@ -24,6 +24,7 @@
     "db:studio": "npm run prisma:studio --workspace @ai-travel/server"
   },
   "dependencies": {
+    "ably": "^2.27.0",
     "leaflet": "^1.9.4",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",

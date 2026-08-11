@@ -117,6 +117,28 @@ const schema = z.object({
   VIATOR_API_KEY: z.string().min(1).optional(),
 
   /**
+   * Ably — the realtime channel behind the lobby.
+   *
+   * A genuine secret, and the one key here that must never be handed to a
+   * browser: it can publish and subscribe to everything. What the browser gets
+   * is a token this server signs from it, pinned to one user id and one
+   * channel, which is why the whole flow goes through `GET /api/lobby/token`
+   * rather than a `VITE_` variable.
+   *
+   * Give it a key limited to `publish, subscribe, presence` on `lobby:*`
+   * rather than the root key. Note it needs `presence` even though this server
+   * never enters the presence set: a token's rights are the intersection of
+   * what it asks for and what the signing key holds, so a key without it would
+   * quietly mint tokens that cannot show who is online.
+   *
+   * Optional, and the degradation is deliberate: without it the lobby still
+   * works as a room you refresh — messages are saved, history loads, sends
+   * succeed — and only the live delivery is missing. `GET /api/lobby/token`
+   * answers `PROVIDER_NOT_CONFIGURED` and the panel says so.
+   */
+  ABLY_API_KEY: z.string().min(1).optional(),
+
+  /**
    * Anthropic API key — the model behind the planner conversation.
    *
    * A genuine secret, on the same footing as `TRAVELPAYOUTS_TOKEN`: it must

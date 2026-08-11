@@ -6,6 +6,7 @@ import { authRouter } from './modules/auth/auth.routes';
 import { meRouter } from './modules/auth/me.routes';
 import { bookingsRouter } from './modules/bookings/bookings.routes';
 import { libraryRouter } from './modules/library/library.routes';
+import { lobbyRouter } from './modules/lobby/lobby.routes';
 import { imagesRouter } from './modules/places/images.routes';
 import { placesRouter } from './modules/places/places.routes';
 import { referenceRouter } from './modules/places/reference.routes';
@@ -55,6 +56,8 @@ export function createApp(): Express {
   app.use('/api', bookingsRouter);
   // Saved attractions, recent searches and the planner conversation.
   app.use('/api', libraryRouter);
+  // The one public room. Everything else here is scoped to one account.
+  app.use('/api', lobbyRouter);
   // Unauthenticated, and mounted at the root of /api because its paths are
   // domain-shaped (`/flights/search`) rather than grouped under one noun.
   app.use('/api', travelRouter);
