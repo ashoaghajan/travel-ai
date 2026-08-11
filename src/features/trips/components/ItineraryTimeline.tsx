@@ -6,6 +6,7 @@ import type { ItineraryActivity, ItineraryDay } from '../../../types/trip.types'
 import type { Booking } from '../../../types/booking.types';
 import type { BookingMoment } from '../../../utils/booking';
 import { bookingKindLabel, bookingsAlongsideDay } from '../../../utils/booking';
+import { useMoney } from '../../../store/currency.store';
 import { cx } from '../../../utils/cx';
 import { formatShortDate } from '../../../utils/date';
 import styles from './ItineraryTimeline.module.css';
@@ -65,6 +66,11 @@ function momentLabel(booking: Booking, moment: BookingMoment): string {
 }
 
 export function ItineraryTimeline({ days, bookings = [], editing }: ItineraryTimelineProps) {
+  // `priceEstimate` is a dollar guess like every other price in the app, so it
+  // goes through the same formatter the rest of the screen reads from — the
+  // currency picker at the top of this page has to reach these rows too.
+  const money = useMoney();
+
   return (
     <ol className={styles.timeline}>
       {days.map((day) => (
@@ -131,7 +137,9 @@ export function ItineraryTimeline({ days, bookings = [], editing }: ItineraryTim
                         <span className={styles.activityDescription}>{activity.description}</span>
                       </span>
                       {activity.priceEstimate ? (
-                        <span className={styles.price}>${activity.priceEstimate}</span>
+                        <span className={styles.price}>
+                          {money.format(activity.priceEstimate)}
+                        </span>
                       ) : null}
                     </li>
                   ),
