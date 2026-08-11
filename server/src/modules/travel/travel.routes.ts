@@ -43,8 +43,25 @@ const flightQuerySchema = z.object({
   travellers: z.coerce.number().int().min(1).max(9).default(1),
 });
 
-/** How many fares a screen can usefully show. */
+/** How many fares a screen can usefully show. Applied to the answer. */
 const RESULT_LIMIT = 20;
+
+/**
+ * How many rows to ask the provider for.
+ *
+ * Deliberately much larger than `RESULT_LIMIT`, and the two are separate for a
+ * reason that cost a bug: this used to be the same number, so the screen's own
+ * cap was being sent to a provider that sorts by price and truncates. The
+ * cheapest twenty fares of a month are not a sample of its *days* — asking
+ * AUH→EVN for twenty returns twelve days of September, asking for a hundred
+ * returns seventeen, and among the five it was hiding was the day before the
+ * one the reader asked for. A price-ranked truncation upstream was deciding
+ * which dates existed down here.
+ *
+ * A hundred is where the answer stops changing: 300 and 1000 return exactly
+ * what 100 does, because the provider holds at most one fare per day per route.
+ */
+const PROVIDER_LIMIT = 100;
 
 /**
  * The month a date falls in, which is what the provider is actually asked for.
@@ -59,9 +76,6 @@ const RESULT_LIMIT = 20;
 function toMonth(isoDate: string): string {
   return isoDate.slice(0, 7);
 }
-
-/** How far either side of the requested day still counts as "this trip". */
-const NEARBY_DAYS = 7;
 
 /** Whole days between two ISO dates, unsigned. */
 function daysApart(a: string, b: string): number {
@@ -93,38 +107,33 @@ function dedupe(flights: Flight[]): Flight[] {
 }
 
 /**
- * Narrow a month of fares down to the trip that was actually asked for.
+ * Rank a month of fares against the day that was actually asked for.
  *
  * The search has to be made by month — see `toMonth` — but a month of fares
  * ordered by price reads as a jumble: the 7th, the 21st and the 10th
- * interleaved with no pattern the reader can see. So the results are narrowed
- * in tiers, and only widened when the tighter one is empty:
+ * interleaved with no pattern the reader can see. So the day the reader chose
+ * decides the order: fares on it first and cheapest first, then everything
+ * else by how far it is from that day, ties broken by price.
  *
- *   1. fares on the requested day, cheapest first;
- *   2. failing that, fares within a week of it, nearest day first;
- *   3. failing that, the whole month, nearest day first.
+ * One ordered list rather than the tiers this used to use. Those *discarded*
+ * every other day the moment one fare matched, so asking for the 11th when the
+ * 11th flies answered with a single card and no alternatives at all — and on
+ * a route where nothing flies that day, a reader who would happily take the
+ * 10th could not see whether the 12th was cheaper. Ranking says the same thing
+ * about relevance without throwing away the answer to the next question.
  *
  * Never empty when the provider returned anything, and never silently wrong:
  * every card shows its own date, and the screen says so when they differ.
  */
-function narrowToTrip(flights: Flight[], wanted: string): Flight[] {
-  const unique = dedupe(flights);
+function rankAgainstDay(flights: Flight[], wanted: string): Flight[] {
+  return dedupe(flights)
+    .sort((a, b) => {
+      const distance =
+        daysApart(a.departureDate ?? '', wanted) - daysApart(b.departureDate ?? '', wanted);
 
-  const exact = unique.filter((flight) => flight.departureDate === wanted);
-  if (exact.length > 0) return exact.sort((a, b) => a.price - b.price);
-
-  const byProximity = (a: Flight, b: Flight) => {
-    const distance =
-      daysApart(a.departureDate ?? '', wanted) - daysApart(b.departureDate ?? '', wanted);
-
-    return distance !== 0 ? distance : a.price - b.price;
-  };
-
-  const nearby = unique.filter(
-    (flight) => daysApart(flight.departureDate ?? '', wanted) <= NEARBY_DAYS,
-  );
-
-  return (nearby.length > 0 ? nearby : unique).sort(byProximity);
+      return distance !== 0 ? distance : a.price - b.price;
+    })
+    .slice(0, RESULT_LIMIT);
 }
 
 const flightCache = createCache<FlightResults>();
@@ -361,14 +370,14 @@ travelRouter.get('/flights/search', searchRateLimit, async (request, response) =
     return_at: query.returnDate ? toMonth(query.returnDate) : undefined,
     one_way: query.returnDate ? 'false' : 'true',
     currency: 'usd',
-    limit: RESULT_LIMIT,
+    limit: PROVIDER_LIMIT,
     sorting: 'price',
   });
 
   const mapped = await toFlights(Array.isArray(rows) ? rows : [], marker());
 
   const results: FlightResults = {
-    results: narrowToTrip(mapped, query.departDate),
+    results: rankAgainstDay(mapped, query.departDate),
     source: 'live',
     quotedAt: new Date().toISOString(),
   };

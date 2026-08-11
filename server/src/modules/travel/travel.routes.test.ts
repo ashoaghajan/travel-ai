@@ -133,7 +133,7 @@ describe('GET /api/flights/search', () => {
     expect(url.searchParams.get('currency')).toBe('usd');
   });
 
-  describe('narrowing to the trip', () => {
+  describe('ranking against the requested day', () => {
     const on = (date: string, price: number, flight = price) => ({
       ...ROW,
       flight_number: flight,
@@ -141,23 +141,39 @@ describe('GET /api/flights/search', () => {
       departure_at: `${date}T09:00:00+00:00`,
     });
 
-    // The requested day is what was asked for. If anything flies then, that is
-    // the list — a cheaper fare eleven days later is a different trip.
-    it('shows only the requested day when fares exist on it', async () => {
+    const datesOf = (body: { results: { departureDate: string }[] }) =>
+      body.results.map((flight) => flight.departureDate);
+
+    // The day the reader chose comes first even when another day is cheaper:
+    // a fare eleven days later at a third of the price is a different trip.
+    it('puts the requested day first', async () => {
       vi.stubGlobal(
         'fetch',
-        providerAnswers([on('2027-05-17', 100), on('2027-05-20', 900), on('2027-05-20', 800)]),
+        providerAnswers([on('2027-05-17', 100), on('2027-05-20', 900), on('2027-05-23', 200)]),
       );
 
       const response = await api().get(SEARCH).query(QUERY);
 
-      expect(response.body.results).toHaveLength(2);
-      expect(
-        response.body.results.every((f: { departureDate: string }) => f.departureDate === '2027-05-20'),
-      ).toBe(true);
+      expect(datesOf(response.body)[0]).toBe('2027-05-20');
     });
 
-    it('orders that day cheapest first', async () => {
+    /*
+     * The tiers this replaced discarded every other day the moment one fare
+     * matched, so asking for a day that flies answered with one card and no
+     * alternatives. Relevance is an order, not a filter.
+     */
+    it('keeps the other days, behind it', async () => {
+      vi.stubGlobal(
+        'fetch',
+        providerAnswers([on('2027-05-17', 100), on('2027-05-20', 900), on('2027-05-23', 200)]),
+      );
+
+      const response = await api().get(SEARCH).query(QUERY);
+
+      expect(datesOf(response.body)).toEqual(['2027-05-20', '2027-05-17', '2027-05-23']);
+    });
+
+    it('orders the requested day cheapest first', async () => {
       vi.stubGlobal(
         'fetch',
         providerAnswers([on('2027-05-20', 900), on('2027-05-20', 300), on('2027-05-20', 600)]),
@@ -169,11 +185,11 @@ describe('GET /api/flights/search', () => {
     });
 
     /*
-     * The provider's cache holds almost nothing for a named day, so an empty
-     * answer would be the common case. Nearby beats nothing — and nearest
-     * first, because a month ordered by price reads as a jumble.
+     * The provider's cache holds nothing for most named days — AUH→EVN has no
+     * September 7th at all — so this is the common case rather than the edge.
+     * Nearest first, because a month ordered by price reads as a jumble.
      */
-    it('falls back to nearby days, nearest first', async () => {
+    it('orders the rest by distance from that day, nearest first', async () => {
       vi.stubGlobal(
         'fetch',
         providerAnswers([on('2027-05-25', 100), on('2027-05-19', 700), on('2027-05-22', 400)]),
@@ -181,11 +197,16 @@ describe('GET /api/flights/search', () => {
 
       const response = await api().get(SEARCH).query(QUERY);
 
-      expect(response.body.results.map((f: { departureDate: string }) => f.departureDate)).toEqual([
-        '2027-05-19',
-        '2027-05-22',
-        '2027-05-25',
-      ]);
+      expect(datesOf(response.body)).toEqual(['2027-05-19', '2027-05-22', '2027-05-25']);
+    });
+
+    it('breaks a tie in distance on price, not on the provider order', async () => {
+      // The 19th and the 21st are both a day out; the cheaper one leads.
+      vi.stubGlobal('fetch', providerAnswers([on('2027-05-19', 700), on('2027-05-21', 400)]));
+
+      const response = await api().get(SEARCH).query(QUERY);
+
+      expect(datesOf(response.body)).toEqual(['2027-05-21', '2027-05-19']);
     });
 
     it('keeps the whole month rather than answering nothing', async () => {
@@ -195,6 +216,33 @@ describe('GET /api/flights/search', () => {
 
       expect(response.body.results).toHaveLength(2);
       expect(response.body.results[0].departureDate).toBe('2027-05-31');
+    });
+
+    /*
+     * The screen's own cap, applied to the answer. It used to be sent to the
+     * provider instead — which, because the provider sorts by price and then
+     * truncates, let an upstream price ranking decide which *days* existed
+     * down here. See `PROVIDER_LIMIT`.
+     */
+    it('asks the provider for far more rows than it returns', async () => {
+      const fetchSpy = providerAnswers([ROW]);
+      vi.stubGlobal('fetch', fetchSpy);
+
+      await api().get(SEARCH).query(QUERY);
+
+      const [url] = fetchSpy.mock.calls[0] as [URL];
+      expect(Number(url.searchParams.get('limit'))).toBe(100);
+    });
+
+    it('caps what it returns at twenty', async () => {
+      const rows = Array.from({ length: 40 }, (_, index) =>
+        on(`2027-05-${String((index % 28) + 1).padStart(2, '0')}`, 100 + index, index),
+      );
+      vi.stubGlobal('fetch', providerAnswers(rows));
+
+      const response = await api().get(SEARCH).query(QUERY);
+
+      expect(response.body.results).toHaveLength(20);
     });
 
     // The provider really does repeat itself, and a list that shows the same
