@@ -1000,6 +1000,35 @@ The design should include these visual sections:
 
 ---
 
+## Surface 9: The Lobby — **built**
+
+Not one of the numbered screens, and deliberately: it is chrome rather than a
+destination. A collapsible column beside the main content at ≥1024px, a
+full-screen `<dialog>` below that, and a toggle in `PageHeader`'s actions on
+every signed-in screen.
+
+- **Bubbles borrow the planner's vocabulary, not its component.** Own messages
+  purple and right, everyone else's grey and left — but `ChatMessage.tsx` is
+  sized for a 640px conversation and this panel is barely half that.
+- **The roster is a row of faces, not a column.** It is context for the
+  conversation rather than the point of the panel, and a column would push the
+  messages off screen as the room fills.
+- **A presence dot rings the avatar rather than sitting inside it** —
+  `.avatar` is `overflow: hidden` — and carries a visually-hidden
+  "Online"/"Offline". `--color-success` against `--color-text-muted` is exactly
+  the pair WCAG 1.4.1 exists for; the roster must not signal by hue alone.
+- **One mark on the toggle, never two.** An unread count takes the corner
+  whenever there is one; a green presence dot stands in only when there is
+  nothing to read. Both on a 40px button would make neither legible.
+- **The conversation follows only from its live edge.** A reader who has
+  scrolled back is offered "New messages ↓" instead of being dragged to the
+  bottom — the panel is on every page, so that would happen while they are
+  doing something else.
+- **`prefers-reduced-motion`** turns off both the smooth scroll and the
+  affordance's entrance.
+
+---
+
 # 12. Short Instruction For Coding Agent
 
 ```txt

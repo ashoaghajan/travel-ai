@@ -180,7 +180,10 @@ async function refreshAccessToken(): Promise<boolean> {
 export async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const response = await send(path, options);
 
-  if (response.ok) return parse<T>(response);
+  if (response.ok) {
+    lastSuccessAt = Date.now();
+    return parse<T>(response);
+  }
 
   const { code, message, details } = await readError(response);
 
@@ -199,6 +202,51 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
   signedOut.emit();
 
   throw new ApiError(401, code, 'Your session has ended. Please sign in again.', details);
+}
+
+/* --------------------------------------------------------------- keeping warm */
+
+/**
+ * When the API last answered anything successfully.
+ *
+ * Null until it has. Only the keep-warm ping reads it, but it is recorded here
+ * because this is the one place that knows a request succeeded — a service
+ * tracking its own calls would miss every other service's.
+ */
+let lastSuccessAt: number | null = null;
+
+/** Render's free tier sleeps after fifteen idle minutes; ten leaves a margin. */
+const WARM_FOR_MS = 10 * 60 * 1000;
+
+/**
+ * Wakes the API if it has probably gone to sleep.
+ *
+ * Called when somebody focuses the composer — a human about to type is the
+ * signal, which is the whole design. **No interval.** A periodic ping would
+ * burn the free tier's instance-hours and defeat the sleeping it exists to
+ * work around; this fires at most once per ten minutes, and only when a person
+ * is actually there.
+ *
+ * `skipAuth`, so a ping can never be the request that discovers an expired
+ * token and signs somebody out. Failures are swallowed: this is a nudge, and
+ * nothing downstream is waiting on it.
+ */
+export function keepWarm(): void {
+  if (lastSuccessAt !== null && Date.now() - lastSuccessAt < WARM_FOR_MS) return;
+
+  // Recorded before the answer, so a slow wake-up cannot queue a second ping
+  // behind the first.
+  lastSuccessAt = Date.now();
+
+  void request('/health', { skipAuth: true }).catch(() => {
+    // It was asleep and is now waking, or it is down and the next real request
+    // will say so properly.
+  });
+}
+
+/** Testing seam: there is one module-level clock and suites must not share it. */
+export function resetWarmth(): void {
+  lastSuccessAt = null;
 }
 
 /* ----------------------------------------------------------------- streaming */

@@ -945,13 +945,44 @@ POST response and the copy off the channel produce identical state in either
 order — which matters, because the channel usually wins.
 
 An author's email never reaches the room. Messages join `name` only, and
-`/lobby/people` returns the people who have posted rather than enumerating every
-registered account: "everyone signed in can see each other's names" is the
-bargain, but "every account that has ever existed is listable" is a larger one
-nobody made. `listPeople` already takes the ids of whoever is present and unions
-them in, so a newcomer who has not spoken yet can appear the moment they
-connect — the route passes none today, because nothing on the client joins the
-presence set.
+`/lobby/people` returns the people who have posted, unioned with whoever the
+caller can see in the presence set — rather than enumerating every registered
+account. "Everyone signed in can see each other's names" is the bargain;
+"every account that has ever existed is listable" is a larger one nobody made.
+
+**Presence is Ably's, not ours.** `enter()` on connect, `get()` for the roster,
+`subscribe()` for changes — no heartbeat, no `lastSeenAt` column, no reaper,
+and nothing to go stale the day a second instance appears. Three rules carry
+it, and each is a bug inverted:
+
+- **Rebuild from `presence.get()` on every event; never apply the event.**
+  Closing one of three tabs fires `leave` while the person is still present in
+  the other two. `get()` reads the SDK's local member map, so this is free.
+- **Dedupe by `clientId`** — the user's id, pinned server-side when the token
+  is signed. Three tabs are three members and one person.
+- **Enter carrying nothing.** The `presence` capability lets a client enter
+  with arbitrary data beside its correctly-pinned id, so a name taken from
+  there would be whatever that client typed.
+
+The online ids travel up to `/lobby/people` as `?online=`, because presence
+lives in Ably and no server joins it — without them, somebody who connects and
+says nothing has no name to show. They are untrusted and need not be trusted:
+they widen a lookup that already projects `id` and `name`, so a forged one can
+name an account any caller could already enumerate by reading the room.
+
+`close()` leaves the presence set before closing the socket, and `reset()` goes
+through it — otherwise a signed-out reader stays online to everyone else until
+Ably times the member out.
+
+**A cold instance is visible only here.** The API sleeps after fifteen idle
+minutes and takes about a minute to wake. Every other screen simply waits; the
+lobby is the one place where other people's messages keep arriving over the
+socket while your own send hangs, which reads as broken for you specifically.
+So a pending bubble escalates — silent, then "Sending…", then "Still sending —
+the server may be waking up." — and focusing the composer pings `/health` if
+nothing has succeeded in ten minutes. **On focus, never on an interval:** a
+periodic ping would burn the free tier's instance-hours and defeat the sleeping
+it exists to work around.
 
 ---
 

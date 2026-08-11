@@ -92,6 +92,17 @@
   color: var(--color-text-muted);
 }
 
+/*
+ * "Still sending — the server may be waking up." Wraps rather than truncating:
+ * it is a sentence, and a sentence cut off mid-way explains nothing, which is
+ * the only job it has.
+ */
+.slow {
+  max-width: 22ch;
+  text-align: right;
+  text-wrap: pretty;
+}
+
 .failure {
   display: flex;
   gap: var(--space-sm);

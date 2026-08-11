@@ -1,6 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ERROR_CODES } from '@ai-travel/shared';
-import { ApiError, getAccessToken, http, request, setAccessToken, signedOut } from './http';
+import {
+  ApiError,
+  getAccessToken,
+  http,
+  keepWarm,
+  request,
+  resetWarmth,
+  setAccessToken,
+  signedOut,
+} from './http';
 
 /** A JSON response, as the server would send it. */
 function json(status: number, body: unknown): Response {
@@ -282,5 +291,76 @@ describe('http verbs', () => {
       'PUT',
       'DELETE',
     ]);
+  });
+});
+
+describe('keeping the API warm', () => {
+  beforeEach(() => {
+    resetWarmth();
+  });
+
+  it('pings when nothing has succeeded yet', async () => {
+    const fetchMock = mockFetch();
+    alwaysRespond(fetchMock, 200, { status: 'ok' });
+
+    keepWarm();
+    await vi.waitFor(() => expect(paths(fetchMock)).toEqual(['/api/health']));
+  });
+
+  it('carries no token, so a ping can never end a session', async () => {
+    const fetchMock = mockFetch();
+    alwaysRespond(fetchMock, 200, { status: 'ok' });
+    setAccessToken('stale-token');
+
+    keepWarm();
+
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    expect(headersOf(fetchMock).Authorization).toBeUndefined();
+  });
+
+  it('stays quiet while the API is known to be awake', async () => {
+    const fetchMock = mockFetch();
+    alwaysRespond(fetchMock, 200, {});
+    await http.get('/trips');
+    fetchMock.mockClear();
+
+    keepWarm();
+
+    // Something answered a moment ago; there is nothing to wake.
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('pings again once ten minutes have passed', async () => {
+    const fetchMock = mockFetch();
+    alwaysRespond(fetchMock, 200, {});
+    await http.get('/trips');
+    fetchMock.mockClear();
+
+    vi.useFakeTimers();
+    vi.setSystemTime(Date.now() + 11 * 60 * 1000);
+    keepWarm();
+    vi.useRealTimers();
+
+    await vi.waitFor(() => expect(paths(fetchMock)).toEqual(['/api/health']));
+  });
+
+  it('does not queue a second ping behind a slow first one', async () => {
+    const fetchMock = mockFetch();
+    // A cold instance takes about a minute; the answer never arrives here.
+    fetchMock.mockImplementation(() => new Promise<Response>(() => {}));
+
+    keepWarm();
+    keepWarm();
+    keepWarm();
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('swallows a failure rather than surfacing one nobody asked for', async () => {
+    const fetchMock = mockFetch();
+    fetchMock.mockRejectedValue(new TypeError('network down'));
+
+    expect(() => keepWarm()).not.toThrow();
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalled());
   });
 });

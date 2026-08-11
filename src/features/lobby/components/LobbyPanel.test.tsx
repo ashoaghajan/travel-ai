@@ -1,6 +1,6 @@
 /** @vitest-environment jsdom */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { act, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { ApiLobbyMessage } from '@ai-travel/shared';
 import { lobbyService } from '../../../services/lobby.service';
@@ -185,5 +185,86 @@ describe('LobbyPanel', () => {
 
     expect(screen.queryByRole('heading', { name: 'Lobby' })).not.toBeInTheDocument();
     expect(lobbyStore.getSnapshot().isOpen).toBe(false);
+  });
+});
+
+/**
+ * Following the conversation, without dragging anybody along.
+ *
+ * The panel is on every page, so a message arriving while somebody is reading
+ * back through the room would otherwise yank the view away mid-sentence while
+ * they are doing something else entirely.
+ */
+describe('keeping up with the room', () => {
+  /** jsdom lays nothing out, so the scroller's geometry has to be stated. */
+  function setScrollPosition({ from }: { from: number }) {
+    const scroller = document.querySelector('[aria-label="Messages"]')?.parentElement;
+    if (!scroller) throw new Error('no scroller');
+
+    Object.defineProperty(scroller, 'scrollHeight', { value: 1000, configurable: true });
+    Object.defineProperty(scroller, 'clientHeight', { value: 400, configurable: true });
+    Object.defineProperty(scroller, 'scrollTop', { value: 600 - from, configurable: true });
+
+    return scroller;
+  }
+
+  it('scrolls to the newest when already at the end', async () => {
+    vi.spyOn(lobbyService, 'getMessages').mockResolvedValue([message()]);
+    render(<LobbyPanel />);
+    act(() => lobbyStore.open());
+    await screen.findByText('Anyone been to Yerevan?');
+
+    (Element.prototype.scrollIntoView as ReturnType<typeof vi.fn>).mockClear();
+    act(() => lobbyStore.receive(message({ id: 'lm_2', body: 'just landed' })));
+
+    expect(Element.prototype.scrollIntoView).toHaveBeenCalled();
+    expect(screen.queryByRole('button', { name: /new messages/i })).not.toBeInTheDocument();
+  });
+
+  it('offers to catch up instead of yanking a reader who has scrolled back', async () => {
+    vi.spyOn(lobbyService, 'getMessages').mockResolvedValue([message()]);
+    render(<LobbyPanel />);
+    act(() => lobbyStore.open());
+    await screen.findByText('Anyone been to Yerevan?');
+
+    const scroller = setScrollPosition({ from: 300 });
+    fireEvent.scroll(scroller);
+
+    (Element.prototype.scrollIntoView as ReturnType<typeof vi.fn>).mockClear();
+    act(() => lobbyStore.receive(message({ id: 'lm_2', body: 'just landed' })));
+
+    expect(Element.prototype.scrollIntoView).not.toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: /new messages/i })).toBeInTheDocument();
+  });
+
+  it('goes to the newest when the offer is taken', async () => {
+    const user = userEvent.setup();
+    vi.spyOn(lobbyService, 'getMessages').mockResolvedValue([message()]);
+    render(<LobbyPanel />);
+    act(() => lobbyStore.open());
+    await screen.findByText('Anyone been to Yerevan?');
+
+    fireEvent.scroll(setScrollPosition({ from: 300 }));
+    act(() => lobbyStore.receive(message({ id: 'lm_2', body: 'just landed' })));
+
+    await user.click(screen.getByRole('button', { name: /new messages/i }));
+
+    expect(Element.prototype.scrollIntoView).toHaveBeenCalled();
+    expect(screen.queryByRole('button', { name: /new messages/i })).not.toBeInTheDocument();
+  });
+
+  it('drops the offer when the reader scrolls back down themselves', async () => {
+    vi.spyOn(lobbyService, 'getMessages').mockResolvedValue([message()]);
+    render(<LobbyPanel />);
+    act(() => lobbyStore.open());
+    await screen.findByText('Anyone been to Yerevan?');
+
+    fireEvent.scroll(setScrollPosition({ from: 300 }));
+    act(() => lobbyStore.receive(message({ id: 'lm_2', body: 'just landed' })));
+    expect(screen.getByRole('button', { name: /new messages/i })).toBeInTheDocument();
+
+    fireEvent.scroll(setScrollPosition({ from: 0 }));
+
+    expect(screen.queryByRole('button', { name: /new messages/i })).not.toBeInTheDocument();
   });
 });

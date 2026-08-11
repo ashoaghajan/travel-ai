@@ -2,6 +2,7 @@ import { useId, useState } from 'react';
 import { LOBBY_MESSAGE_MAX_LENGTH } from '@ai-travel/shared';
 import { IconButton } from '../../../components/common/IconButton';
 import { ArrowUpIcon } from '../../../components/common/icons';
+import { lobbyService } from '../../../services/lobby.service';
 import styles from './LobbyComposer.module.css';
 
 /** Counts down only once it is close enough to matter. */
@@ -15,10 +16,12 @@ export type LobbyComposerProps = {
 /**
  * The one place to type into the room.
  *
- * Written rather than lifted from `PlannerInput`, which hardcodes
- * `id="planner-prompt"` — and since this panel is on every page including the
- * planner, sharing it would put two elements with one id on that screen. A
- * `useId()` here means the clash cannot happen at all.
+ * Written rather than lifted from `PlannerInput`, which hardcoded
+ * `id="planner-prompt"` when this was built — and since this panel is on every
+ * page including the planner, sharing it would have put two elements with one
+ * id on that screen. That input now uses `useId()` too, but the two composers
+ * genuinely differ (character counter, Enter-to-send, pending state), so they
+ * stay separate.
  *
  * Enter sends; Shift+Enter is a newline. The field grows to a few lines and
  * then scrolls, because a composer that grows without limit eventually eats
@@ -59,6 +62,13 @@ export function LobbyComposer({ onSend, disabled = false }: LobbyComposerProps) 
         rows={1}
         placeholder="Say something…"
         disabled={disabled}
+        /*
+         * A person who has just focused this is about to send something, which
+         * is the earliest moment worth waking a sleeping API for. See
+         * `keepWarm` — it is at most one request per ten minutes, and never a
+         * timer.
+         */
+        onFocus={() => lobbyService.wakeUp()}
         onChange={(event) => setValue(event.target.value)}
         onKeyDown={(event) => {
           if (event.key !== 'Enter' || event.shiftKey) return;

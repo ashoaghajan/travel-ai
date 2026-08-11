@@ -1,5 +1,5 @@
 import type { ApiLobbyMessage, ApiLobbyPerson } from '@ai-travel/shared';
-import { http } from './http';
+import { http, keepWarm } from './http';
 
 /**
  * The lobby's HTTP half.
@@ -53,5 +53,20 @@ export const lobbyService = {
    */
   async getRealtimeToken(): Promise<unknown> {
     return http.get<unknown>('/lobby/token');
+  },
+
+  /**
+   * Nudges the API awake because somebody is about to type.
+   *
+   * The lobby is the only screen that can show a reader other people's
+   * messages arriving live while their own send hangs for a minute on a cold
+   * instance — which reads as "broken for me specifically" rather than as a
+   * server waking up. Focusing the composer is the earliest honest signal that
+   * a send is coming, and it costs nothing when the API is already up.
+   *
+   * Fire-and-forget by design; see `keepWarm`.
+   */
+  wakeUp(): void {
+    keepWarm();
   },
 };

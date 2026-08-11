@@ -1,7 +1,50 @@
+import { useEffect, useState } from 'react';
 import { IconButton } from '../../../components/common/IconButton';
 import { TrashIcon } from '../../../components/common/icons';
 import { cx } from '../../../utils/cx';
 import styles from './LobbyMessageItem.module.css';
+
+/**
+ * How long a send waits before it starts explaining itself.
+ *
+ * Nothing at first, because most sends are done inside a second and a label
+ * that appears and vanishes is worse than no label. Then "Sending…". Then, at
+ * fifteen seconds, the sentence that matters: the API sleeps after fifteen idle
+ * minutes and takes about a minute to wake, and the lobby is the one screen
+ * where that is invisible — other people's messages keep arriving over the
+ * socket while this one hangs, which reads as broken for this reader
+ * specifically rather than as a server waking up.
+ */
+const SENDING_AFTER_MS = 4000;
+const SLOW_AFTER_MS = 15_000;
+
+type SendingStage = 'fresh' | 'sending' | 'slow';
+
+/**
+ * How long this send has been going, in the three stages the copy has words
+ * for. Timers rather than a clock: nothing else here re-renders on an interval,
+ * and two `setTimeout`s cost less than watching one.
+ */
+function useSendingStage(pending: boolean): SendingStage {
+  const [stage, setStage] = useState<SendingStage>('fresh');
+
+  useEffect(() => {
+    if (!pending) {
+      setStage('fresh');
+      return;
+    }
+
+    const sending = setTimeout(() => setStage('sending'), SENDING_AFTER_MS);
+    const slow = setTimeout(() => setStage('slow'), SLOW_AFTER_MS);
+
+    return () => {
+      clearTimeout(sending);
+      clearTimeout(slow);
+    };
+  }, [pending]);
+
+  return stage;
+}
 
 export type LobbyMessageItemProps = {
   authorName: string;
@@ -48,6 +91,8 @@ export function LobbyMessageItem({
   onRetry,
   onDiscard,
 }: LobbyMessageItemProps) {
+  const stage = useSendingStage(pending);
+
   return (
     <li className={cx(styles.item, isOwn ? styles.own : styles.other)}>
       {/* Only on other people's messages: repeating your own name back at you
@@ -82,8 +127,20 @@ export function LobbyMessageItem({
           </button>
         </p>
       ) : (
-        <span className={styles.meta}>
-          {pending ? 'Sending…' : createdAt ? timeOf(createdAt) : null}
+        <span className={cx(styles.meta, stage === 'slow' && styles.slow)} aria-live="polite">
+          {/*
+            Silent for the first few seconds. A send that completes normally
+            should never have said anything about itself.
+          */}
+          {pending
+            ? stage === 'slow'
+              ? 'Still sending — the server may be waking up.'
+              : stage === 'sending'
+                ? 'Sending…'
+                : null
+            : createdAt
+              ? timeOf(createdAt)
+              : null}
         </span>
       )}
     </li>

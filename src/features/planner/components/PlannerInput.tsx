@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import type { FormEvent } from 'react';
 import { ArrowUpIcon } from '../../../components/common/icons';
 import styles from './PlannerInput.module.css';
@@ -19,6 +19,14 @@ export function PlannerInput({
   disabled = false,
   onSend,
 }: PlannerInputProps) {
+  /*
+   * Was a hardcoded `id="planner-prompt"`, which is a latent bug rather than a
+   * style point: two of these on one screen would give the document two
+   * elements with one id, and every `<label for>` would then point at whichever
+   * the browser found first. Nothing renders two today — but a component that
+   * cannot be used twice is a trap laid for whoever tries.
+   */
+  const fieldId = useId();
   const [message, setMessage] = useState('');
   const canSend = !disabled && message.trim().length > 0;
 
@@ -32,11 +40,11 @@ export function PlannerInput({
 
   return (
     <form className={styles.form} onSubmit={handleSubmit}>
-      <label className="visually-hidden" htmlFor="planner-prompt">
+      <label className="visually-hidden" htmlFor={fieldId}>
         Describe the trip you want
       </label>
       <input
-        id="planner-prompt"
+        id={fieldId}
         className={styles.input}
         type="text"
         autoComplete="off"
