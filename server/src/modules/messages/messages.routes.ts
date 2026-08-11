@@ -3,6 +3,7 @@ import { conversationsQuerySchema, sendDirectMessageSchema } from '@ai-travel/sh
 import { Router } from 'express';
 import type { Request, Response } from 'express';
 import rateLimit, { ipKeyGenerator, MemoryStore } from 'express-rate-limit';
+import { HttpError } from '../../errors';
 import { requireAuth, userIdOf } from '../auth/requireAuth';
 import {
   createMessage,
@@ -11,6 +12,7 @@ import {
   listThread,
   markRead,
 } from './messages.service';
+import { createTokenRequest, isConfigured, publishToBoth } from './realtime';
 
 /**
  * `/api/messages` — private conversations, two people at a time.
@@ -108,6 +110,13 @@ messagesRouter.post(
       clientMessageId,
     );
 
+    // Written first, then fanned out to both ends. Awaited so a test can
+    // observe it, but it cannot fail the request — see `publishToBoth`.
+    await publishToBoth([message.senderId, message.recipientId], {
+      name: 'message',
+      data: message,
+    });
+
     response.status(201).json(message);
   },
 );
@@ -129,8 +138,41 @@ messagesRouter.delete(
   async (request: Request, response: Response) => {
     const messageId = request.params.messageId;
 
-    await deleteMessage(userIdOf(request), typeof messageId === 'string' ? messageId : '');
+    const removed = await deleteMessage(
+      userIdOf(request),
+      typeof messageId === 'string' ? messageId : '',
+    );
+
+    /*
+     * Both ends again, and the event carries both ids. A client keeps threads
+     * keyed by who they are with, so it has to know which thread this came
+     * out of — and "the other person" is a different answer for each of the
+     * two recipients of this one event.
+     */
+    await publishToBoth([removed.senderId, removed.recipientId], {
+      name: 'delete',
+      data: { id: removed.id, senderId: removed.senderId, recipientId: removed.recipientId },
+    });
 
     response.status(204).end();
   },
 );
+
+/**
+ * A short-lived token letting this browser listen to its own inbox.
+ *
+ * The API key never leaves the server; what goes back is signed, expires in an
+ * hour, is pinned to the caller's user id, and can neither publish anywhere
+ * nor subscribe to anybody else's channel. See `realtime.ts`.
+ */
+messagesRouter.get('/messages/token', requireAuth, async (request: Request, response: Response) => {
+  if (!isConfigured()) {
+    throw new HttpError(
+      503,
+      ERROR_CODES.PROVIDER_NOT_CONFIGURED,
+      'Live messages are not switched on.',
+    );
+  }
+
+  response.json(await createTokenRequest(userIdOf(request)));
+});
