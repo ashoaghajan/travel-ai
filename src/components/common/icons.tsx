@@ -193,6 +193,25 @@ export function CrownIcon(props: IconProps) {
   );
 }
 
+/** The lobby — people talking to each other. */
+export function ChatBubbleIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M20.4 12.6a7.4 7.4 0 0 1-7.9 7.4c-.9-.1-1.8-.3-2.6-.7l-4.3 1.1 1.1-4.3a7.4 7.4 0 0 1-.7-2.6 7.4 7.4 0 0 1 7.4-7.9 7.4 7.4 0 0 1 7 7Z" />
+      <path d="M9.4 12h.01M13 12h.01M16.6 12h.01" />
+    </Icon>
+  );
+}
+
+/** Dismiss a panel or dialog. */
+export function CloseIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M6.4 6.4l11.2 11.2M17.6 6.4 6.4 17.6" />
+    </Icon>
+  );
+}
+
 /** Export a trip to a file. */
 export function DownloadIcon(props: IconProps) {
   return (

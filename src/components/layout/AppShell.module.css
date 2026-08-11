@@ -40,9 +40,15 @@
 }
 
 @media (min-width: 1024px) {
+  /*
+   * A third `auto` track for the lobby. Collapsed, the panel renders nothing
+   * at all, so the track sizes to zero and this row is identical to the two
+   * columns it was before — no second media query, and no width to animate
+   * against the grid.
+   */
   .shell {
     grid-template-rows: minmax(0, 1fr);
-    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-columns: auto minmax(0, 1fr) auto;
   }
 
   .sidebar {

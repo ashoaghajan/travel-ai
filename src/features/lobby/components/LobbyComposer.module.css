@@ -1,0 +1,51 @@
+.composer {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-sm);
+  padding: var(--space-md);
+  border-top: 1px solid var(--color-border);
+  background-color: var(--color-surface);
+}
+
+.field {
+  flex: 1;
+  min-width: 0;
+  /* Two and a half lines, then it scrolls: a composer that grows without a
+     ceiling eventually swallows the conversation above it. */
+  max-height: 6rem;
+  padding: var(--space-sm) var(--space-md);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background-color: var(--color-background);
+  color: var(--color-text-main);
+  font: inherit;
+  font-size: var(--font-sm);
+  line-height: var(--line-height-base);
+  resize: none;
+}
+
+.field:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 1px;
+  border-color: var(--color-primary);
+}
+
+.field:disabled {
+  opacity: 0.6;
+}
+
+.remaining,
+.over {
+  padding-bottom: var(--space-sm);
+  font-size: var(--font-xs);
+  font-variant-numeric: tabular-nums;
+}
+
+.remaining {
+  color: var(--color-text-muted);
+}
+
+.over {
+  color: var(--color-danger);
+  font-weight: var(--font-weight-semibold);
+}

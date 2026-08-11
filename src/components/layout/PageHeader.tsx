@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { AccountMenu } from '../navigation/AccountMenu';
+import { LobbyToggle } from '../../features/lobby/components/LobbyToggle';
 import { cx } from '../../utils/cx';
 import styles from './PageHeader.module.css';
 
@@ -33,6 +34,7 @@ export function PageHeader({ title, subtitle, leading, actions, className }: Pag
 
       <div className={styles.actions}>
         {actions}
+        <LobbyToggle />
         <AccountMenu />
       </div>
     </header>

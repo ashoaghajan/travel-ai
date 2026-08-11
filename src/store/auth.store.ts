@@ -8,6 +8,7 @@ import { searchService } from '../services/search.service';
 import { settingsService } from '../services/settings.service';
 import { tripImportService } from '../services/tripImport.service';
 import { bookingStore } from './booking.store';
+import { lobbyStore } from './lobby.store';
 import { savedActivityStore } from './savedActivity.store';
 import { tripStore } from './trip.store';
 
@@ -106,22 +107,36 @@ function signIn(user: ApiUser): void {
 }
 
 /**
- * A session that ended without the user asking — an expired refresh, or a
- * token replay. `http.ts` announces it; the guard reacts to the state change.
+ * Puts every store back to how it looks with nobody signed in.
+ *
+ * One function rather than the two identical lists this used to be, in the
+ * `signedOut` handler and in `signOut`. They were maintained by hand and had
+ * grown to six entries each; the failure mode of adding a seventh to only one
+ * of them is a store still holding the last account's data on the screen the
+ * next person sees.
  */
-signedOut.subscribe(() => {
-  if (state.status === 'anonymous') return;
-
+function forgetAccount(): void {
   releaseLocalData();
   // The next reader must not see this account's trips, or have their theme
   // painted, for the moment before their own arrive.
   tripStore.reset();
   bookingStore.reset();
   savedActivityStore.reset();
+  lobbyStore.reset();
   settingsService.clearCache();
   chatService.clearCache();
   searchService.clearCache();
   setState(ANONYMOUS);
+}
+
+/**
+ * A session that ended without the user asking — an expired refresh, or a
+ * token replay. `http.ts` announces it; the guard reacts to the state change.
+ */
+signedOut.subscribe(() => {
+  if (state.status === 'anonymous') return;
+
+  forgetAccount();
 });
 
 export const authStore = {
@@ -189,14 +204,7 @@ export const authStore = {
       await authService.logout();
     } finally {
       // Even if the server never heard about it, this browser is signed out.
-      releaseLocalData();
-      tripStore.reset();
-      bookingStore.reset();
-      savedActivityStore.reset();
-      settingsService.clearCache();
-      chatService.clearCache();
-      searchService.clearCache();
-      setState(ANONYMOUS);
+      forgetAccount();
     }
   },
 

@@ -18,6 +18,12 @@ export const STORAGE_KEYS = {
   selectedCity: 'ai-travel-planner:selectedCity',
   /** Attractions the user bookmarked from the explorer. */
   savedActivities: 'ai-travel-planner:savedActivities',
+  /**
+   * Whether the lobby panel was left open. Device-scoped UI position, like
+   * the explorer's country — where a panel sits on this screen is not a
+   * preference worth carrying to another one.
+   */
+  lobbyOpen: 'ai-travel-planner:lobbyOpen',
   /** Flights, stays, tickets and activities attached to a trip — or to none yet. */
   bookings: 'ai-travel-planner:bookings',
   /**

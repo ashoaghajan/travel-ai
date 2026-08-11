@@ -1,0 +1,31 @@
+.wrap {
+  position: relative;
+  display: inline-flex;
+}
+
+/*
+ * The count is `aria-hidden` and duplicated into the button's label instead:
+ * a screen reader announcing "3" next to "Open the lobby" says nothing about
+ * what three of, whereas "Lobby, 3 new" is the whole sentence.
+ */
+.badge {
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: var(--radius-pill);
+  /* Rings the badge in the surface behind it so it reads as sitting on top of
+     the icon rather than merging into it. */
+  border: 2px solid var(--color-background);
+  background-color: var(--color-primary);
+  color: var(--color-text-light);
+  font-size: 10px;
+  font-weight: var(--font-weight-semibold);
+  line-height: 1;
+  pointer-events: none;
+}

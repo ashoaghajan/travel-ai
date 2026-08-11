@@ -1,0 +1,116 @@
+.item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-width: 100%;
+}
+
+.own {
+  align-items: flex-end;
+}
+
+.other {
+  align-items: flex-start;
+}
+
+.author {
+  padding: 0 var(--space-xs);
+  font-size: var(--font-xs);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-muted);
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  max-width: 100%;
+}
+
+.own .row {
+  flex-direction: row-reverse;
+}
+
+.bubble {
+  padding: var(--space-sm) var(--space-md);
+  /* Not the planner's 640px: this column is ~340px wide, and a bubble that
+     never wraps reads as a wall rather than a conversation. */
+  max-width: 15rem;
+  font-size: var(--font-sm);
+  line-height: var(--line-height-base);
+  border-radius: var(--radius-lg);
+  /* Someone will paste a URL, and a long unbroken string must not push the
+     panel wider than its grid column. */
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.other .bubble {
+  background-color: var(--color-surface-muted);
+  color: var(--color-text-main);
+  border-bottom-left-radius: var(--radius-sm);
+}
+
+.own .bubble {
+  background-color: var(--color-primary);
+  color: var(--color-text-light);
+  border-bottom-right-radius: var(--radius-sm);
+}
+
+/* Unconfirmed: visibly provisional, without moving anything when it lands. */
+.pending {
+  opacity: 0.6;
+}
+
+.failed {
+  background-color: var(--color-danger-soft);
+  color: var(--color-danger);
+}
+
+/* Revealed on hover or keyboard focus — one bin per line is a lot of bins. */
+.delete {
+  opacity: 0;
+  transition: opacity var(--transition-fast);
+}
+
+.item:hover .delete,
+.delete:focus-visible {
+  opacity: 1;
+}
+
+@media (hover: none) {
+  /* Nothing hovers on a touchscreen, so hiding it would hide it for good. */
+  .delete {
+    opacity: 1;
+  }
+}
+
+.meta {
+  min-height: 1rem;
+  padding: 0 var(--space-xs);
+  font-size: var(--font-xs);
+  color: var(--color-text-muted);
+}
+
+.failure {
+  display: flex;
+  gap: var(--space-sm);
+  padding: 0 var(--space-xs);
+  font-size: var(--font-xs);
+  color: var(--color-danger);
+}
+
+.link {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--color-primary);
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.link:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: 2px;
+}

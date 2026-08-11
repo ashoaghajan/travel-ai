@@ -1,0 +1,41 @@
+.wrap {
+  padding: var(--space-md);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.heading {
+  margin-bottom: var(--space-sm);
+  font-size: var(--font-xs);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+/* A row of faces rather than a column: the roster is context for the
+   conversation, not the point of the panel, and it must not push the messages
+   off the screen as the room fills up. */
+.list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+}
+
+.person {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  padding: 2px var(--space-sm) 2px 2px;
+  border-radius: var(--radius-pill);
+  background-color: var(--color-surface-muted);
+}
+
+.name {
+  font-size: var(--font-xs);
+  color: var(--color-text-main);
+  white-space: nowrap;
+}
+
+.you {
+  color: var(--color-text-muted);
+}

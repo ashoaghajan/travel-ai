@@ -136,6 +136,9 @@
    * Layout — DESIGN_SPEC §7
    * --------------------------------------------------------------- */
   --layout-sidebar-width: 280px;
+  /* Narrower than the sidebar: the lobby is company alongside the page, not a
+     second place to be, and it only appears when someone opens it. */
+  --layout-lobby-width: 340px;
   --layout-content-padding: 24px;
   --layout-max-width: 1200px;
 
