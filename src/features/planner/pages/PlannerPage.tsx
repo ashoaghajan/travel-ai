@@ -5,12 +5,13 @@ import type { TripDraft } from '../../../types/trip.types';
 import { PageHeader } from '../../../components/layout/PageHeader';
 import { IconButton } from '../../../components/common/IconButton';
 import { Logo } from '../../../components/common/Logo';
-import { BookmarkIcon, ShareIcon, TrashIcon } from '../../../components/common/icons';
+import { BookmarkIcon, DownloadIcon, TrashIcon } from '../../../components/common/icons';
 import { ChatMessage } from '../components/ChatMessage';
 import { ItineraryPreview } from '../components/ItineraryPreview';
 import { PlannerInput } from '../components/PlannerInput';
 import { TypingIndicator } from '../components/TypingIndicator';
 import { usePlanner } from '../usePlanner';
+import { useTripExport } from '../../trips/useTripExport';
 import styles from './PlannerPage.module.css';
 
 /** `/trips/:tripId` for one saved trip. */
@@ -37,6 +38,7 @@ export function PlannerPage() {
     clearConversation,
   } = usePlanner();
   const navigate = useNavigate();
+  const { exportTrip, error: exportError } = useTripExport();
   const conversationEndRef = useRef<HTMLDivElement>(null);
 
   /**
@@ -62,7 +64,9 @@ export function PlannerPage() {
     });
   }, [messages, isGenerating]);
 
-  // The header bookmark saves the most recent itinerary.
+  // The header bookmark saves the most recent itinerary, and the export button
+  // writes that same one to a file — which works before it is saved, because
+  // nothing in the file comes from the database row.
   const latestTripMessage = [...messages].reverse().find((message) => message.trip);
   const latestTripSaved = Boolean(savedTripIdFor(latestTripMessage?.trip));
 
@@ -73,15 +77,32 @@ export function PlannerPage() {
         leading={<Logo variant="dark" size="md" markOnly className={styles.mobileBrand} />}
         actions={
           <>
+            {/*
+              Every label here is also the hover tooltip — `IconButton` sets
+              `title` from it — so each one says what the icon does and to
+              what. "Clear conversation" in particular: it empties this chat
+              and touches no saved trip, which is not what a bin next to an
+              itinerary looks like it means.
+            */}
             <IconButton
-              label="Clear conversation"
+              label="Clear this conversation"
               disabled={isGenerating}
               onClick={clearConversation}
             >
               <TrashIcon size={20} />
             </IconButton>
-            <IconButton label="Share this trip">
-              <ShareIcon size={20} />
+            <IconButton
+              label={
+                latestTripMessage
+                  ? 'Export this trip as a file'
+                  : 'Nothing to export yet — ask for an itinerary first'
+              }
+              disabled={!latestTripMessage}
+              onClick={() => {
+                if (latestTripMessage?.trip) exportTrip(latestTripMessage.trip);
+              }}
+            >
+              <DownloadIcon size={20} />
             </IconButton>
             <IconButton
               label={latestTripSaved ? 'Trip saved' : 'Save this trip'}
@@ -126,9 +147,9 @@ export function PlannerPage() {
 
       <div className={styles.composer}>
         <div className={styles.composerInner}>
-          {error ? (
+          {error || exportError ? (
             <p className={styles.error} role="alert">
-              {error}
+              {error ?? exportError}
             </p>
           ) : null}
           <PlannerInput disabled={isGenerating} onSend={(prompt) => void generate(prompt)} />

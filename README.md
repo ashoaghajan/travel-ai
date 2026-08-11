@@ -748,6 +748,76 @@ DELETE /api/trips/:id
 
 ---
 
+### Moving a trip between accounts — **built**
+
+A trip can be exported to a file and imported into somebody else's account.
+Export is the download icon in the trip details header; import is on the
+My Trips page, beside "New Trip" and in the empty state.
+
+**There is no import endpoint.** `POST /api/trips` already accepts a whole trip
+and mints the id itself, so an import is a create whose body came off disk —
+which means `createTripSchema` is still the single thing deciding what a trip
+may contain, on an imported trip exactly as on a typed one. The client half
+(`src/utils/tripFile.ts`) is structural only: it turns bytes into a `TripDraft`,
+or says in one sentence why it cannot.
+
+The file:
+
+```jsonc
+{
+  "kind": "ai-travel.trip",
+  "version": 1,
+  "exportedAt": "2026-08-11T09:14:22.317Z",
+  "trip": { "title": "…", "startDate": "…", "itinerary": [ … ], "notes": [ … ] }
+}
+```
+
+- **Bookings are not in it.** An itinerary activity is a guess and copies
+  harmlessly; a booking is a fact about the exporter — a confirmation number,
+  a price they paid — and writing it into another account would state their
+  booking as the importer's own. Notes travel, because they are part of the plan.
+- **Nothing identifying the exporter is in it** either: no name, no email, no
+  user id. A file that says who made it is a file that leaks who made it.
+- **`id`, `draftId`, `createdAt`, `updatedAt` and `version` are stripped.** The
+  importer's copy is a new trip, not a claim to be the old one. Exporting
+  `draftId` in particular would make a second import of the same file collide
+  on `@@unique([userId, draftId])` and silently return the first trip.
+- **Day and activity ids are re-minted on import.** Nothing outside the trip's
+  own JSON points at them, and the schema bounds their length without requiring
+  them to be distinct — so a hand-edited file could otherwise give two
+  activities one id, and the editor would delete both when asked for one.
+  `sourceActivityId` is preserved: it is what stops the same attraction being
+  added to a day twice.
+- **Bundled photographs travel by name, not by URL.** Every picture the app
+  ships is a Vite asset import, so what a trip stores is whatever *this* build
+  resolved it to — `/src/assets/generic/coast.jpg` on a laptop,
+  `/assets/coast-9f2a1b.jpg` in a deployment, a different hash again next
+  build. A file therefore carries `coverImageId` on the trip and `imageId` on
+  each day and activity, and the importer resolves those against its own build
+  (`src/assets/bundled-images.ts`). Without it, a trip exported from localhost
+  and imported into staging would point every photograph at a path that
+  environment has never served. The URL stays in the file as the fallback for
+  anything not ours — an OpenTripMap photo needs no translation.
+- **A newer `version` is refused, not best-guessed.** A version 2 file may carry
+  a whole section this reader has never heard of, and silently dropping half a
+  trip is worse than asking someone to update.
+- **Image URLs are filtered to `http(s)` and bundled asset paths.** Not an XSS
+  guard — `<img src>` is not a script context — but the app only ever writes
+  those two shapes, and a file from a stranger can carry a megabyte of inline
+  `data:` per activity.
+
+Importing a trip the account already holds — same title, same dates — warns and
+offers "Import anyway". Nothing is ever overwritten. One draft key is minted per
+file chosen, so a retry after a lost reply resolves to the trip that may already
+have been created rather than making a second, while picking the file again
+later deliberately makes a new one.
+
+Bodies are capped at 1 MB by `express.json`; over that the API answers **413
+`PAYLOAD_TOO_LARGE`** rather than the 500 it used to, and the client refuses a
+file over 4 MB before reading it at all.
+
+---
+
 ### 3. Planner API
 
 Move itinerary generation to the backend.

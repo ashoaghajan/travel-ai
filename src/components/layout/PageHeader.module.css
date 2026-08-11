@@ -59,9 +59,14 @@
 .actions {
   display: flex;
   /* Never compressed: buttons that shrink below their label are unreadable,
-     and wrapping to a second row is the better answer at that point. */
+     and wrapping to a second row is the better answer at that point — which
+     is what `flex-wrap` here actually delivers. Only `.header` wrapped before,
+     so the row of buttons had no way to break and overflowed sideways once a
+     fourth control joined it on a narrow phone. */
   flex: none;
+  flex-wrap: wrap;
   align-items: center;
+  justify-content: flex-end;
   gap: var(--space-sm);
   margin-left: auto;
 }

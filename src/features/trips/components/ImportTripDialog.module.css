@@ -1,0 +1,138 @@
+.dialog {
+  width: min(30rem, calc(100vw - 2 * var(--space-lg)));
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-lg);
+  background-color: var(--color-surface);
+  color: var(--color-text-main);
+  box-shadow: var(--shadow-card);
+}
+
+.dialog::backdrop {
+  background-color: var(--color-backdrop);
+}
+
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  padding: var(--space-xl);
+}
+
+.title {
+  font-size: var(--font-lg);
+  font-weight: var(--font-weight-semibold);
+}
+
+.subtitle {
+  margin-top: calc(-1 * var(--space-sm));
+  font-size: var(--font-sm);
+  color: var(--color-text-muted);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.label {
+  font-size: var(--font-xs);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-muted);
+}
+
+/*
+ * The file input is replaced by a labelled button rather than styled: a native
+ * file control cannot be restyled consistently across browsers, and the label
+ * is what makes the button open the picker without any script.
+ */
+.picker {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.pickerButton {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  min-height: 2.75rem;
+  padding: var(--space-sm) var(--space-md);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background-color: var(--color-surface);
+  color: var(--color-text-main);
+  font-size: var(--font-sm);
+  font-weight: var(--font-weight-semibold);
+  cursor: pointer;
+}
+
+.pickerButton:hover {
+  border-color: var(--color-primary);
+}
+
+/* The input is focusable, so the ring has to follow it onto its label. */
+.input:focus-visible + .pickerButton {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 1px;
+  border-color: var(--color-primary);
+}
+
+.fileName {
+  min-width: 0;
+  overflow: hidden;
+  font-size: var(--font-xs);
+  color: var(--color-text-muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.summary {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  padding: var(--space-md);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+.summaryTitle {
+  font-size: var(--font-md);
+  font-weight: var(--font-weight-semibold);
+}
+
+.summaryMeta {
+  font-size: var(--font-sm);
+  color: var(--color-text-muted);
+}
+
+/* A caution, not a failure — the reader may well mean to do this. */
+.warning {
+  padding: var(--space-sm) var(--space-md);
+  border-left: 3px solid var(--color-warning);
+  border-radius: var(--radius-md);
+  background-color: var(--color-surface-muted);
+  color: var(--color-text-main);
+  font-size: var(--font-sm);
+}
+
+.error {
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-md);
+  background-color: var(--color-danger-soft);
+  color: var(--color-danger);
+  font-size: var(--font-sm);
+}
+
+.note {
+  font-size: var(--font-xs);
+  color: var(--color-text-muted);
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-sm);
+  margin-top: var(--space-xs);
+}

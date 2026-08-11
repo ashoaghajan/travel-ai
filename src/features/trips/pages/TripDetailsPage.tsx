@@ -11,7 +11,7 @@ import { CurrencySelect } from '../../../components/common/CurrencySelect';
 import { tabId, tabPanelId } from '../../../components/common/tabs.helpers';
 import { TripRouteMap } from '../components/TripRouteMap';
 import { IconButton } from '../../../components/common/IconButton';
-import { SuitcaseIcon, TrashIcon } from '../../../components/common/icons';
+import { DownloadIcon, SuitcaseIcon, TrashIcon } from '../../../components/common/icons';
 import type { Trip } from '../../../types/trip.types';
 import { formatDateRange } from '../../../utils/date';
 import {
@@ -28,6 +28,7 @@ import { TripBookings } from '../components/TripBookings';
 import { TripNotes } from '../components/TripNotes';
 import { useDeleteTrip, useTripDetails } from '../useTrips';
 import { useEditTrip } from '../useEditTrip';
+import { useTripExport } from '../useTripExport';
 import { useStopCoordinates } from '../useStopCoordinates';
 import { useBookingCoordinates } from '../useBookingCoordinates';
 import { useTripBookings } from '../../../store/booking.store';
@@ -165,6 +166,7 @@ function TripDetailsView({ trip }: { trip: Trip }) {
   // point from the explorer; a hotel is geocoded from its name.
   const tripBookings = useTripBookings(trip.id);
   const money = useMoney();
+  const { exportTrip, error: exportError } = useTripExport();
 
   /*
    * Dates, party, and what it comes to. The cost joins the other two because
@@ -229,6 +231,18 @@ function TripDetailsView({ trip }: { trip: Trip }) {
                 <Button to={`/trips/${trip.id}/summary`} variant="secondary" size="md">
                   Summary
                 </Button>
+                {/*
+                  Icon-only, and next to Delete rather than beside the labelled
+                  buttons: two labels plus two icons is the ceiling this row
+                  holds on a phone, and `.actions` now wraps rather than
+                  overflowing if a fifth control ever arrives.
+                */}
+                <IconButton
+                  label={`Export ${trip.title} as a file`}
+                  onClick={() => exportTrip(trip)}
+                >
+                  <DownloadIcon size={20} />
+                </IconButton>
                 <IconButton
                   label={`Delete ${trip.title}`}
                   disabled={isDeleting}
@@ -243,6 +257,12 @@ function TripDetailsView({ trip }: { trip: Trip }) {
       />
 
       <div className={styles.content}>
+        {exportError ? (
+          <p className={styles.error} role="alert">
+            {exportError}
+          </p>
+        ) : null}
+
         {deleteError ? (
           <p className={styles.error} role="alert">
             {deleteError}
@@ -283,8 +303,8 @@ function TripDetailsView({ trip }: { trip: Trip }) {
         {/*
           The currency picker sits on the tab row rather than in the header.
           It belongs beside the prices it governs — the schedule's costs are
-          directly below it — and the header already carries three controls,
-          which is as many as fits a phone.
+          directly below it — and the header is already full: two labelled
+          buttons and two icon buttons is as much as fits a phone.
         */}
         <div className={styles.tabRow}>
           <Tabs

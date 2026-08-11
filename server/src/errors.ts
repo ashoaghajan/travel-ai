@@ -50,6 +50,15 @@ function zodDetails(error: ZodError): Record<string, string> {
   return details;
 }
 
+/** `body-parser`'s own marker for a body over the configured limit. */
+function isBodyTooLarge(error: unknown): boolean {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    (error as { type?: unknown }).type === 'entity.too.large'
+  );
+}
+
 export function notFoundHandler(_request: Request, _response: Response, next: NextFunction): void {
   next(notFound('That endpoint does not exist.'));
 }
@@ -72,6 +81,26 @@ export function errorHandler(
         code: ERROR_CODES.VALIDATION_FAILED,
         message: 'Some of those details are not valid.',
         details: zodDetails(error),
+      },
+    });
+    return;
+  }
+
+  /*
+   * The body parser refused before any handler ran.
+   *
+   * `express.json` throws this rather than calling the route, so it never
+   * reaches an `HttpError` and used to fall through to the 500 below — telling
+   * the reader the server had broken when in fact their file was too big.
+   * Narrowed on `type` rather than on `status`, so it cannot swallow an
+   * unrelated error that happens to carry one.
+   */
+  if (isBodyTooLarge(error)) {
+    response.status(413).json({
+      error: {
+        code: ERROR_CODES.PAYLOAD_TOO_LARGE,
+        message: 'That request is too large.',
+        details: null,
       },
     });
     return;

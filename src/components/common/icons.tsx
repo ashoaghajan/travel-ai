@@ -193,6 +193,28 @@ export function CrownIcon(props: IconProps) {
   );
 }
 
+/** Export a trip to a file. */
+export function DownloadIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M12 4v10.4" />
+      <path d="m7.4 10.2 4.6 4.6 4.6-4.6" />
+      <path d="M4.6 16.4v1.8a2 2 0 0 0 2 2h10.8a2 2 0 0 0 2-2v-1.8" />
+    </Icon>
+  );
+}
+
+/** Import a trip from a file — `DownloadIcon` with the arrow reversed. */
+export function UploadIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M12 14.4V4" />
+      <path d="m7.4 8.6 4.6-4.6 4.6 4.6" />
+      <path d="M4.6 16.4v1.8a2 2 0 0 0 2 2h10.8a2 2 0 0 0 2-2v-1.8" />
+    </Icon>
+  );
+}
+
 /** Destructive action: delete a saved trip. */
 export function TrashIcon(props: IconProps) {
   return (

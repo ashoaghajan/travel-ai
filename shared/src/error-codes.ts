@@ -44,6 +44,15 @@ export const ERROR_CODES = {
 
   /* generic */
   VALIDATION_FAILED: 'VALIDATION_FAILED',
+  /**
+   * The request body was bigger than the parser will accept.
+   *
+   * Distinct from `VALIDATION_FAILED` because nothing about the content is
+   * wrong — it never got as far as being read — and the only useful advice is
+   * about size. Reachable since trips can be imported from a file the reader
+   * chose, which is the first body this app does not itself compose.
+   */
+  PAYLOAD_TOO_LARGE: 'PAYLOAD_TOO_LARGE',
 
   /* ------------------------------------------------------------------ trips */
 

@@ -555,3 +555,81 @@ describe('PUT /api/me/active-trip', () => {
     expect(me.body.activeTripId).toBeNull();
   });
 });
+
+describe('taking a trip in from a file', () => {
+  /*
+   * What the export/import feature rests on. The client reads a file, strips
+   * the fields that belong to whoever wrote it, and posts the rest here — so
+   * these are assertions about a contract another codebase now depends on,
+   * not about a new endpoint.
+   */
+
+  it('accepts a whole itinerary and its notes in one create', async () => {
+    const { accessToken } = await signUp();
+    const response = await api()
+      .post(TRIPS)
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send(
+        tripBody({
+          notes: [
+            {
+              id: 'note_1',
+              text: 'Book the wine tour',
+              createdAt: '2026-08-01T00:00:00.000Z',
+              updatedAt: '2026-08-01T00:00:00.000Z',
+            },
+          ],
+        }),
+      )
+      .expect(201);
+
+    expect(response.body.itinerary).toHaveLength(1);
+    expect(response.body.notes).toHaveLength(1);
+  });
+
+  it('gives the importer their own trip, and leaves the exporter’s alone', async () => {
+    const owner = await withTrip();
+
+    // Exactly what a `.trip.json` carries: the plan, with no id and no draft key.
+    const {
+      id: _id,
+      draftId: _draftId,
+      createdAt: _createdAt,
+      updatedAt: _updatedAt,
+      version: _version,
+      ...exported
+    } = owner.trip;
+    const importer = await signUp({ email: 'importer@example.com' });
+
+    const response = await api()
+      .post(TRIPS)
+      .set('Authorization', `Bearer ${importer.accessToken}`)
+      .send(exported)
+      .expect(201);
+
+    expect(response.body.id).not.toBe(owner.trip.id);
+    expect(response.body.title).toBe(owner.trip.title);
+    expect(response.body.itinerary).toEqual(owner.trip.itinerary);
+
+    // The exporter still has exactly the one trip they started with.
+    const theirs = await api().get(TRIPS).set('Authorization', owner.auth).expect(200);
+    expect(theirs.body).toHaveLength(1);
+    expect(theirs.body[0].id).toBe(owner.trip.id);
+  });
+
+  it('answers a body over the limit with 413, not 500', async () => {
+    const { accessToken } = await signUp();
+
+    // A file the reader chose is the first body this app does not compose
+    // itself. Without a branch for it, body-parser's refusal fell through to
+    // "Something went wrong on our end" — blaming the server for a big file.
+    const response = await api()
+      .post(TRIPS)
+      .set('Authorization', `Bearer ${accessToken}`)
+      .set('Content-Type', 'application/json')
+      .send(JSON.stringify({ ...tripBody(), summary: 'x'.repeat(1024 * 1024) }))
+      .expect(413);
+
+    expect(errorCode(response)).toBe(ERROR_CODES.PAYLOAD_TOO_LARGE);
+  });
+});

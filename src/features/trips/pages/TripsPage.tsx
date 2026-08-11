@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { ROUTES } from '../../../app/routes';
 import { PageHeader } from '../../../components/layout/PageHeader';
 import { Button } from '../../../components/common/Button';
@@ -7,11 +7,17 @@ import { Card } from '../../../components/common/Card';
 import { EmptyState } from '../../../components/common/EmptyState';
 import { Skeleton } from '../../../components/common/Skeleton';
 import { TripCard } from '../../../components/cards/TripCard';
-import { PlusIcon, SparklesIcon, SuitcaseIcon } from '../../../components/common/icons';
+import {
+  PlusIcon,
+  SparklesIcon,
+  SuitcaseIcon,
+  UploadIcon,
+} from '../../../components/common/icons';
 import { formatDayCount } from '../../../utils/trip';
 import { useActiveTripId } from '../../../store/trip.store';
 import { useBookingsByTrip } from '../../../store/booking.store';
 import { EditTripModal } from '../components/EditTripModal';
+import { ImportTripDialog } from '../components/ImportTripDialog';
 import { useSavedTrips } from '../useTrips';
 import styles from './TripsPage.module.css';
 
@@ -45,6 +51,9 @@ export function TripsPage() {
   const [editingTripId, setEditingTripId] = useState<string | null>(null);
   const editingTrip = trips.find((trip) => trip.id === editingTripId);
 
+  const [isImporting, setIsImporting] = useState(false);
+  const navigate = useNavigate();
+
   // Restored from storage, so it survives a reload.
   const activeTripId = useActiveTripId();
   const activeTrip = trips.find((trip) => trip.id === activeTripId);
@@ -60,6 +69,14 @@ export function TripsPage() {
         subtitle={subtitle}
         actions={
           <>
+            <Button
+              variant="secondary"
+              size="md"
+              leadingIcon={<UploadIcon size={18} />}
+              onClick={() => setIsImporting(true)}
+            >
+              Import trip
+            </Button>
             <Button
               to={ROUTES.planner}
               variant="secondary"
@@ -114,6 +131,11 @@ export function TripsPage() {
                 <Button to={ROUTES.planner} variant="secondary" size="md">
                   Plan with AI
                 </Button>
+                {/* Someone arriving with a file in hand has no trips yet, so
+                    this is exactly where they will look for it. */}
+                <Button variant="secondary" size="md" onClick={() => setIsImporting(true)}>
+                  Import a trip
+                </Button>
               </>
             }
           />
@@ -143,6 +165,18 @@ export function TripsPage() {
 
       {editingTrip ? (
         <EditTripModal trip={editingTrip} onClose={() => setEditingTripId(null)} />
+      ) : null}
+
+      {isImporting ? (
+        <ImportTripDialog
+          onClose={() => setIsImporting(false)}
+          onImported={(trip) => {
+            setIsImporting(false);
+            // Onto the trip itself: it is already in the store, so this needs
+            // no fetch, and landing on it is the proof the import worked.
+            void navigate(`/trips/${trip.id}`);
+          }}
+        />
       ) : null}
     </div>
   );
