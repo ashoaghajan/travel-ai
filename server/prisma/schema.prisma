@@ -67,6 +67,15 @@ model User {
   recentSearches  RecentSearch[]
   chatHistory     ChatHistory?
   lobbyMessages   LobbyMessage[]
+
+  /// Two relations to one model, so both need naming — Prisma cannot tell
+  /// which side of a `DirectMessage` a `User[]` was meant to be.
+  sentMessages     DirectMessage[] @relation("SentMessages")
+  receivedMessages DirectMessage[] @relation("ReceivedMessages")
+
+  /// Read cursors, one per conversation this account has opened. Declared only
+  /// because Prisma requires both ends of a relation; nothing joins from here.
+  conversationReads ConversationRead[]
 }
 
 /// App preferences, one row per account.
@@ -406,4 +415,71 @@ model LobbyMessage {
   /// read as `ORDER BY createdAt DESC LIMIT 50` across every row, where a
   /// leading userId would make the index useless for the one query there is.
   @@index([createdAt(sort: Desc)])
+}
+
+/// One thing somebody said to one other person.
+///
+/// Replaces `LobbyMessage`, which was one public room shared by everyone. The
+/// shape is nearly the same — plain text, a client-minted id for retries, a
+/// soft delete — and the difference that matters is that a message now has a
+/// recipient, so a conversation is a *pair* rather than the whole app.
+model DirectMessage {
+  id String @id @default(uuid())
+
+  senderId String
+  sender   User   @relation("SentMessages", fields: [senderId], references: [id], onDelete: Cascade)
+
+  recipientId String
+  recipient   User   @relation("ReceivedMessages", fields: [recipientId], references: [id], onDelete: Cascade)
+
+  /// `min(senderId, recipientId):max(...)`, written on create.
+  ///
+  /// A conversation is an unordered pair, and this is what lets one index serve
+  /// it. Without it every thread read is `(sender = A AND recipient = B) OR
+  /// (sender = B AND recipient = A)`, which no single index covers — Postgres
+  /// takes both branches and merges. Computed server-side from the
+  /// authenticated sender and the path recipient, never accepted from a client.
+  pairKey String
+
+  /// Plain text, capped by zod at the edge. Never markup: it is rendered as a
+  /// text node, and nothing anywhere linkifies it.
+  body String
+
+  /// The id the sending browser minted. With the unique constraint below it
+  /// makes a retry idempotent, which matters because a sleeping instance takes
+  /// a minute to answer and the reader will press the button again long before
+  /// it does. It also lets the sender retire its own optimistic bubble.
+  clientMessageId String
+
+  /// Withdrawn by its author. Soft, so an id already on the other person's
+  /// screen still resolves — and so that adding moderation later does not need
+  /// data that was hard-deleted before anybody asked for it.
+  deletedAt DateTime?
+
+  createdAt DateTime @default(now())
+
+  @@unique([senderId, clientMessageId])
+  /// The one query a thread has: the newest fifty of a pair.
+  @@index([pairKey, createdAt(sort: Desc)])
+  /// Unread counts, which are always asked per recipient.
+  @@index([recipientId, createdAt(sort: Desc)])
+}
+
+/// How far one person has read in one conversation.
+///
+/// A cursor rather than a `readAt` on every message: marking a thread read is
+/// then a single upsert instead of an UPDATE across every row in it, and the
+/// unread count is a COUNT with one predicate.
+///
+/// Deliberately not a foreign key on `otherUserId`. The row is worthless once
+/// that account is gone, but it is also harmless, and a cascade here would mean
+/// a second relation pair on `User` for a table nothing ever joins from.
+model ConversationRead {
+  userId      String
+  otherUserId String
+  lastReadAt  DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, otherUserId])
 }

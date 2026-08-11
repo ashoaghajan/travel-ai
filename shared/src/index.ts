@@ -9,6 +9,7 @@ export * from './api.types';
 export * from './currency.types';
 export * from './error-codes';
 export * from './lobby.types';
+export * from './messages.types';
 export * from './occupancy';
 export * from './planner.types';
 export * from './travel.types';
