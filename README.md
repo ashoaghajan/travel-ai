@@ -15,6 +15,9 @@ docker compose up -d
 cp server/.env.example server/.env
 # Put a JWT_SECRET in it. Generate one with:
 #   node -e "console.log(require('crypto').randomBytes(48).toString('base64url'))"
+# Every other key in that file is optional; each one names what is lost
+# without it. ABLY_API_KEY is the newest — without it the lobby still works,
+# it just stops updating until you refresh.
 npm run db:migrate
 
 # Two terminals, or two tabs:
@@ -890,6 +893,65 @@ Do not integrate real paid APIs in Stage 1.
 After backend integration, users should be able to log in from mobile and desktop and see the same saved trips.
 
 This is not possible with localStorage only.
+
+---
+
+### 7. The lobby — **built**
+
+One public room that every signed-in account shares — the first surface in this
+app that is not scoped to a single user. It is a panel docked beside the main
+content on desktop, a full-screen dialog on a phone, and a toggle in the page
+header carrying a count of what has been missed.
+
+```txt
+GET    /api/lobby/messages          the newest 50, oldest first
+POST   /api/lobby/messages          30 per minute, per account
+DELETE /api/lobby/messages/:id      your own only
+GET    /api/lobby/people            everyone who has posted
+GET    /api/lobby/token             an hour-long listening token
+```
+
+Nothing here is called `chat`. That word is already spoken for by the private
+transcript between one reader and the planner (`planner.types.ts`), and the two
+have opposite shapes: that is one conversation per account, read and written
+whole by its owner; this is one conversation shared by everybody, appended to by
+many writers and read as a tail. So `LobbyMessage` is a relational table rather
+than a JSON document, and its index leads with `createdAt` rather than `userId`
+— the only query it serves is the newest fifty across all rows, where a leading
+`userId` would make the index useless.
+
+**The client cannot publish.** Realtime is Ably, and the API key never leaves
+the server; the browser gets a token this server signs, pinned to one user id
+and one channel. That token grants `subscribe` and `presence` and deliberately
+**not** `publish`, so every message must go through `POST /api/lobby/messages`,
+where it is validated, throttled and written down before anyone sees it — which
+is what lets every subscriber trust what arrives without re-checking it. A test
+asserts that exact capability, because it is the line the whole design rests on.
+
+`ABLY_API_KEY` is optional and the degradation is deliberate: without it the
+lobby is still a working room that you refresh — messages are saved and history
+loads — and only live delivery is missing. `GET /api/lobby/token` answers
+`PROVIDER_NOT_CONFIGURED`, the connection resolves to `unavailable`, and the
+panel's subtitle reads "Not live — reopen to refresh" rather than looking
+broken or silently going stale.
+
+`clientMessageId` carries the retry story on both sides. A sleeping instance
+takes about a minute to answer and the reader will press the button again long
+before it does, so a send is an upsert on `(userId, clientMessageId)` and the
+second attempt returns the first message instead of duplicating it. In the
+browser, unconfirmed sends live in their own list: with no server id they cannot
+collide with anything that has one, so confirmed messages upsert by id and the
+POST response and the copy off the channel produce identical state in either
+order — which matters, because the channel usually wins.
+
+An author's email never reaches the room. Messages join `name` only, and
+`/lobby/people` returns the people who have posted rather than enumerating every
+registered account: "everyone signed in can see each other's names" is the
+bargain, but "every account that has ever existed is listable" is a larger one
+nobody made. `listPeople` already takes the ids of whoever is present and unions
+them in, so a newcomer who has not spoken yet can appear the moment they
+connect — the route passes none today, because nothing on the client joins the
+presence set.
 
 ---
 
