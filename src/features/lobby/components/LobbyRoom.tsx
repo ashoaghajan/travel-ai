@@ -17,7 +17,7 @@ import styles from './LobbyRoom.module.css';
  * part that does not care which one it is inside.
  */
 export function LobbyRoom({ onClose }: { onClose: () => void }) {
-  const { messages, pending, people, history, error, connection } = useLobby();
+  const { messages, pending, people, onlineIds, history, error, connection } = useLobby();
   const { user } = useCurrentUser();
   const endRef = useRef<HTMLDivElement>(null);
 
@@ -54,7 +54,7 @@ export function LobbyRoom({ onClose }: { onClose: () => void }) {
         </IconButton>
       </header>
 
-      <LobbyPeopleList people={people} selfId={user?.id} />
+      <LobbyPeopleList people={people} onlineIds={onlineIds} selfId={user?.id} />
 
       <div className={styles.scroller}>
         {history === 'loading' && messages.length === 0 ? (

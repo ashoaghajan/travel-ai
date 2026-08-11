@@ -303,6 +303,19 @@ describe('the panel’s own state', () => {
   });
 });
 
+/** A connection that never opens a socket, capturing what the store passes in. */
+function fakeChannel() {
+  const close = vi.fn(async () => {});
+  let captured: Parameters<typeof lobbyChannel.connect>[0] | null = null;
+
+  const spy = vi.spyOn(lobbyChannel, 'connect').mockImplementation(async (handlers) => {
+    captured = handlers;
+    return { close };
+  });
+
+  return { spy, close, handlers: () => captured! };
+}
+
 describe('who is in the room', () => {
   it('loads the roster', async () => {
     vi.spyOn(lobbyService, 'getPeople').mockResolvedValue([{ id: 'u_1', name: 'Ada' }]);
@@ -320,6 +333,19 @@ describe('who is in the room', () => {
     // A failed roster must not put an error banner over a working conversation.
     expect(state().people).toEqual([]);
     expect(state().error).toBeNull();
+  });
+
+  it('tells the server who it can see in the presence set', async () => {
+    const getPeople = vi.spyOn(lobbyService, 'getPeople').mockResolvedValue([]);
+    const channel = fakeChannel();
+    await lobbyStore.connect();
+
+    channel.handlers().onPresence(['u_1', 'u_2']);
+    await vi.waitFor(() => expect(getPeople).toHaveBeenCalled());
+
+    // Without them, someone who connects and says nothing has no name to show:
+    // the server's directory is everyone who has *posted*.
+    expect(getPeople).toHaveBeenLastCalledWith(['u_1', 'u_2']);
   });
 });
 
@@ -349,19 +375,6 @@ describe('reset', () => {
 });
 
 describe('listening', () => {
-  /** A connection that never opens a socket, capturing what the store passes in. */
-  function fakeChannel() {
-    const close = vi.fn();
-    let captured: Parameters<typeof lobbyChannel.connect>[0] | null = null;
-
-    const spy = vi.spyOn(lobbyChannel, 'connect').mockImplementation(async (handlers) => {
-      captured = handlers;
-      return { close };
-    });
-
-    return { spy, close, handlers: () => captured! };
-  }
-
   it('starts listening before it asks for the history', async () => {
     const channel = fakeChannel();
     const order: string[] = [];
@@ -460,5 +473,77 @@ describe('listening', () => {
     // browser must not inherit it.
     expect(channel.close).toHaveBeenCalled();
     expect(state().connection).toBe('idle');
+  });
+});
+
+describe('presence', () => {
+  it('holds whoever is here', async () => {
+    const channel = fakeChannel();
+    await lobbyStore.connect();
+
+    channel.handlers().onPresence(['u_1', 'u_2']);
+
+    expect(state().onlineIds).toEqual(['u_1', 'u_2']);
+  });
+
+  it('takes the roster whole rather than merging it', async () => {
+    const channel = fakeChannel();
+    await lobbyStore.connect();
+
+    channel.handlers().onPresence(['u_1', 'u_2']);
+    channel.handlers().onPresence(['u_1']);
+
+    // The channel rebuilds from `presence.get()` on every event, so the second
+    // call is the truth and not a delta to apply against the first.
+    expect(state().onlineIds).toEqual(['u_1']);
+  });
+
+  it('fetches names when somebody present has none', async () => {
+    const getPeople = vi.spyOn(lobbyService, 'getPeople').mockResolvedValue([]);
+    const channel = fakeChannel();
+    await lobbyStore.connect();
+
+    channel.handlers().onPresence(['u_stranger']);
+
+    await vi.waitFor(() => expect(getPeople).toHaveBeenCalledTimes(1));
+  });
+
+  it('does not fetch names again for people it already knows', async () => {
+    const getPeople = vi
+      .spyOn(lobbyService, 'getPeople')
+      .mockResolvedValue([{ id: 'u_1', name: 'Ada' }]);
+    await lobbyStore.refreshPeople();
+    const channel = fakeChannel();
+    await lobbyStore.connect();
+
+    getPeople.mockClear();
+    channel.handlers().onPresence(['u_1']);
+    channel.handlers().onPresence([]);
+
+    // Otherwise every tab anybody opens or closes puts a request behind it.
+    expect(getPeople).not.toHaveBeenCalled();
+  });
+
+  it('empties the room when the connection goes', async () => {
+    const channel = fakeChannel();
+    await lobbyStore.connect();
+    channel.handlers().onPresence(['u_1', 'u_2']);
+
+    lobbyStore.disconnect();
+
+    // The roster went with the socket; leaving it up would show a room full of
+    // people to somebody who is no longer in it.
+    expect(state().onlineIds).toEqual([]);
+  });
+
+  it('leaves the set when the session ends', async () => {
+    const channel = fakeChannel();
+    await lobbyStore.connect();
+    channel.handlers().onPresence(['u_1']);
+
+    lobbyStore.reset();
+
+    expect(channel.close).toHaveBeenCalled();
+    expect(state().onlineIds).toEqual([]);
   });
 });

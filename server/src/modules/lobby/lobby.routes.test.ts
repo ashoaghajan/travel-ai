@@ -239,6 +239,64 @@ describe('who is in the room', () => {
     const response = await api().get(PEOPLE).set('Authorization', auth).expect(200);
     expect(response.body).toHaveLength(1);
   });
+
+  /*
+   * Presence is Ably's and this server never joins it, so the ids come up from
+   * the client. Without them somebody who connects and says nothing would be
+   * invisible until they spoke, which is not what "who is here" means.
+   */
+  it('names somebody who is present but has never posted', async () => {
+    const { auth } = await withMessage();
+    const lurker = await signUp({ email: 'lurker@example.com' });
+
+    const response = await api()
+      .get(PEOPLE)
+      .query({ online: lurker.user.id })
+      .set('Authorization', auth)
+      .expect(200);
+
+    expect(response.body).toHaveLength(2);
+    expect(response.body.map((person: { id: string }) => person.id)).toContain(lurker.user.id);
+  });
+
+  it('still says nothing about them but their name', async () => {
+    const { auth } = await withMessage();
+    const lurker = await signUp({ email: 'lurker@example.com' });
+
+    const response = await api()
+      .get(PEOPLE)
+      .query({ online: lurker.user.id })
+      .set('Authorization', auth)
+      .expect(200);
+
+    expect(JSON.stringify(response.body)).not.toContain('@');
+  });
+
+  it('names someone once whether they are present or have posted', async () => {
+    const { user, auth } = await withMessage();
+
+    const response = await api()
+      .get(PEOPLE)
+      .query({ online: user.id })
+      .set('Authorization', auth)
+      .expect(200);
+
+    expect(response.body).toHaveLength(1);
+  });
+
+  it('ignores an online id that names nobody', async () => {
+    const { auth } = await withMessage();
+
+    // The ids are untrusted and do not need to be trusted: they only widen a
+    // lookup that already projects id and name.
+    const response = await api()
+      .get(PEOPLE)
+      .query({ online: 'u_nobody,,  ,u_also_nobody' })
+      .set('Authorization', auth)
+      .expect(200);
+
+    expect(response.body).toHaveLength(1);
+  });
 });
 
 describe('throttling', () => {

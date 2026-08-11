@@ -1,0 +1,27 @@
+/*
+ * The dot sits on the avatar rather than in it: `.avatar` is `overflow:
+ * hidden`, so anything placed inside is clipped at its edge. This wrapper is
+ * the positioning context for both.
+ */
+.wrap {
+  position: relative;
+  display: inline-flex;
+  flex: none;
+}
+
+.dot {
+  position: absolute;
+  right: -1px;
+  bottom: -1px;
+  width: 9px;
+  height: 9px;
+  border-radius: var(--radius-pill, 999px);
+  /* The ring separates the dot from whatever the avatar happens to be behind
+     it — without it a green dot on a green initial disappears. */
+  border: 2px solid var(--color-surface, #fff);
+  background-color: var(--color-text-muted, #667085);
+}
+
+.online {
+  background-color: var(--color-success, #16a34a);
+}

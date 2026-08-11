@@ -29,3 +29,20 @@
   line-height: 1;
   pointer-events: none;
 }
+
+/*
+ * "Somebody is here", shown only when there is no unread count to show. Same
+ * corner and same ring as the badge, so the two read as one mark that changes
+ * rather than as two things competing for the spot.
+ */
+.presence {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 10px;
+  height: 10px;
+  border-radius: var(--radius-pill);
+  border: 2px solid var(--color-background);
+  background-color: var(--color-success);
+  pointer-events: none;
+}

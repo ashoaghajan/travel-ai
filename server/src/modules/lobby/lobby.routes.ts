@@ -1,5 +1,5 @@
 import { ERROR_CODES } from '@ai-travel/shared';
-import { sendLobbyMessageSchema } from '@ai-travel/shared/schemas';
+import { lobbyPeopleQuerySchema, sendLobbyMessageSchema } from '@ai-travel/shared/schemas';
 import { Router } from 'express';
 import type { Request, Response } from 'express';
 import rateLimit, { ipKeyGenerator, MemoryStore } from 'express-rate-limit';
@@ -109,6 +109,16 @@ lobbyRouter.get('/lobby/token', requireAuth, async (request: Request, response: 
   response.json(await createTokenRequest(userIdOf(request)));
 });
 
-lobbyRouter.get('/lobby/people', requireAuth, async (_request: Request, response: Response) => {
-  response.json(await listPeople());
+/**
+ * Who is in the room: everyone who has posted, plus whoever the caller can
+ * see in the presence set.
+ *
+ * The ids come from the client because presence is Ably's and this server
+ * never joins it. Without them a person who connects and says nothing would
+ * be invisible until they spoke, which is not what "who is here" means.
+ */
+lobbyRouter.get('/lobby/people', requireAuth, async (request: Request, response: Response) => {
+  const { online } = lobbyPeopleQuerySchema.parse(request.query);
+
+  response.json(await listPeople(online));
 });

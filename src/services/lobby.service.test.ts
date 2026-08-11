@@ -54,6 +54,16 @@ describe('lobbyService', () => {
     const get = vi.spyOn(http, 'get').mockResolvedValue([{ id: 'u_1', name: 'Ada' }]);
 
     await expect(lobbyService.getPeople()).resolves.toEqual([{ id: 'u_1', name: 'Ada' }]);
-    expect(get).toHaveBeenCalledWith('/lobby/people');
+    // No `?online=` at all when nobody is present — an empty parameter would
+    // be a claim about the presence set rather than the absence of one.
+    expect(get).toHaveBeenCalledWith('/lobby/people', { query: undefined });
+  });
+
+  it('carries the presence set up with the request', async () => {
+    const get = vi.spyOn(http, 'get').mockResolvedValue([]);
+
+    await lobbyService.getPeople(['u_1', 'u_2']);
+
+    expect(get).toHaveBeenCalledWith('/lobby/people', { query: { online: 'u_1,u_2' } });
   });
 });

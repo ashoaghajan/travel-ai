@@ -21,10 +21,19 @@ export type LobbyChannelHandlers = {
   onMessage: (message: ApiLobbyMessage) => void;
   onDelete: (id: string) => void;
   onState: (state: LobbyConnectionState) => void;
+  /** The whole roster, rebuilt — never a delta. See `readPresence`. */
+  onPresence: (userIds: string[]) => void;
 };
 
 export type LobbyConnection = {
-  close: () => void;
+  /**
+   * Leaves the presence set, then closes the socket.
+   *
+   * Leaving first is the point: a close alone lets Ably time the member out
+   * minutes later, so a signed-out reader stays "online" to everyone else
+   * long after they have gone. See `lobbyStore.reset`.
+   */
+  close: () => Promise<void>;
 };
 
 /**
@@ -33,12 +42,21 @@ export type LobbyConnection = {
  */
 type RealtimeFactory = (options: unknown) => Promise<AblyRealtimeLike>;
 
+/** A member of the presence set, as much of one as this file reads. */
+export type AblyPresenceMember = { clientId?: string };
+
 /** Only the parts of the SDK this file uses. */
 type AblyRealtimeLike = {
   connection: { on: (listener: (change: { current: string }) => void) => void };
   channels: {
     get: (name: string) => {
       subscribe: (name: string, listener: (message: { data: unknown }) => void) => void;
+      presence: {
+        enter: (data?: unknown) => Promise<void>;
+        leave: (data?: unknown) => Promise<void>;
+        get: () => Promise<AblyPresenceMember[]>;
+        subscribe: (listener: () => void) => void;
+      };
     };
   };
   close: () => void;
@@ -110,7 +128,67 @@ export async function connect(handlers: LobbyChannelHandlers): Promise<LobbyConn
   channel.subscribe('message', (message) => handlers.onMessage(message.data as ApiLobbyMessage));
   channel.subscribe('delete', (message) => handlers.onDelete((message.data as { id: string }).id));
 
+  /*
+   * Presence, in the one order that is correct.
+   *
+   * Subscribe before entering, for the same reason the store backfills after
+   * subscribing: entering first can complete before the listener is attached,
+   * and the reader would then be missing from their own roster until somebody
+   * else's arrival happened to trigger a rebuild.
+   */
+  channel.presence.subscribe(() => void readPresence(channel.presence, handlers.onPresence));
+
+  /*
+   * Entered with no data at all, deliberately.
+   *
+   * The `presence` capability lets a client enter carrying anything it likes
+   * beside its correctly-pinned `clientId`, so a name taken from here would be
+   * whatever that client typed. Names come only from `GET /lobby/people`,
+   * joined server-side from `User.name`.
+   */
+  await channel.presence.enter().catch(() => {
+    // A room that cannot say who is here is still a room that works.
+  });
+
+  await readPresence(channel.presence, handlers.onPresence);
+
   return {
-    close: () => realtime.close(),
+    close: async () => {
+      // Best-effort: a failed leave still gets timed out by Ably, and there is
+      // nothing useful to do with the error on the way out of a session.
+      await channel.presence.leave().catch(() => {});
+      realtime.close();
+    },
   };
+}
+
+/**
+ * The roster, read whole.
+ *
+ * Rebuilt from `presence.get()` on **every** event rather than updated from
+ * the event itself, which is the rule that makes tabs work: closing one of
+ * three tabs fires `leave` while the person is still present in the other two,
+ * so applying that delta would show them offline while they are typing.
+ * `get()` reads the SDK's own local member map — no round trip.
+ *
+ * Deduped by `clientId`, which is the user's id: three tabs are three members
+ * and one person.
+ */
+async function readPresence(
+  presence: { get: () => Promise<AblyPresenceMember[]> },
+  onPresence: (userIds: string[]) => void,
+): Promise<void> {
+  try {
+    const members = await presence.get();
+
+    onPresence([
+      ...new Set(
+        members
+          .map((member) => member.clientId)
+          .filter((id): id is string => typeof id === 'string' && id.length > 0),
+      ),
+    ]);
+  } catch {
+    // Leave the last known roster up rather than emptying it on a hiccup.
+  }
 }

@@ -30,8 +30,17 @@ export const lobbyService = {
     await http.delete<void>(`/lobby/messages/${encodeURIComponent(id)}`);
   },
 
-  async getPeople(): Promise<ApiLobbyPerson[]> {
-    return http.get<ApiLobbyPerson[]>('/lobby/people');
+  /**
+   * The roster's names.
+   *
+   * `onlineIds` widens the directory to people who are present but have never
+   * posted — the server cannot know them, because presence is Ably's and no
+   * server ever joins it.
+   */
+  async getPeople(onlineIds: string[] = []): Promise<ApiLobbyPerson[]> {
+    return http.get<ApiLobbyPerson[]>('/lobby/people', {
+      query: onlineIds.length > 0 ? { online: onlineIds.join(',') } : undefined,
+    });
   },
 
   /**

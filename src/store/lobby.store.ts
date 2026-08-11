@@ -46,6 +46,13 @@ export type LobbyState = {
   /** Always rendered after `messages`. */
   pending: PendingMessage[];
   people: ApiLobbyPerson[];
+  /**
+   * Account ids currently in the presence set, this browser's included.
+   *
+   * Ids rather than people: presence carries no name — it deliberately carries
+   * nothing at all — so this says who is here and `people` says who they are.
+   */
+  onlineIds: string[];
   /** Counted from mount, and only while collapsed. See `open()`. */
   unread: number;
   isOpen: boolean;
@@ -62,6 +69,7 @@ function initialState(): LobbyState {
     messages: [],
     pending: [],
     people: [],
+    onlineIds: [],
     unread: 0,
     // Collapsed on a first visit: 340px is a lot to take from someone who has
     // not asked for it, and the unread badge is a better invitation than a
@@ -166,6 +174,7 @@ export const lobbyStore = {
         onMessage: (message) => accept(message, message.userId !== selfId),
         onDelete: (id) => setState({ messages: state.messages.filter((m) => m.id !== id) }),
         onState: (next) => setState({ connection: next }),
+        onPresence: (userIds) => arrive(userIds),
       })
       .then((opened) => {
         // Closed again before the socket finished opening.
@@ -187,9 +196,11 @@ export const lobbyStore = {
     connections = Math.max(0, connections - 1);
     if (connections > 0) return;
 
-    connection?.close();
+    void connection?.close();
     connection = null;
-    setState({ connection: 'idle' });
+    // The roster went with the socket. Leaving the last one on screen would
+    // show a room full of people to someone who is no longer in it.
+    setState({ connection: 'idle', onlineIds: [] });
   },
 
   /**
@@ -224,9 +235,16 @@ export const lobbyStore = {
     }
   },
 
+  /**
+   * Loads the names.
+   *
+   * The ids of whoever is present go up with the request: the server's
+   * directory is "everyone who has posted", and without them somebody who
+   * connected but has not spoken yet would have no name to show.
+   */
   async refreshPeople(): Promise<void> {
     try {
-      setState({ people: await lobbyService.getPeople() });
+      setState({ people: await lobbyService.getPeople(state.onlineIds) });
     } catch {
       // The roster is decoration next to the conversation; failing to load it
       // must not put an error over a room that is working.
@@ -335,8 +353,10 @@ export const lobbyStore = {
   reset(): void {
     // The connection carries this account's identity, so it must not outlive
     // the session — the next person to sign in on this browser would inherit
-    // a socket introduced as somebody else.
-    connection?.close();
+    // a socket introduced as somebody else. `close` leaves the presence set
+    // first, so the departing account stops showing as online now rather than
+    // whenever Ably times the member out.
+    void connection?.close();
     connection = null;
     connections = 0;
     selfId = null;
@@ -358,6 +378,27 @@ function accept(message: LobbyMessage, countsAsUnread: boolean): void {
     pending: state.pending.filter((entry) => entry.clientMessageId !== message.clientMessageId),
     unread: countsAsUnread && !state.isOpen ? state.unread + 1 : state.unread,
   });
+}
+
+/**
+ * Takes a rebuilt roster.
+ *
+ * Always the whole set, never a delta — see `readPresence` for why a `leave`
+ * must not be applied on its own.
+ *
+ * Fetches names again only when somebody present has none, which is the case
+ * that needs it: a person who connects and says nothing is in `onlineIds` and
+ * absent from `people`, because the server's directory is everyone who has
+ * *posted*. Refetching on every event instead would put a request behind every
+ * tab anybody opens or closes.
+ */
+function arrive(userIds: string[]): void {
+  const known = new Set(state.people.map((person) => person.id));
+  const stranger = userIds.some((id) => !known.has(id));
+
+  setState({ onlineIds: userIds });
+
+  if (stranger) void lobbyStore.refreshPeople();
 }
 
 /** The half of `send`/`retry` they have in common. */
