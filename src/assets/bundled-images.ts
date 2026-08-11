@@ -50,3 +50,75 @@ export function bundledImageId(src: unknown): string | undefined {
 export function bundledImageSrc(id: unknown): string | undefined {
   return typeof id === 'string' ? BUNDLED_IMAGES[id] : undefined;
 }
+
+/* ------------------------------------------------- reading a stored picture */
+
+/**
+ * The file name each id is known by, longest first.
+ *
+ * Longest first so the most specific stem wins: were there ever both `day-1`
+ * and `day-1-ubud`, matching the short one against `day-1-ubud.jpg` would
+ * quietly resolve the wrong photograph.
+ *
+ * A stem that two ids share is dropped rather than guessed at. Nothing
+ * collides today — the check exists so that adding `itinerary/city` beside
+ * `generic/city` later fails visibly here instead of silently swapping
+ * pictures.
+ */
+const STEMS: readonly { stem: string; id: string }[] = (() => {
+  const counts = new Map<string, number>();
+  const entries = Object.keys(BUNDLED_IMAGES).map((id) => {
+    const stem = id.slice(id.lastIndexOf('/') + 1);
+    counts.set(stem, (counts.get(stem) ?? 0) + 1);
+
+    return { stem, id };
+  });
+
+  return entries
+    .filter((entry) => counts.get(entry.stem) === 1)
+    .sort((a, b) => b.stem.length - a.stem.length);
+})();
+
+/**
+ * A stored image URL, translated into one this build can actually serve.
+ *
+ * The problem it exists for: what gets written to the database is whatever URL
+ * the build that wrote it resolved an asset import to — `/src/assets/generic/
+ * city.jpg` from a dev server, `/assets/city-Dtv_IcUv.jpg` from a production
+ * build, and a different hash again after any deploy that changes the file.
+ * One database serves both, so a trip made in dev shows broken thumbnails in
+ * the built app, and a trip made against one deploy breaks on the next.
+ *
+ * `tripFile.ts` already solves this for a trip crossing between installs, by
+ * carrying the id in the file. This is the same idea one layer down, for a
+ * trip that never moves: match a stored path back to its id by file name, and
+ * hand back whatever *this* build calls it.
+ *
+ * Matching on the name rather than the hash is deliberate. A Vite hash is
+ * base64url and can itself contain a hyphen — `nature-MTN-2l84.jpg` — so
+ * "everything before the last hyphen" would answer `nature-MTN`. Asking
+ * instead whether the file name is `<stem>.jpg` or begins `<stem>-` has no
+ * such trap.
+ *
+ * Anything unrecognised is returned untouched: an OpenTripMap photograph, a
+ * category fallback, an empty string. This only ever repairs its own.
+ */
+export function resolveBundledSrc(src: string | undefined): string | undefined {
+  if (!src) return src;
+
+  // Already this build's. The common case, and it costs one lookup.
+  if (bundledImageId(src) !== undefined) return src;
+
+  // Only ever our own paths — an absolute URL belongs to somebody else.
+  if (/^[a-z][a-z\d+.-]*:/i.test(src)) return src;
+
+  const path = src.split(/[?#]/)[0];
+  const file = path.slice(path.lastIndexOf('/') + 1);
+  if (!file) return src;
+
+  const match = STEMS.find(
+    ({ stem }) => file === `${stem}.jpg` || file.startsWith(`${stem}-`),
+  );
+
+  return match ? BUNDLED_IMAGES[match.id] : src;
+}

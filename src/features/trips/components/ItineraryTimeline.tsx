@@ -2,6 +2,7 @@ import { Button } from '../../../components/common/Button';
 import { IconButton } from '../../../components/common/IconButton';
 import { PlusIcon, TrashIcon } from '../../../components/common/icons';
 import { CATEGORY_IMAGES } from '../../../assets/category-images';
+import { resolveBundledSrc } from '../../../assets/bundled-images';
 import type { ItineraryActivity, ItineraryDay } from '../../../types/trip.types';
 import type { Booking } from '../../../types/booking.types';
 import type { BookingMoment } from '../../../utils/booking';
@@ -93,7 +94,9 @@ export function ItineraryTimeline({ days, bookings = [], editing }: ItineraryTim
               {day.image ? (
                 <img
                   className={styles.thumbnail}
-                  src={day.image}
+                  /* Re-resolved because the stored URL belongs to whichever
+                     build wrote it — see `resolveBundledSrc`. */
+                  src={resolveBundledSrc(day.image)}
                   alt=""
                   loading="lazy"
                   decoding="async"
@@ -193,7 +196,7 @@ function EditableActivity({
         {activity.sourceActivityId ? (
           <img
             className={styles.pickedThumb}
-            src={activity.image ?? CATEGORY_IMAGES[activity.category]}
+            src={resolveBundledSrc(activity.image) ?? CATEGORY_IMAGES[activity.category]}
             alt=""
             loading="lazy"
             decoding="async"

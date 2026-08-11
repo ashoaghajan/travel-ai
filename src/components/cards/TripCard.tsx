@@ -12,6 +12,7 @@ import { useMoney } from '../../store/currency.store';
 import type { Booking } from '../../types/booking.types';
 import type { Trip } from '../../types/trip.types';
 import styles from './TripCard.module.css';
+import { resolveBundledSrc } from '../../assets/bundled-images';
 
 export type TripCardProps = {
   trip: Trip;
@@ -53,7 +54,7 @@ export function TripCard({
   return (
     <Card as={as} padding="none" elevation="card" className={cx(styles.card, className)}>
       <div className={styles.media}>
-        <CardImage className={styles.image} src={trip.coverImage} />
+        <CardImage className={styles.image} src={resolveBundledSrc(trip.coverImage)} />
         <span className={styles.dayBadge}>{formatDayCount(trip.itinerary.length)}</span>
 
       </div>

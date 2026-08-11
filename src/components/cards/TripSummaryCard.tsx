@@ -16,6 +16,7 @@ import type { TripPricing } from '../../utils/booking';
 import type { Booking, BookingKind } from '../../types/booking.types';
 import type { Trip } from '../../types/trip.types';
 import styles from './TripSummaryCard.module.css';
+import { resolveBundledSrc } from '../../assets/bundled-images';
 
 export type TripSummaryCardProps = {
   trip: Trip;
@@ -100,7 +101,7 @@ export function TripSummaryCard({
   return (
     <Card padding="none" elevation="card" className={cx(styles.card, className)}>
       <div className={styles.media}>
-        <CardImage className={styles.image} src={trip.coverImage} />
+        <CardImage className={styles.image} src={resolveBundledSrc(trip.coverImage)} />
       </div>
 
       <div className={styles.body}>
