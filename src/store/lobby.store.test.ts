@@ -338,6 +338,7 @@ describe('who is in the room', () => {
   it('tells the server who it can see in the presence set', async () => {
     const getPeople = vi.spyOn(lobbyService, 'getPeople').mockResolvedValue([]);
     const channel = fakeChannel();
+    lobbyStore.open();
     await lobbyStore.connect();
 
     channel.handlers().onPresence(['u_1', 'u_2']);
@@ -498,9 +499,10 @@ describe('presence', () => {
     expect(state().onlineIds).toEqual(['u_1']);
   });
 
-  it('fetches names when somebody present has none', async () => {
+  it('fetches names when the room is open and the set changes', async () => {
     const getPeople = vi.spyOn(lobbyService, 'getPeople').mockResolvedValue([]);
     const channel = fakeChannel();
+    lobbyStore.open();
     await lobbyStore.connect();
 
     channel.handlers().onPresence(['u_stranger']);
@@ -508,20 +510,53 @@ describe('presence', () => {
     await vi.waitFor(() => expect(getPeople).toHaveBeenCalledTimes(1));
   });
 
-  it('does not fetch names again for people it already knows', async () => {
-    const getPeople = vi
-      .spyOn(lobbyService, 'getPeople')
-      .mockResolvedValue([{ id: 'u_1', name: 'Ada' }]);
-    await lobbyStore.refreshPeople();
+  /*
+   * The panel mounts on every page for every signed-in reader, and most of
+   * them never open it. `useLobbyRoom` is careful not to fetch the
+   * conversation until somebody asks to see it; the roster must be equally
+   * careful, or connecting puts a query behind every page load anyway.
+   */
+  it('fetches nothing while the panel is shut', async () => {
+    const getPeople = vi.spyOn(lobbyService, 'getPeople').mockResolvedValue([]);
     const channel = fakeChannel();
     await lobbyStore.connect();
 
-    getPeople.mockClear();
+    channel.handlers().onPresence(['u_stranger']);
+
+    expect(getPeople).not.toHaveBeenCalled();
+  });
+
+  it('does not fetch names again when the same people are still here', async () => {
+    const getPeople = vi
+      .spyOn(lobbyService, 'getPeople')
+      .mockResolvedValue([{ id: 'u_1', name: 'Ada' }]);
+    const channel = fakeChannel();
+    lobbyStore.open();
+    await lobbyStore.connect();
     channel.handlers().onPresence(['u_1']);
+    await vi.waitFor(() => expect(getPeople).toHaveBeenCalled());
+
+    getPeople.mockClear();
+    // A second tab from the same person is not a change to the set.
+    channel.handlers().onPresence(['u_1']);
+
+    expect(getPeople).not.toHaveBeenCalled();
+  });
+
+  it('fetches again when somebody leaves, not only when they arrive', async () => {
+    const getPeople = vi.spyOn(lobbyService, 'getPeople').mockResolvedValue([]);
+    const channel = fakeChannel();
+    lobbyStore.open();
+    await lobbyStore.connect();
+    channel.handlers().onPresence(['u_1']);
+    await vi.waitFor(() => expect(getPeople).toHaveBeenCalled());
+
+    getPeople.mockClear();
     channel.handlers().onPresence([]);
 
-    // Otherwise every tab anybody opens or closes puts a request behind it.
-    expect(getPeople).not.toHaveBeenCalled();
+    // Somebody who was only ever in the room by being in it must stop being
+    // listed when they go — the directory is who has posted plus who is here.
+    await vi.waitFor(() => expect(getPeople).toHaveBeenCalledTimes(1));
   });
 
   it('empties the room when the connection goes', async () => {

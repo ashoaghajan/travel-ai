@@ -386,19 +386,29 @@ function accept(message: LobbyMessage, countsAsUnread: boolean): void {
  * Always the whole set, never a delta — see `readPresence` for why a `leave`
  * must not be applied on its own.
  *
- * Fetches names again only when somebody present has none, which is the case
- * that needs it: a person who connects and says nothing is in `onlineIds` and
- * absent from `people`, because the server's directory is everyone who has
- * *posted*. Refetching on every event instead would put a request behind every
- * tab anybody opens or closes.
+ * Names are fetched again when the set actually changes, and only while
+ * somebody is looking. Both halves matter:
+ *
+ * - **Only while open.** The panel mounts on every page for every signed-in
+ *   reader and most never open it. `useLobbyRoom` is careful not to fetch the
+ *   conversation until asked; fetching the roster on connect would put a query
+ *   behind every page load regardless, which is the cost that care was buying.
+ * - **On departures too, not just arrivals.** The directory is who has posted
+ *   *plus who is here*, so somebody who was only ever in it by being in it has
+ *   to stop being listed when they go.
+ *
+ * Comparing the sets rather than refetching per event is what keeps a second
+ * tab from the same person — which fires an event and changes nothing — from
+ * costing a request.
  */
 function arrive(userIds: string[]): void {
-  const known = new Set(state.people.map((person) => person.id));
-  const stranger = userIds.some((id) => !known.has(id));
+  const changed =
+    userIds.length !== state.onlineIds.length ||
+    userIds.some((id) => !state.onlineIds.includes(id));
 
   setState({ onlineIds: userIds });
 
-  if (stranger) void lobbyStore.refreshPeople();
+  if (changed && state.isOpen) void lobbyStore.refreshPeople();
 }
 
 /** The half of `send`/`retry` they have in common. */
