@@ -383,3 +383,14 @@ export function ArrowRightIcon(props: IconProps) {
     </Icon>
   );
 }
+
+/** The emoji picker's trigger. */
+export function SmileyIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <circle cx="12" cy="12" r="8.4" />
+      <path d="M9.2 10.4h.01M14.8 10.4h.01" />
+      <path d="M8.8 14.2a4 4 0 0 0 6.4 0" />
+    </Icon>
+  );
+}

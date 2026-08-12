@@ -230,6 +230,63 @@ describe('MessagesPanel', () => {
     expect(await screen.findByText(/Only the two of you can read it/)).toBeInTheDocument();
   });
 
+  it('gives a run of messages one timestamp, under a single day marker', async () => {
+    const now = new Date();
+    const minutesAgo = (n: number) => new Date(now.getTime() - n * 60_000).toISOString();
+
+    vi.spyOn(messagesService, 'getThread').mockResolvedValue([
+      message({ id: 'dm_1', createdAt: minutesAgo(3), body: 'one' }),
+      message({ id: 'dm_2', createdAt: minutesAgo(2), body: 'two' }),
+      message({ id: 'dm_3', createdAt: minutesAgo(1), body: 'three' }),
+    ]);
+
+    const user = userEvent.setup();
+    await openConversationWith(user);
+    await screen.findByText('three');
+
+    // Three messages, one clock. Stamping each of them is what made this read
+    // as a column of islands rather than as somebody talking.
+    const list = await screen.findByRole('log');
+    expect(within(list).getAllByText(/^\d{1,2}:\d{2}/)).toHaveLength(1);
+    expect(within(list).getByText('Today')).toBeInTheDocument();
+  });
+
+  it('announces arriving messages to a screen reader', async () => {
+    const user = userEvent.setup();
+    await openConversationWith(user);
+
+    // A chat that updates in silence is the case `role="log"` exists for.
+    const list = await screen.findByRole('log');
+    expect(list).toHaveAttribute('aria-live', 'polite');
+  });
+
+  it('puts an emoji where the caret is', async () => {
+    const user = userEvent.setup();
+    await openConversationWith(user);
+
+    const field = await screen.findByLabelText('Write a message');
+    await user.type(field, 'see you');
+    await user.click(screen.getByRole('button', { name: 'Add an emoji' }));
+    await user.click(screen.getByRole('button', { name: 'celebrate' }));
+
+    expect(field).toHaveValue('see you🎉');
+  });
+
+  it('closes the emoji picker without closing the panel', async () => {
+    const user = userEvent.setup();
+    await openConversationWith(user);
+
+    await user.click(screen.getByRole('button', { name: 'Add an emoji' }));
+    expect(screen.getByRole('button', { name: 'celebrate' })).toBeInTheDocument();
+
+    await user.keyboard('{Escape}');
+
+    // Escape belongs to the picker while it is open — on a phone the panel is
+    // a modal dialog, and letting it through would shut the conversation.
+    expect(screen.queryByRole('button', { name: 'celebrate' })).not.toBeInTheDocument();
+    expect(messagesStore.getSnapshot().isOpen).toBe(true);
+  });
+
   it('searches for somebody by name', async () => {
     const user = userEvent.setup();
     render(<MessagesPanel />);

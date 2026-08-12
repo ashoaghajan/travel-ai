@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { IconButton } from '../../../components/common/IconButton';
 import { TrashIcon } from '../../../components/common/icons';
 import { cx } from '../../../utils/cx';
+import { isEmojiOnly } from '../message.filters';
 import styles from './MessageItem.module.css';
 
 /**
@@ -51,6 +52,16 @@ export type MessageItemProps = {
   /** ISO timestamp, or absent while the message is still on its way. */
   createdAt?: string;
   isOwn: boolean;
+  /** First of a run — it gets the space above it, the rest of the run does not. */
+  startsRun?: boolean;
+  /**
+   * Whether this message shows its time.
+   *
+   * Only the last of a run does. Three messages a minute apart do not each need
+   * a clock under them, and stamping all three is what makes a thread read as a
+   * column of islands rather than as somebody talking.
+   */
+  showTime?: boolean;
   /** Set while the server has not confirmed it yet. */
   pending?: boolean;
   failed?: boolean;
@@ -89,6 +100,8 @@ export function MessageItem({
   body,
   createdAt,
   isOwn,
+  startsRun = true,
+  showTime = true,
   pending = false,
   failed = false,
   onDelete,
@@ -97,10 +110,31 @@ export function MessageItem({
 }: MessageItemProps) {
   const stage = useSendingStage(pending);
 
+  /*
+   * A message that is nothing but a gesture is drawn as one: no bubble, four
+   * times the size. Every messenger does this, and it is the one piece of
+   * decoration that carries actual meaning — 🎉 at body-text size reads as an
+   * afterthought rather than as the whole message.
+   */
+  const jumbo = !failed && isEmojiOnly(body);
+
   return (
-    <li className={cx(styles.item, isOwn ? styles.own : styles.other)}>
+    <li
+      className={cx(
+        styles.item,
+        isOwn ? styles.own : styles.other,
+        startsRun && styles.startsRun,
+      )}
+    >
       <div className={styles.row}>
-        <p className={cx(styles.bubble, pending && styles.pending, failed && styles.failed)}>
+        <p
+          className={cx(
+            styles.bubble,
+            jumbo && styles.jumbo,
+            pending && styles.pending,
+            failed && styles.failed,
+          )}
+        >
           {body}
         </p>
 
@@ -126,7 +160,7 @@ export function MessageItem({
             Discard
           </button>
         </p>
-      ) : (
+      ) : pending || (showTime && createdAt) ? (
         <span className={cx(styles.meta, stage === 'slow' && styles.slow)} aria-live="polite">
           {/*
             Silent for the first few seconds. A send that completes normally
@@ -142,7 +176,7 @@ export function MessageItem({
               ? timeOf(createdAt)
               : null}
         </span>
-      )}
+      ) : null}
     </li>
   );
 }

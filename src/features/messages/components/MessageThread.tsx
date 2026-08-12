@@ -4,6 +4,7 @@ import { Skeleton } from '../../../components/common/Skeleton';
 import { ArrowLeftIcon, CloseIcon } from '../../../components/common/icons';
 import { useCurrentUser } from '../../../hooks/useCurrentUser';
 import { messagesStore, threadFor, useMessages } from '../../../store/messages.store';
+import { groupThread } from '../message.filters';
 import { MessageComposer } from './MessageComposer';
 import { MessageItem } from './MessageItem';
 import styles from './MessageThread.module.css';
@@ -137,33 +138,51 @@ export function MessageThread({ userId, name, isOnline, onBack, onClose }: Messa
           </p>
         ) : null}
 
-        {/* Named for the person rather than "Messages": the dialog around it
-            is already called that, and two things with one name is a list a
-            screen-reader user cannot tell apart from the panel holding it. */}
-        <ul className={styles.messages} aria-label={`Conversation with ${name}`}>
-          {messages.map((message) => (
-            <MessageItem
-              key={message.id}
-              body={message.body}
-              createdAt={message.createdAt}
-              isOwn={message.senderId === user?.id}
-              onDelete={() => void messagesStore.remove(userId, message.id)}
-            />
-          ))}
+        {/*
+          Named for the person rather than "Messages": the dialog around it is
+          already called that, and two things with one name is a list a
+          screen-reader user cannot tell apart from the panel holding it.
 
-          {/* Always after the confirmed ones: they are the newest thing said,
-              and they have no server time to sort by. */}
-          {pending.map((entry) => (
-            <MessageItem
-              key={entry.clientMessageId}
-              body={entry.body}
-              isOwn
-              pending={entry.status === 'pending'}
-              failed={entry.status === 'failed'}
-              onRetry={() => void messagesStore.retry(userId, entry.clientMessageId)}
-              onDiscard={() => messagesStore.discard(userId, entry.clientMessageId)}
-            />
-          ))}
+          `role="log"` is what makes an arriving message announce itself. A
+          chat is the case that role exists for, and without it the panel
+          updates in complete silence for anybody not looking at it.
+        */}
+        <ul
+          className={styles.messages}
+          aria-label={`Conversation with ${name}`}
+          role="log"
+          aria-live="polite"
+          aria-relevant="additions"
+        >
+          {groupThread(messages, pending).map((row) =>
+            row.kind === 'day' ? (
+              <li key={row.key} className={styles.day}>
+                <span>{row.label}</span>
+              </li>
+            ) : row.kind === 'message' ? (
+              <MessageItem
+                key={row.key}
+                body={row.message.body}
+                createdAt={row.message.createdAt}
+                isOwn={row.message.senderId === user?.id}
+                startsRun={row.startsRun}
+                showTime={row.endsRun}
+                onDelete={() => void messagesStore.remove(userId, row.message.id)}
+              />
+            ) : (
+              <MessageItem
+                key={row.key}
+                body={row.entry.body}
+                isOwn
+                startsRun={row.startsRun}
+                showTime
+                pending={row.entry.status === 'pending'}
+                failed={row.entry.status === 'failed'}
+                onRetry={() => void messagesStore.retry(userId, row.entry.clientMessageId)}
+                onDiscard={() => messagesStore.discard(userId, row.entry.clientMessageId)}
+              />
+            ),
+          )}
         </ul>
 
         <div ref={endRef} />

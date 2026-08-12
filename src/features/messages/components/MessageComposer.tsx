@@ -1,8 +1,10 @@
-import { useId, useState } from 'react';
+import { useId, useRef, useState } from 'react';
 import { MESSAGE_MAX_LENGTH } from '@ai-travel/shared';
 import { IconButton } from '../../../components/common/IconButton';
 import { ArrowUpIcon } from '../../../components/common/icons';
 import { messagesService } from '../../../services/messages.service';
+import { insertAt } from '../message.filters';
+import { EmojiPicker } from './EmojiPicker';
 import styles from './MessageComposer.module.css';
 
 /** Counts down only once it is close enough to matter. */
@@ -30,6 +32,7 @@ export type MessageComposerProps = {
 export function MessageComposer({ onSend, disabled = false }: MessageComposerProps) {
   const fieldId = useId();
   const [value, setValue] = useState('');
+  const fieldRef = useRef<HTMLTextAreaElement>(null);
 
   const trimmed = value.trim();
   const remaining = MESSAGE_MAX_LENGTH - value.length;
@@ -41,6 +44,29 @@ export function MessageComposer({ onSend, disabled = false }: MessageComposerPro
 
     onSend(trimmed);
     setValue('');
+  }
+
+  /**
+   * Drops an emoji where the caret is, and puts the caret after it.
+   *
+   * Appending would be wrong the moment somebody goes back to add a wave to
+   * the front of what they have written — and a caret left at the start after
+   * an insert is the same bug seen from the other side, so it is moved by hand
+   * once React has painted the new value.
+   */
+  function addEmoji(emoji: string): void {
+    const field = fieldRef.current;
+    const start = field?.selectionStart ?? value.length;
+    const end = field?.selectionEnd ?? start;
+
+    setValue(insertAt(value, emoji, start, end));
+
+    requestAnimationFrame(() => {
+      const caret = Math.min(start, value.length) + emoji.length;
+
+      field?.focus();
+      field?.setSelectionRange(caret, caret);
+    });
   }
 
   return (
@@ -55,8 +81,11 @@ export function MessageComposer({ onSend, disabled = false }: MessageComposerPro
         Write a message
       </label>
 
+      <EmojiPicker onPick={addEmoji} disabled={disabled} />
+
       <textarea
         id={fieldId}
+        ref={fieldRef}
         className={styles.field}
         value={value}
         rows={1}

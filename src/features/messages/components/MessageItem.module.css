@@ -1,8 +1,29 @@
+/*
+ * The width cap lives here, not on the bubble.
+ *
+ * A percentage resolves against the containing block, and the row inside this
+ * is shrink-to-fit — so `max-width: 80%` on the bubble asked for a percentage
+ * of a width that depended on the bubble, which Chrome resolves by collapsing
+ * to min-content. With `overflow-wrap: anywhere` that is *one character*, and
+ * "hi" rendered as two lines of one letter. This element is a flex child of
+ * the list, whose width is definite, so the percentage means something here.
+ */
 .item {
   display: flex;
   flex-direction: column;
   gap: 2px;
-  max-width: 100%;
+  max-width: min(80%, 34rem);
+}
+
+/*
+ * The space between one person's turn and the next.
+ *
+ * Only the first message of a run gets it; the rest sit 2px apart, which is
+ * what makes three quick messages read as one turn rather than as three
+ * separate events. The list itself has no gap for exactly this reason.
+ */
+.startsRun:not(:first-child) {
+  margin-top: var(--space-md);
 }
 
 .own {
@@ -26,9 +47,12 @@
 
 .bubble {
   padding: var(--space-sm) var(--space-md);
-  /* Not the planner's 640px: this column is ~340px wide, and a bubble that
-     never wraps reads as a wall rather than a conversation. */
-  max-width: 15rem;
+  /*
+   * No cap of its own — `.item` above carries it. What that cap replaced was a
+   * flat 15rem, sized for the public room's 340px column: right for nothing
+   * now that the pane is ~390px on a desktop and the whole screen on a phone,
+   * where it left two thirds of the width empty.
+   */
   font-size: var(--font-sm);
   line-height: var(--line-height-base);
   border-radius: var(--radius-lg);
@@ -48,6 +72,26 @@
   background-color: var(--color-primary);
   color: var(--color-text-light);
   border-bottom-right-radius: var(--radius-sm);
+}
+
+/*
+ * A message that is only emoji: the gesture, not a bubble around it.
+ *
+ * Padding goes with the background — a transparent box with 12px of padding is
+ * a hole in the run — and the line-height is tightened because emoji carry a
+ * lot of leading of their own at this size.
+ */
+.jumbo {
+  padding: 2px 0;
+  background: none;
+  font-size: 2.25rem;
+  line-height: 1.15;
+}
+
+.own .jumbo,
+.other .jumbo {
+  background: none;
+  color: inherit;
 }
 
 /* Unconfirmed: visibly provisional, without moving anything when it lands. */
