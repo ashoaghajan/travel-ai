@@ -260,6 +260,7 @@ export const messagesStore = {
     connecting = messagesChannel
       .connect(userId, {
         onMessage: (message) => accept(message),
+        onShare: (message) => applyShare(message),
         onDelete: (event) => withdraw(event),
         onState: (next) => setState({ connection: next }),
         onPresence: (userIds) => arrive(userIds),
@@ -392,6 +393,34 @@ export const messagesStore = {
       // A cursor that failed to move is a badge that comes back, which is a
       // great deal better than an error over a conversation that is working.
     }
+  },
+
+  /**
+   * Takes a card that has changed — accepted, or withdrawn.
+   *
+   * Public so the reader's own accept can patch their screen without waiting
+   * for the round trip to come back over the channel, and so a browser with no
+   * realtime at all still updates the card it just acted on.
+   */
+  applyShare(message: DirectMessage): void {
+    applyShare(message);
+  },
+
+  /**
+   * Marks a card taken up, here and now.
+   *
+   * The authoritative version arrives over the channel a moment later and
+   * upserts over this — but the card has to change under the finger that
+   * pressed it, and a browser whose realtime is down still has to show what it
+   * just did.
+   */
+  noteShareAccepted(shareId: string): void {
+    patchShare(shareId, { acceptedAt: new Date().toISOString() });
+  },
+
+  /** The same, for an offer the sender has withdrawn. */
+  noteShareRevoked(shareId: string): void {
+    patchShare(shareId, { revokedAt: new Date().toISOString() });
   },
 
   /**
@@ -598,6 +627,51 @@ function note(message: DirectMessage, userId: string): void {
   // Read as it arrives, so the badge does not come back on the next reload for
   // messages the reader watched land.
   if (fromThem && watching) void messagesService.markRead(userId).catch(() => {});
+}
+
+/**
+ * Replaces a message whose card has changed.
+ *
+ * Deliberately not `accept`: nothing new was said. Bumping the unread count or
+ * moving the conversation's preview because a card went from "Waiting" to
+ * "Added" would tell the reader there is something to read when there is not.
+ * The message upserts by id, so the card is the only thing that moves.
+ */
+function applyShare(message: DirectMessage): void {
+  const userId = otherEndOf(message);
+  const thread = state.threads[userId];
+
+  // Nothing held for this person yet: the card will arrive with the thread
+  // when it is opened, already in its current state.
+  if (!thread) return;
+
+  patchThread(userId, { messages: upsert(thread.messages, message) });
+}
+
+/**
+ * Changes one card wherever it is being held.
+ *
+ * Searched for rather than addressed, because a share knows which thread it is
+ * in and the caller does not: the card was pressed, not the conversation.
+ */
+function patchShare(shareId: string, patch: { acceptedAt?: string; revokedAt?: string }): void {
+  const threads = { ...state.threads };
+  let changed = false;
+
+  for (const [userId, thread] of Object.entries(state.threads)) {
+    const messages = thread.messages.map((message) =>
+      message.share?.id === shareId
+        ? { ...message, share: { ...message.share, ...patch } }
+        : message,
+    );
+
+    if (messages.some((message, index) => message !== thread.messages[index])) {
+      threads[userId] = { ...thread, messages };
+      changed = true;
+    }
+  }
+
+  if (changed) setState({ threads });
 }
 
 /**

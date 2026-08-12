@@ -11,7 +11,8 @@ import { CurrencySelect } from '../../../components/common/CurrencySelect';
 import { tabId, tabPanelId } from '../../../components/common/tabs.helpers';
 import { TripRouteMap } from '../components/TripRouteMap';
 import { IconButton } from '../../../components/common/IconButton';
-import { DownloadIcon, SuitcaseIcon, TrashIcon } from '../../../components/common/icons';
+import { ShareTripDialog } from '../components/ShareTripDialog';
+import { DownloadIcon, ShareIcon, SuitcaseIcon, TrashIcon } from '../../../components/common/icons';
 import type { Trip } from '../../../types/trip.types';
 import { formatDateRange } from '../../../utils/date';
 import {
@@ -109,6 +110,7 @@ export function TripDetailsPage() {
 function TripDetailsView({ trip }: { trip: Trip }) {
   const { deleteTrip, isDeleting, error: deleteError } = useDeleteTrip();
   const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
+  const [isSharing, setIsSharing] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [isEditingDetails, setIsEditingDetails] = useState(false);
   const [pickerDayId, setPickerDayId] = useState<string | null>(null);
@@ -237,6 +239,17 @@ function TripDetailsView({ trip }: { trip: Trip }) {
                   holds on a phone, and `.actions` now wraps rather than
                   overflowing if a fifth control ever arrives.
                 */}
+                {/*
+                  Beside Export, because the two are the same act with
+                  different destinations: one writes the trip to a file, the
+                  other hands it to somebody in the app.
+                */}
+                <IconButton
+                  label={`Share ${trip.title} with somebody`}
+                  onClick={() => setIsSharing(true)}
+                >
+                  <ShareIcon size={20} />
+                </IconButton>
                 <IconButton
                   label={`Export ${trip.title} as a file`}
                   onClick={() => exportTrip(trip)}
@@ -269,7 +282,9 @@ function TripDetailsView({ trip }: { trip: Trip }) {
           </p>
         ) : null}
 
-        {isConfirmingDelete ? (
+        {isSharing ? <ShareTripDialog trip={trip} onClose={() => setIsSharing(false)} /> : null}
+
+      {isConfirmingDelete ? (
           <Card padding="lg" elevation="soft" className={styles.confirm}>
             <p className={styles.confirmText}>Delete this trip? This cannot be undone.</p>
             <div className={styles.confirmActions}>

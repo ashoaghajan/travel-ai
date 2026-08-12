@@ -26,6 +26,11 @@
   margin-top: var(--space-md);
 }
 
+/* A shared trip is the message, not an aside inside one. */
+.wide {
+  max-width: min(100%, 34rem);
+}
+
 .own {
   align-items: flex-end;
 }
@@ -39,6 +44,11 @@
   align-items: center;
   gap: var(--space-xs);
   max-width: 100%;
+}
+
+/* The card fills the row it is in; the delete button keeps its place beside. */
+.wide .row {
+  width: 100%;
 }
 
 .own .row {

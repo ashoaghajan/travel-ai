@@ -22,6 +22,14 @@ export type ApiTripShare = {
   dayCount: number;
   /** When it was taken up, and null while it is still an offer. */
   acceptedAt: string | null;
+  /**
+   * The trip it became, in the recipient's account.
+   *
+   * Sent to both ends, and useful to only one: the recipient's card links to
+   * it. An id is not a capability here — trips are scoped to their owner, so
+   * the sender holding this string can do nothing with it.
+   */
+  acceptedTripId: string | null;
   /** Withdrawn by the sender before anyone took it up. */
   revokedAt: string | null;
 };

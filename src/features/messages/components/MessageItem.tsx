@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import type { ReactNode } from 'react';
 import { IconButton } from '../../../components/common/IconButton';
 import { TrashIcon } from '../../../components/common/icons';
 import { cx } from '../../../utils/cx';
@@ -68,6 +69,14 @@ export type MessageItemProps = {
   onDelete?: () => void;
   onRetry?: () => void;
   onDiscard?: () => void;
+  /**
+   * Rendered instead of the bubble — a shared trip, today.
+   *
+   * The message keeps its `body` regardless, because that is what the
+   * conversation list previews and what stands in wherever a card cannot go.
+   * What changes here is only what this row draws.
+   */
+  children?: ReactNode;
 };
 
 /** "14:32" — the room is read as it happens, so the day is noise. */
@@ -107,6 +116,7 @@ export function MessageItem({
   onDelete,
   onRetry,
   onDiscard,
+  children,
 }: MessageItemProps) {
   const stage = useSendingStage(pending);
 
@@ -124,19 +134,25 @@ export function MessageItem({
         styles.item,
         isOwn ? styles.own : styles.other,
         startsRun && styles.startsRun,
+        // A card is the message rather than a remark within it, so it is
+        // allowed the width a bubble is deliberately denied. `Boolean` because
+        // `cx` takes strings and falsehoods, and a `ReactNode` is neither.
+        Boolean(children) && styles.wide,
       )}
     >
       <div className={styles.row}>
-        <p
-          className={cx(
-            styles.bubble,
-            jumbo && styles.jumbo,
-            pending && styles.pending,
-            failed && styles.failed,
-          )}
-        >
-          {body}
-        </p>
+        {children ?? (
+          <p
+            className={cx(
+              styles.bubble,
+              jumbo && styles.jumbo,
+              pending && styles.pending,
+              failed && styles.failed,
+            )}
+          >
+            {body}
+          </p>
+        )}
 
         {isOwn && onDelete && !pending && !failed ? (
           <IconButton

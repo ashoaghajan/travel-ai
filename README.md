@@ -1017,6 +1017,57 @@ precisely so that stays possible.
 
 ---
 
+### 8. Sharing a trip through a conversation — **built**
+
+A trip can be handed to somebody you can message. It arrives in the thread as a
+card, opens as a read-only itinerary, and becomes their own copy only if they
+accept it.
+
+```txt
+POST   /api/trips/:id/share   { toUserId, trip }  → the message carrying it
+GET    /api/shares/:id                             → the snapshot, either party only
+POST   /api/shares/:id/accept { trip }             → the new trip; idempotent
+DELETE /api/shares/:id                             → withdraw, sender only, before acceptance
+```
+
+**The snapshot is an `ExportedTrip`** — byte for byte the document `Export`
+already writes to a file. The format, its validation and the code that turns it
+back into a trip all existed before this feature did, so nothing here is a
+second answer to "what is a trip when it moves": new ids, notes travel,
+bookings do not.
+
+**The browser builds that snapshot, not the server**, and it has to. A bundled
+photograph's URL is a content hash (`/assets/city-9f2a1b.jpg`) that differs
+between one build and the next, so the URL alone would point the recipient at a
+file their copy of the app has never served. `bundledImageId` turns it back into
+`city`, and that map lives in the client bundle. The server's job is to refuse
+anything not shaped like a trip, which is `share.schemas.ts`.
+
+**A share is a message.** It lands in the thread on the channel that already
+exists — no second inbox, no new realtime work — and the row is written by one
+nested create alongside the message, because half of that pair existing is the
+one state this must never reach. The message still carries a body ("Shared a
+trip: Berlin in Early Autumn"), which is what the conversation list previews and
+what a screen reader reads.
+
+**Offer, never convert.** Nothing enters the recipient's account until they
+accept, which is the same principle that keeps an itinerary activity a guess and
+a booking a fact. Accepting is idempotent through a `draftId` derived from the
+share, so a double tap on a sleeping instance cannot leave two copies — the
+protection `clientMessageId` gives a send, for the same reason.
+
+**A snapshot outlives its source.** `TripShare.tripId` is nullable and nulls on
+delete, so an offer already on somebody's screen still opens after the sender has
+deleted the trip it came from. Editing the original afterwards does not rewrite
+what was handed over, in either direction.
+
+**Withdrawing works until it does not.** The sender can take back an offer nobody
+has taken up; once somebody has added the trip it is theirs, and reaching into
+another account to delete a trip is not what revoke means. The card says which of
+those happened rather than disappearing.
+
+---
+
 ## Backend Preparation Rule
 
 Even in Stage 1, frontend services should be written as if they will later call APIs.

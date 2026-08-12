@@ -1039,6 +1039,32 @@ every signed-in screen.
 
 ---
 
+## Surface 10: A shared trip — **built**
+
+Not a screen: a card inside a conversation, and a read-only dialog behind it.
+
+- **A card, not a bubble.** A bubble is something somebody said; this is
+  something they are handing over, so it is surface-coloured, bordered, and
+  takes the full width of the pane rather than the 80% a bubble is held to.
+- **Four states, and each says something different at each end.** Offered
+  (Preview · Add to my trips / Withdraw), accepted ("Added to your trips" with a
+  link, or "Added to their trips" without one — an id into somebody else's
+  account is not a place to send anybody), and withdrawn, which greys the card
+  and explains itself rather than vanishing. A message disappearing off a screen
+  is worse than one that says what happened.
+- **Preview before deciding.** Accepting without it is a blind command: a card
+  says a title and five days, and a person is being asked to put somebody else's
+  itinerary in their account on that basis. The dialog is read-only in the
+  strongest sense — no edit affordances, and no bookings, which never travel.
+- **The disclosure is said once, where the decision is.** In the share dialog
+  before the first send, and in the preview before accepting. A copy is
+  permanent once taken up.
+- **Sharing lives on the trip, beside Export.** The two are the same act with
+  different destinations: one writes the trip to a file, the other hands it to
+  somebody in the app.
+
+---
+
 # 12. Short Instruction For Coding Agent
 
 ```txt

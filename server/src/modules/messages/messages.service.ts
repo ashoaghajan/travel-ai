@@ -54,6 +54,7 @@ const WITH_SENDER = {
       endDate: true,
       dayCount: true,
       acceptedAt: true,
+      acceptedTripId: true,
       revokedAt: true,
     },
   },
@@ -75,6 +76,7 @@ type MessageRow = {
     endDate: string;
     dayCount: number;
     acceptedAt: Date | null;
+    acceptedTripId: string | null;
     revokedAt: Date | null;
   } | null;
 };

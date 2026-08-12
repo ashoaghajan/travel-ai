@@ -5,8 +5,11 @@ import { ArrowLeftIcon, CloseIcon } from '../../../components/common/icons';
 import { useCurrentUser } from '../../../hooks/useCurrentUser';
 import { messagesStore, threadFor, useMessages } from '../../../store/messages.store';
 import { groupThread } from '../message.filters';
+import { useSharedTrip } from '../useSharedTrip';
 import { MessageComposer } from './MessageComposer';
 import { MessageItem } from './MessageItem';
+import { SharedTripCard } from './SharedTripCard';
+import { SharedTripPreview } from './SharedTripPreview';
 import styles from './MessageThread.module.css';
 
 /** How far from the end still counts as following the conversation. */
@@ -45,6 +48,7 @@ export function MessageThread({ userId, name, isOnline, onBack, onClose }: Messa
    */
   const isAtBottom = useRef(true);
   const [hasMissed, setHasMissed] = useState(false);
+  const shared = useSharedTrip();
 
   const goToBottom = useCallback((smooth = true) => {
     const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -168,7 +172,23 @@ export function MessageThread({ userId, name, isOnline, onBack, onClose }: Messa
                 startsRun={row.startsRun}
                 showTime={row.endsRun}
                 onDelete={() => void messagesStore.remove(userId, row.message.id)}
-              />
+              >
+                {/*
+                  A trip, where the words would be. The message keeps its body
+                  underneath — "Shared a trip: …" — which is what the
+                  conversation list previews and what a screen reader reads.
+                */}
+                {row.message.share ? (
+                  <SharedTripCard
+                    share={row.message.share}
+                    isOwn={row.message.senderId === user?.id}
+                    isBusy={shared.isBusy}
+                    onPreview={() => void shared.preview(row.message.share!.id)}
+                    onAccept={() => void shared.accept(row.message.share!.id)}
+                    onRevoke={() => void shared.revoke(row.message.share!.id)}
+                  />
+                ) : null}
+              </MessageItem>
             ) : (
               <MessageItem
                 key={row.key}
@@ -204,7 +224,24 @@ export function MessageThread({ userId, name, isOnline, onBack, onClose }: Messa
         </p>
       ) : null}
 
+      {/* Only while the preview is shut: the dialog shows its own failures,
+          and one sentence in two places at once reads as two problems. */}
+      {shared.error && !shared.isPreviewOpen ? (
+        <p className={styles.error} role="alert">
+          {shared.error}
+        </p>
+      ) : null}
+
       <MessageComposer onSend={(body) => void messagesStore.send(userId, body)} />
+
+      {shared.isPreviewOpen ? (
+        <SharedTripPreview
+          offer={shared.offer}
+          isLoading={shared.isLoading}
+          error={shared.error}
+          onClose={shared.closePreview}
+        />
+      ) : null}
     </div>
   );
 }

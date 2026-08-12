@@ -34,6 +34,7 @@ type ShareRow = {
   endDate: string;
   dayCount: number;
   acceptedAt: Date | null;
+  acceptedTripId: string | null;
   revokedAt: Date | null;
 };
 
@@ -46,6 +47,7 @@ export function toApiShare(row: ShareRow): ApiTripShare {
     endDate: row.endDate,
     dayCount: row.dayCount,
     acceptedAt: row.acceptedAt?.toISOString() ?? null,
+    acceptedTripId: row.acceptedTripId,
     revokedAt: row.revokedAt?.toISOString() ?? null,
   };
 }

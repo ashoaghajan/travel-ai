@@ -1,0 +1,91 @@
+/*
+ * A trip in a thread.
+ *
+ * Card-shaped rather than bubble-shaped, and on purpose: a bubble is something
+ * somebody said, and this is something they are handing over. It takes the full
+ * width of the pane for the same reason — the offer is the message, not an
+ * aside within one.
+ */
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  width: 100%;
+  padding: var(--space-md);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background-color: var(--color-surface);
+  box-shadow: var(--shadow-sm);
+}
+
+/* Withdrawn: still there, plainly spent. Removing it would be a message
+   disappearing from somebody's screen, which is worse than one that explains
+   itself. */
+.revoked {
+  opacity: 0.6;
+}
+
+.title {
+  font-size: var(--font-sm);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-main);
+}
+
+.meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-xs) var(--space-sm);
+  font-size: var(--font-xs);
+  color: var(--color-text-muted);
+}
+
+.where {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.status {
+  font-size: var(--font-xs);
+  color: var(--color-text-muted);
+}
+
+.link {
+  color: var(--color-primary);
+  text-decoration: underline;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-sm);
+  margin-top: 2px;
+}
+
+/* Withdrawing is the quiet half of the pair: available, never inviting. */
+.textAction {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--color-text-muted);
+  font: inherit;
+  font-size: var(--font-xs);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.textAction:hover:not(:disabled) {
+  color: var(--color-text-main);
+}
+
+.textAction:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.textAction:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: 2px;
+}

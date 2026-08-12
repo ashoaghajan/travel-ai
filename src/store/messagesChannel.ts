@@ -43,6 +43,15 @@ export type MessageDeletedEvent = {
 
 export type MessagesChannelHandlers = {
   onMessage: (message: ApiDirectMessage) => void;
+  /**
+   * A shared trip changed state — taken up, or withdrawn.
+   *
+   * The whole message, not a patch: it is small, it is the shape the store
+   * already reconciles by id, and a second shape would be a second thing that
+   * can disagree with the first. Separate from `onMessage` because nothing new
+   * was *said* — a badge for a card changing colour would be a lie.
+   */
+  onShare: (message: ApiDirectMessage) => void;
   onDelete: (event: MessageDeletedEvent) => void;
   onState: (state: MessagesConnectionState) => void;
   /** The whole roster, rebuilt — never a delta. See `readPresence`. */
@@ -160,6 +169,7 @@ export async function connect(
 
   inbox.subscribe('message', (message) => handlers.onMessage(message.data as ApiDirectMessage));
   inbox.subscribe('delete', (message) => handlers.onDelete(message.data as MessageDeletedEvent));
+  inbox.subscribe('share', (message) => handlers.onShare(message.data as ApiDirectMessage));
 
   const presence = realtime.channels.get(PRESENCE_CHANNEL).presence;
 

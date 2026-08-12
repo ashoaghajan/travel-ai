@@ -4,6 +4,7 @@ import { act, fireEvent, render, screen, waitFor, within } from '@testing-librar
 import userEvent from '@testing-library/user-event';
 import type { ApiConversation, ApiDirectMessage } from '@ai-travel/shared';
 import { messagesService } from '../../../services/messages.service';
+import { shareService } from '../../../services/share.service';
 import { messagesStore } from '../../../store/messages.store';
 import { MessagesPanel } from './MessagesPanel';
 
@@ -318,6 +319,120 @@ describe('MessagesPanel', () => {
  * back through a thread would otherwise yank the view away mid-sentence while
  * they are doing something else entirely.
  */
+/**
+ * A trip somebody offered, in the thread where they offered it.
+ *
+ * The card is the message here — the body underneath it ("Shared a trip: …")
+ * is what the conversation list previews and what stands in wherever a card
+ * cannot go.
+ */
+describe('a shared trip', () => {
+  const SHARE = {
+    id: 's_1',
+    title: 'Berlin in Early Autumn',
+    destination: 'Berlin, Germany',
+    startDate: '2026-09-07',
+    endDate: '2026-09-11',
+    dayCount: 5,
+    acceptedAt: null,
+    acceptedTripId: null,
+    revokedAt: null,
+  };
+
+  const SNAPSHOT = {
+    title: 'Berlin in Early Autumn',
+    destination: 'Berlin, Germany',
+    startDate: '2026-09-07',
+    endDate: '2026-09-11',
+    travellers: 2,
+    coverImage: '',
+    itinerary: [
+      {
+        id: 'day_1',
+        dayNumber: 1,
+        date: '2026-09-07',
+        destination: 'Berlin',
+        summary: 'Arrive and wander',
+        activities: [{ id: 'act_1', time: '10:00', title: 'Tiergarten', category: 'nature' }],
+      },
+    ],
+  };
+
+  function offered() {
+    vi.spyOn(messagesService, 'getThread').mockResolvedValue([
+      message({ id: 'dm_1', body: 'Shared a trip: Berlin in Early Autumn', share: SHARE }),
+    ]);
+  }
+
+  it('renders as a card rather than as a sentence', async () => {
+    offered();
+
+    const user = userEvent.setup();
+    await openConversationWith(user);
+
+    expect(await screen.findByRole('heading', { name: 'Berlin in Early Autumn' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Add to my trips' })).toBeInTheDocument();
+  });
+
+  it('opens the itinerary before anybody has to decide', async () => {
+    offered();
+    vi.spyOn(shareService, 'getShare').mockResolvedValue({ share: SHARE, trip: SNAPSHOT });
+
+    const user = userEvent.setup();
+    await openConversationWith(user);
+    await user.click(await screen.findByRole('button', { name: 'Preview' }));
+
+    // Accepting without this would be a blind command.
+    expect(await screen.findByText('Tiergarten')).toBeInTheDocument();
+    expect(screen.getByText(/Bookings do not travel/)).toBeInTheDocument();
+  });
+
+  it('makes a copy, and says where it went', async () => {
+    offered();
+    vi.spyOn(shareService, 'getShare').mockResolvedValue({ share: SHARE, trip: SNAPSHOT });
+    const accept = vi.spyOn(shareService, 'acceptShare').mockResolvedValue({ id: 'trip_9' } as never);
+
+    const user = userEvent.setup();
+    await openConversationWith(user);
+    await user.click(await screen.findByRole('button', { name: 'Add to my trips' }));
+
+    await waitFor(() => expect(accept).toHaveBeenCalled());
+    // The itinerary goes up rebuilt by this side: fresh ids, and each
+    // photograph resolved against this build.
+    expect(accept.mock.calls[0][0]).toBe('s_1');
+    expect(accept.mock.calls[0][1]).toMatchObject({ title: 'Berlin in Early Autumn' });
+
+    // The card changes under the finger that pressed it, without waiting for
+    // the channel to say so.
+    expect(await screen.findByText(/Added to your trips/)).toBeInTheDocument();
+  });
+
+  it('lets the sender take an offer back', async () => {
+    vi.spyOn(messagesService, 'getThread').mockResolvedValue([
+      message({ id: 'dm_1', senderId: SELF.id, recipientId: 'u_grace', share: SHARE }),
+    ]);
+    const revoke = vi.spyOn(shareService, 'revokeShare').mockResolvedValue(undefined);
+
+    const user = userEvent.setup();
+    await openConversationWith(user);
+    await user.click(await screen.findByRole('button', { name: 'Withdraw' }));
+
+    await waitFor(() => expect(revoke).toHaveBeenCalledWith('s_1'));
+    expect(await screen.findByText('You withdrew this trip.')).toBeInTheDocument();
+  });
+
+  it('says so when a trip will not open', async () => {
+    offered();
+    vi.spyOn(shareService, 'getShare').mockRejectedValue(new Error('offline'));
+
+    const user = userEvent.setup();
+    await openConversationWith(user);
+    await user.click(await screen.findByRole('button', { name: 'Preview' }));
+
+    expect(await screen.findByText(/could not open that trip/i)).toBeInTheDocument();
+  });
+});
+
 describe('keeping up with a conversation', () => {
   /** jsdom lays nothing out, so the scroller's geometry has to be stated. */
   function setScrollPosition({ from }: { from: number }) {

@@ -1,0 +1,125 @@
+/* The modal shape `ImportTripDialog` established: Escape, the focus trap and
+   the backdrop all come from the browser. */
+.dialog {
+  width: min(420px, calc(100vw - 2 * var(--space-md)));
+  max-height: min(80dvh, 620px);
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-lg);
+  background-color: var(--color-surface);
+  color: var(--color-text-main);
+  overflow: hidden;
+}
+
+.dialog::backdrop {
+  background-color: var(--color-backdrop);
+}
+
+.header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-md);
+  padding: var(--space-md);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.title {
+  font-size: var(--font-md);
+  font-weight: var(--font-weight-semibold);
+}
+
+.subtitle {
+  font-size: var(--font-xs);
+  color: var(--color-text-muted);
+}
+
+.body {
+  max-height: calc(min(80dvh, 620px) - 76px);
+  padding: var(--space-md);
+  overflow-y: auto;
+}
+
+.loading {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.people {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.person {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  width: 100%;
+  padding: var(--space-xs) var(--space-sm);
+  border: 0;
+  border-radius: var(--radius-md);
+  background: none;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.person:hover:not(:disabled) {
+  background-color: var(--color-surface-muted);
+}
+
+.person:disabled {
+  cursor: default;
+}
+
+.person:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: -2px;
+}
+
+.name {
+  flex: 1;
+  min-width: 0;
+  font-size: var(--font-sm);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* The verb, at the end of the row: what pressing this will do. */
+.action {
+  flex-shrink: 0;
+  font-size: var(--font-xs);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-primary);
+}
+
+.person:disabled .action {
+  color: var(--color-text-muted);
+}
+
+.empty {
+  padding: var(--space-md) 0;
+  font-size: var(--font-sm);
+  color: var(--color-text-muted);
+}
+
+.error {
+  margin-bottom: var(--space-sm);
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-md);
+  background-color: var(--color-danger-soft);
+  color: var(--color-danger);
+  font-size: var(--font-sm);
+}
+
+.disclosure {
+  margin-top: var(--space-md);
+  padding-top: var(--space-md);
+  border-top: 1px solid var(--color-border);
+  font-size: var(--font-xs);
+  line-height: var(--line-height-base);
+  color: var(--color-text-muted);
+}

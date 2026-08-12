@@ -88,6 +88,7 @@ function fakeSdk({ members = [SELF] }: { members?: string[] } = {}) {
 function makeHandlers() {
   return {
     onMessage: vi.fn<(message: ApiDirectMessage) => void>(),
+    onShare: vi.fn<(message: ApiDirectMessage) => void>(),
     onDelete: vi.fn<(event: MessageDeletedEvent) => void>(),
     onState: vi.fn<(state: MessagesConnectionState) => void>(),
     onPresence: vi.fn<(userIds: string[]) => void>(),
@@ -135,6 +136,24 @@ describe('connect', () => {
     sdk.emit('message', { id: 'dm_1', body: 'hello' });
 
     expect(handlers.onMessage).toHaveBeenCalledWith({ id: 'dm_1', body: 'hello' });
+  });
+
+  /*
+   * A card changing state is not somebody saying something, and the two arrive
+   * on different events for that reason: the store must not ring an unread
+   * badge because a trip was accepted.
+   */
+  it('hands a changed card upward on its own event', async () => {
+    const sdk = fakeSdk();
+    await connect(SELF, handlers);
+
+    sdk.emit('share', { id: 'dm_1', share: { id: 's_1', acceptedAt: '2026-08-12T10:00:00.000Z' } });
+
+    expect(handlers.onShare).toHaveBeenCalledWith({
+      id: 'dm_1',
+      share: { id: 's_1', acceptedAt: '2026-08-12T10:00:00.000Z' },
+    });
+    expect(handlers.onMessage).not.toHaveBeenCalled();
   });
 
   /*
