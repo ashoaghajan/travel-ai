@@ -2,6 +2,7 @@ import { useCallback, useState } from 'react';
 import type { ApiSharedTrip } from '@ai-travel/shared';
 import { shareService } from '../../services/share.service';
 import { messagesStore } from '../../store/messages.store';
+import { tripStore } from '../../store/trip.store';
 import { createId } from '../../utils/id';
 import { toTripDraft } from '../../utils/tripFile';
 import type { ExportedTrip } from '../../utils/tripFile';
@@ -78,7 +79,16 @@ export function useSharedTrip(): SharedTripState {
       const { trip } = await shareService.getShare(shareId);
       const draft = toTripDraft(trip as ExportedTrip, createId('draft'));
 
-      await shareService.acceptShare(shareId, draft);
+      const accepted = await shareService.acceptShare(shareId, draft);
+
+      /*
+       * Filed with the trips this account already holds.
+       *
+       * Without this the row exists and nothing reading `tripStore` knows:
+       * the trips page, the sidebar's recent trips and the planner all render
+       * a list fetched before the accept, and only a reload fixes it.
+       */
+      tripStore.adoptTrip(accepted);
 
       // Patched here rather than waited for: the card must change under the
       // finger that pressed it, and a browser with no realtime at all still

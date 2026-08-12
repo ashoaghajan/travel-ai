@@ -93,6 +93,75 @@ describe('saveTrip', () => {
   });
 });
 
+/**
+ * A trip that arrived without this store saving it — accepting a shared trip.
+ *
+ * The row is written by `POST /api/shares/:id/accept`, which never comes
+ * through here, so without this every screen reading the store holds a list
+ * from before the trip existed and only a reload fixes it.
+ */
+describe('adoptTrip', () => {
+  it('files it with the trips already held', () => {
+    tripStore.adoptTrip(makeTrip({ id: 'trip_shared', title: 'Berlin' }));
+
+    expect(held().map((trip) => trip.id)).toEqual(['trip_shared']);
+  });
+
+  it('puts it at the top, beside what was already there', async () => {
+    vi.spyOn(tripService, 'getTrips').mockResolvedValue([makeTrip({ id: 'trip_1' })]);
+    await tripStore.refresh();
+
+    tripStore.adoptTrip(makeTrip({ id: 'trip_shared' }));
+
+    expect(held().map((trip) => trip.id)).toEqual(['trip_shared', 'trip_1']);
+  });
+
+  it('lists it once when the same offer is accepted twice', () => {
+    const trip = makeTrip({ id: 'trip_shared' });
+
+    tripStore.adoptTrip(trip);
+    tripStore.adoptTrip(trip);
+
+    // Accepting is idempotent server-side; the list must agree.
+    expect(held()).toHaveLength(1);
+  });
+
+  it('leaves an unloaded list alone rather than claiming it is the whole list', async () => {
+    const getTrips = vi.spyOn(tripService, 'getTrips').mockResolvedValue([
+      makeTrip({ id: 'trip_1' }),
+      makeTrip({ id: 'trip_shared' }),
+    ]);
+    tripStore.reset();
+
+    tripStore.adoptTrip(makeTrip({ id: 'trip_shared' }));
+
+    /*
+     * The trap this guards: `set` marks the resource ready, so merging into a
+     * list that has never loaded would leave the account holding exactly one
+     * trip until a reload — the bug it fixes, inverted and worse.
+     */
+    expect(held()).toEqual([]);
+
+    await tripStore.refresh();
+    expect(getTrips).toHaveBeenCalled();
+    expect(held()).toHaveLength(2);
+  });
+
+  it('asks again when a list is still in flight', async () => {
+    tripStore.reset();
+    const getTrips = vi.spyOn(tripService, 'getTrips').mockResolvedValue([]);
+    const loading = tripStore.refresh();
+
+    getTrips.mockResolvedValue([makeTrip({ id: 'trip_shared' })]);
+    tripStore.adoptTrip(makeTrip({ id: 'trip_shared' }));
+    await loading;
+
+    // The answer in flight was asked for before this trip existed, so it
+    // cannot be merged into.
+    await vi.waitFor(() => expect(held().map((trip) => trip.id)).toEqual(['trip_shared']));
+  });
+});
+
 describe('updateTrip', () => {
   it('replaces the trip in place', async () => {
     vi.mocked(tripService.getTrips).mockResolvedValue([

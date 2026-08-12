@@ -72,6 +72,40 @@ export const tripStore = {
     return trip;
   },
 
+  /**
+   * Files a trip this account acquired without saving it.
+   *
+   * Accepting a shared trip, today: the row is already written — by
+   * `POST /api/shares/:id/accept`, which never goes through this store — so
+   * what is missing is that every screen reading from here still holds a list
+   * from before it existed. That is why the trips page needed a reload to show
+   * one.
+   *
+   * Merged only into a list that is actually a list. `set` marks the resource
+   * ready, so writing one trip into a resource that has never loaded would
+   * leave the account holding exactly that one trip until a reload — the same
+   * bug inverted, and worse. When nothing is held yet the first reader loads
+   * the whole list anyway, which will include this trip.
+   */
+  adoptTrip(trip: Trip): void {
+    const { status } = tripsResource.getSnapshot();
+
+    if (status === 'ready') {
+      // Upserted rather than prepended because accepting is idempotent:
+      // pressing twice returns the same trip, and a prepend would show it
+      // twice.
+      tripsResource.set(upsertNewestFirst(selectTrips(), trip));
+    } else if (status !== 'idle') {
+      // Loading or errored: whatever answer is in flight was asked for before
+      // this trip existed, so it cannot be merged into — ask again.
+      void tripsResource.refresh();
+    }
+
+    // Other tabs refetch rather than being handed a payload, as with every
+    // other write here.
+    broadcast('trips');
+  },
+
   async updateTrip(id: string, patch: TripPatch): Promise<Trip> {
     const trip = await tripService.updateTrip(id, patch);
 

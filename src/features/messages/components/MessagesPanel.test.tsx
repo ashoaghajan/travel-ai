@@ -6,6 +6,7 @@ import type { ApiConversation, ApiDirectMessage } from '@ai-travel/shared';
 import { messagesService } from '../../../services/messages.service';
 import { shareService } from '../../../services/share.service';
 import { messagesStore } from '../../../store/messages.store';
+import { tripStore } from '../../../store/trip.store';
 import { MessagesPanel } from './MessagesPanel';
 
 /**
@@ -405,6 +406,30 @@ describe('a shared trip', () => {
     // The card changes under the finger that pressed it, without waiting for
     // the channel to say so.
     expect(await screen.findByText(/Added to your trips/)).toBeInTheDocument();
+  });
+
+  it('files the trip where every other screen reads it', async () => {
+    offered();
+    vi.spyOn(shareService, 'getShare').mockResolvedValue({ share: SHARE, trip: SNAPSHOT });
+    vi.spyOn(shareService, 'acceptShare').mockResolvedValue({
+      id: 'trip_9',
+      title: 'Berlin in Early Autumn',
+    } as never);
+    const adopt = vi.spyOn(tripStore, 'adoptTrip');
+
+    const user = userEvent.setup();
+    await openConversationWith(user);
+    await user.click(await screen.findByRole('button', { name: 'Add to my trips' }));
+
+    /*
+     * Accepting writes the row through the shares API, which the trip store
+     * never hears about — so without this the trips page, the sidebar and the
+     * planner all show a list from before the trip existed until a reload.
+     */
+    await waitFor(() => expect(adopt).toHaveBeenCalledWith({
+      id: 'trip_9',
+      title: 'Berlin in Early Autumn',
+    }));
   });
 
   it('lets the sender take an offer back', async () => {
