@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { ERROR_CODES } from '@ai-travel/shared';
-import { api, errorCode, signUp } from '../../test/harness';
+import { api, befriend, errorCode, signUp } from '../../test/harness';
 import { resetMessagesRateLimit } from '../messages/messages.routes';
 
 /**
@@ -66,10 +66,13 @@ function snapshot(overrides: Record<string, unknown> = {}) {
   };
 }
 
-/** Two accounts, and a trip belonging to the first. */
+/** Two friends, and a trip belonging to the first. */
 async function pairWithTrip() {
   const alice = await signUp({ email: 'alice@example.com', name: 'Alice' });
   const bob = await signUp({ email: 'bob@example.com', name: 'Bob' });
+
+  // A trip goes to somebody you may message, which now means a friend.
+  await befriend(alice.user.id, bob.user.id);
 
   const auth = { alice: `Bearer ${alice.accessToken}`, bob: `Bearer ${bob.accessToken}` };
 

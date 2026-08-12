@@ -3,6 +3,7 @@ import type { ApiConversation, ApiDirectMessage } from '@ai-travel/shared';
 import type { Prisma } from '@prisma/client';
 import { HttpError, notFound } from '../../errors';
 import { prisma } from '../../prisma';
+import { areFriends } from '../friends/friends.service';
 import { toApiShare } from '../shares/shares.service';
 
 /**
@@ -106,7 +107,18 @@ export function toApiMessage(row: MessageRow): ApiDirectMessage {
   };
 }
 
-/** That the other person exists, before anything is written against them. */
+/**
+ * That the other person exists and has agreed to hear from this one.
+ *
+ * **The one chokepoint.** Every send, every thread read, every move of a read
+ * cursor and — through `createMessage` — every shared trip comes through here,
+ * which is why the friendship check lives here rather than in the routes: a
+ * route added next year gets it without knowing it exists.
+ *
+ * A 403 rather than a 404 for a stranger: they exist, they are findable by
+ * name on the friends page, and pretending otherwise would make "add a friend"
+ * impossible to explain. What is missing is permission.
+ */
 async function requireRecipient(userId: string, otherUserId: string): Promise<void> {
   if (userId === otherUserId) {
     throw new HttpError(422, ERROR_CODES.VALIDATION_FAILED, 'You cannot message yourself.');
@@ -114,6 +126,14 @@ async function requireRecipient(userId: string, otherUserId: string): Promise<vo
 
   const exists = await prisma.user.findUnique({ where: { id: otherUserId }, select: { id: true } });
   if (!exists) throw notFound('That person is no longer here.');
+
+  if (!(await areFriends(userId, otherUserId))) {
+    throw new HttpError(
+      403,
+      ERROR_CODES.NOT_FRIENDS,
+      'You can only message people you are friends with.',
+    );
+  }
 }
 
 /**
@@ -270,15 +290,39 @@ export async function listConversations(
   userId: string,
   { q, limit = CONVERSATION_LIMIT }: { q?: string; limit?: number } = {},
 ): Promise<ApiConversation[]> {
-  const people = await prisma.user.findMany({
+  /*
+   * Friends, not everybody.
+   *
+   * This used to select from `User`, which was right when any account could
+   * message any other and became wrong the moment that stopped being true: a
+   * panel listing people you cannot write to is a panel of dead ends.
+   *
+   * Selected through `Friendship` rather than filtered afterwards, so the cap
+   * counts people the reader can actually talk to.
+   */
+  const friendships = await prisma.friendship.findMany({
     where: {
-      id: { not: userId },
-      ...(q ? { name: { contains: q, mode: 'insensitive' as const } } : {}),
+      status: 'accepted',
+      OR: [{ requesterId: userId }, { addresseeId: userId }],
+      ...(q
+        ? {
+            OR: [
+              { requesterId: userId, addressee: { name: { contains: q, mode: 'insensitive' } } },
+              { addresseeId: userId, requester: { name: { contains: q, mode: 'insensitive' } } },
+            ],
+          }
+        : {}),
     },
-    select: { id: true, name: true },
-    orderBy: { name: 'asc' },
+    include: {
+      requester: { select: { id: true, name: true } },
+      addressee: { select: { id: true, name: true } },
+    },
     take: limit,
   });
+
+  const people = friendships
+    .map((row) => (row.requesterId === userId ? row.addressee : row.requester))
+    .sort((a, b) => a.name.localeCompare(b.name));
 
   if (people.length === 0) return [];
 

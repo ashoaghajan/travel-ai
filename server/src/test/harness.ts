@@ -54,3 +54,27 @@ export async function signUp(overrides: Credentials = {}) {
 export function errorCode(response: Response): unknown {
   return response.body?.error?.code;
 }
+
+/**
+ * Makes two accounts friends, straight in the database.
+ *
+ * Messaging is friends-only, so almost every conversation test needs this
+ * before it can say anything at all. Written directly rather than through
+ * `POST /api/friends/:id` twice, so that a messages test failing tells you
+ * something about messages: routed through the API, a broken friends endpoint
+ * would fail thirty tests in three other files and name none of them.
+ */
+export async function befriend(a: string, b: string): Promise<void> {
+  const { prisma } = await import('../prisma');
+  const { pairKeyOf } = await import('../modules/messages/messages.service');
+
+  await prisma.friendship.create({
+    data: {
+      pairKey: pairKeyOf(a, b),
+      requesterId: a,
+      addresseeId: b,
+      status: 'accepted',
+      respondedAt: new Date(),
+    },
+  });
+}

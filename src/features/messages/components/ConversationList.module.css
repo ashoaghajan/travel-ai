@@ -121,3 +121,8 @@
   line-height: var(--line-height-base);
   color: var(--color-text-muted);
 }
+
+.link {
+  color: var(--color-primary);
+  text-decoration: underline;
+}

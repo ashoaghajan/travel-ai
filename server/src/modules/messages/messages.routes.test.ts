@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { ERROR_CODES, MESSAGE_MAX_LENGTH } from '@ai-travel/shared';
-import { api, errorCode, signUp } from '../../test/harness';
+import { api, befriend, errorCode, signUp } from '../../test/harness';
 import { resetMessagesRateLimit } from './messages.routes';
 
 /**
@@ -20,10 +20,18 @@ function messageBody(overrides: Record<string, unknown> = {}) {
   return { body: 'Anyone been to Yerevan in September?', clientMessageId: 'cm_1', ...overrides };
 }
 
-/** Two accounts, with helpers for talking as either. */
+/**
+ * Two accounts who have agreed to talk, with helpers for talking as either.
+ *
+ * The friendship is part of the setup now rather than part of the story:
+ * messaging is friends-only, so a pair without one has nothing to say to each
+ * other and every test here would be testing the guard instead of its subject.
+ */
 async function pair() {
   const alice = await signUp({ email: 'alice@example.com', name: 'Alice' });
   const bob = await signUp({ email: 'bob@example.com', name: 'Bob' });
+
+  await befriend(alice.user.id, bob.user.id);
 
   return {
     alice: { user: alice.user, auth: `Bearer ${alice.accessToken}` },
@@ -170,6 +178,11 @@ describe('reading a thread', () => {
     const { alice, bob } = await pair();
     const carol = await signUp({ email: 'carol@example.com', name: 'Carol' });
     const carolAuth = `Bearer ${carol.accessToken}`;
+
+    // Carol is Alice's friend, so the guard is not what is being tested here:
+    // a thread is between exactly two people, and being friends with one of
+    // them is not being in it.
+    await befriend(alice.user.id, carol.user.id);
 
     await api()
       .post(withUser(bob.user.id))
@@ -355,6 +368,7 @@ describe('unread', () => {
     const { alice, bob } = await pair();
     const carol = await signUp({ email: 'carol@example.com', name: 'Carol' });
     const carolAuth = `Bearer ${carol.accessToken}`;
+    await befriend(carol.user.id, bob.user.id);
 
     await sendTo(alice, bob.user.id, 'from alice', 'cm_1');
     await sendTo({ auth: carolAuth }, bob.user.id, 'from carol', 'cm_2');
@@ -366,5 +380,83 @@ describe('unread', () => {
     // Reading Alice must not silence Carol.
     expect(byId.get(alice.user.id)).toBe(0);
     expect(byId.get(carol.user.id)).toBe(1);
+  });
+});
+
+/**
+ * Who may talk to whom.
+ *
+ * The rule the friends feature exists for: a conversation needs both ends to
+ * have agreed to it. The check lives in `requireRecipient`, which every verb
+ * here goes through, so these cover the verbs rather than the routes.
+ */
+describe('strangers', () => {
+  async function strangers() {
+    const alice = await signUp({ email: 'alice@example.com', name: 'Alice' });
+    const carol = await signUp({ email: 'carol@example.com', name: 'Carol' });
+
+    return {
+      alice: { user: alice.user, auth: `Bearer ${alice.accessToken}` },
+      carol: { user: carol.user, auth: `Bearer ${carol.accessToken}` },
+    };
+  }
+
+  it('cannot be written to', async () => {
+    const { alice, carol } = await strangers();
+
+    const response = await api()
+      .post(withUser(carol.user.id))
+      .set('Authorization', alice.auth)
+      .send(messageBody())
+      .expect(403);
+
+    // A 403 rather than a 404: they exist, they are findable by name on the
+    // friends page, and pretending otherwise would make "add a friend"
+    // impossible to explain.
+    expect(errorCode(response)).toBe(ERROR_CODES.NOT_FRIENDS);
+  });
+
+  it('cannot be read', async () => {
+    const { alice, carol } = await strangers();
+
+    const response = await api()
+      .get(withUser(carol.user.id))
+      .set('Authorization', alice.auth)
+      .expect(403);
+
+    expect(errorCode(response)).toBe(ERROR_CODES.NOT_FRIENDS);
+  });
+
+  it('cannot have a read cursor moved against them', async () => {
+    const { alice, carol } = await strangers();
+
+    await api()
+      .post(`${withUser(carol.user.id)}/read`)
+      .set('Authorization', alice.auth)
+      .expect(403);
+  });
+
+  it('are not in the conversation list', async () => {
+    const { alice, carol } = await strangers();
+
+    const response = await api().get(CONVERSATIONS).set('Authorization', alice.auth).expect(200);
+
+    // A panel listing people you cannot write to is a panel of dead ends.
+    expect(response.body).toEqual([]);
+    expect(carol.user.id).toBeTruthy();
+  });
+
+  it('can talk the moment they are friends, and the thread survives', async () => {
+    const { alice, carol } = await strangers();
+    await befriend(alice.user.id, carol.user.id);
+
+    await api()
+      .post(withUser(carol.user.id))
+      .set('Authorization', alice.auth)
+      .send(messageBody({ body: 'now we can' }))
+      .expect(201);
+
+    const list = await api().get(CONVERSATIONS).set('Authorization', carol.auth).expect(200);
+    expect(list.body).toHaveLength(1);
   });
 });

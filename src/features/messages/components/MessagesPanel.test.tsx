@@ -2,6 +2,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { MemoryRouter } from 'react-router-dom';
 import type { ApiConversation, ApiDirectMessage } from '@ai-travel/shared';
 import { messagesService } from '../../../services/messages.service';
 import { shareService } from '../../../services/share.service';
@@ -105,6 +106,22 @@ describe('MessagesPanel', () => {
     const row = await screen.findByRole('button', { name: /Grace/ });
     expect(within(row).getByText('see you')).toBeInTheDocument();
     expect(within(row).getByText('2')).toBeInTheDocument();
+  });
+
+  it('points at the friends page when there is nobody to talk to', async () => {
+    vi.spyOn(messagesService, 'getConversations').mockResolvedValue([]);
+
+    render(
+      <MemoryRouter>
+        <MessagesPanel />
+      </MemoryRouter>,
+    );
+    act(() => messagesStore.open());
+
+    // The list is friends now, so "nobody has signed up" would be both wrong
+    // and a dead end.
+    expect(await screen.findByText(/You have no friends here yet/)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Find somebody' })).toHaveAttribute('href', '/friends');
   });
 
   it('says who has never been written to', async () => {

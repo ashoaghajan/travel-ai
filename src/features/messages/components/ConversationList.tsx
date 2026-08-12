@@ -1,4 +1,6 @@
 import { useEffect, useId, useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
+import { ROUTES } from '../../../app/routes';
 import { Avatar } from '../../../components/common/Avatar';
 import { Skeleton } from '../../../components/common/Skeleton';
 import { messagesStore } from '../../../store/messages.store';
@@ -26,12 +28,13 @@ export type ConversationListProps = {
 };
 
 /**
- * Everyone you could talk to, and the state of each conversation.
+ * Your friends, and the state of each conversation.
  *
- * **Every account appears, not only the people already talked to** — you
- * cannot message somebody you cannot find. That is a deliberate reversal of the
- * public room's rule that accounts must not be enumerable, and the search box
- * is what keeps it usable once there are more names than fit on a screen.
+ * **Friends, not every account.** It listed everybody when anybody could
+ * message anybody, and that became a list of dead ends the moment a
+ * conversation started needing both ends to agree to it. Finding somebody new
+ * is the friends page's job; the search here narrows the people you can
+ * already write to.
  *
  * Names and previews only, never an email: `ApiConversation` exists precisely
  * so an address cannot arrive here by accident.
@@ -99,7 +102,19 @@ export function ConversationList({
 
       {status === 'ready' && conversations.length === 0 ? (
         <p className={styles.empty}>
-          {query ? `Nobody here is called “${query}”.` : 'There is nobody else signed up yet.'}
+          {query ? (
+            `None of your friends is called “${query}”.`
+          ) : (
+            <>
+              {/* The list is friends now, so "nobody has signed up" would be
+                  both wrong and a dead end. This says what to do instead. */}
+              You have no friends here yet.{' '}
+              <Link className={styles.link} to={ROUTES.friends}>
+                Find somebody
+              </Link>{' '}
+              and you can message them once they accept.
+            </>
+          )}
         </p>
       ) : null}
 
