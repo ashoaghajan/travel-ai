@@ -110,6 +110,8 @@ beforeEach(async () => {
   // two cascades happen to fire in.
   await prisma.chatHistory.deleteMany();
   await prisma.directMessage.deleteMany();
+  // After the messages that point at them, before the trips they point at.
+  await prisma.tripShare.deleteMany();
   await prisma.conversationRead.deleteMany();
   await prisma.recentSearch.deleteMany();
   await prisma.savedActivity.deleteMany();

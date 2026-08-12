@@ -11,4 +11,5 @@ export * from './error-codes';
 export * from './messages.types';
 export * from './occupancy';
 export * from './planner.types';
+export * from './share.types';
 export * from './travel.types';

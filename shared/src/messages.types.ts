@@ -11,6 +11,8 @@
  * about the app.
  */
 
+import type { ApiTripShare } from './share.types';
+
 /** Everyone's presence lives on one channel, because the roster is everyone. */
 export const PRESENCE_CHANNEL = 'presence:global';
 
@@ -22,6 +24,8 @@ export function userChannel(userId: string): string {
 /** Realtime event names, on a user's own channel. */
 export const MESSAGE_EVENT_SENT = 'message';
 export const MESSAGE_EVENT_DELETED = 'delete';
+/** A shared trip changed state — taken up, or withdrawn. */
+export const MESSAGE_EVENT_SHARE = 'share';
 
 /**
  * The longest a message may be.
@@ -58,6 +62,19 @@ export type ApiDirectMessage = {
    * the optimistic bubble it drew before the round trip finished.
    */
   clientMessageId: string;
+  /**
+   * Set when this message is a trip rather than words.
+   *
+   * The card, never the itinerary: a thread renders dozens of these and the
+   * snapshot behind one is up to a megabyte. `GET /api/shares/:id` fetches
+   * that, once, when somebody asks to look.
+   *
+   * `body` is still written and still means something — "Shared a trip: Berlin
+   * in Early Autumn" is what the conversation list previews and what a screen
+   * reader reads. A message the rest of the app cannot describe is a message
+   * half the app renders as blank.
+   */
+  share?: ApiTripShare;
 };
 
 /**

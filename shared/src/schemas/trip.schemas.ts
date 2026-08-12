@@ -41,7 +41,12 @@ const LAT_LNG = z.object({
  */
 const ID = z.string().trim().min(1).max(200);
 
-const itineraryActivitySchema = z.object({
+/*
+ * Exported so `share.schemas.ts` can extend them rather than restate them.
+ * A shared trip is this trip plus the stable name of each photograph, and two
+ * descriptions of one itinerary would drift the first time either changed.
+ */
+export const itineraryActivitySchema = z.object({
   id: ID,
   time: TIME,
   title: z.string().trim().min(1, 'Give this activity a title.').max(300),
@@ -53,7 +58,7 @@ const itineraryActivitySchema = z.object({
   coordinates: LAT_LNG.optional(),
 });
 
-const itineraryDaySchema = z.object({
+export const itineraryDaySchema = z.object({
   id: ID,
   dayNumber: z.number().int().min(1).max(1000),
   date: ISO_DATE,
@@ -93,7 +98,7 @@ function hasSomewhereToGo(value: {
   );
 }
 
-const baseTrip = {
+export const baseTrip = {
   draftId: z.string().trim().min(1).max(200).optional(),
   title: z.string().trim().min(1, 'Give the trip a title.').max(300),
   destination: z.string().trim().max(300).default(''),

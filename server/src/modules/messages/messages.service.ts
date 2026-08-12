@@ -1,7 +1,9 @@
 import { ERROR_CODES, CONVERSATION_LIMIT, THREAD_LIMIT } from '@ai-travel/shared';
 import type { ApiConversation, ApiDirectMessage } from '@ai-travel/shared';
+import type { Prisma } from '@prisma/client';
 import { HttpError, notFound } from '../../errors';
 import { prisma } from '../../prisma';
+import { toApiShare } from '../shares/shares.service';
 
 /**
  * Direct messages: one private conversation per pair of accounts.
@@ -35,7 +37,27 @@ export function pairKeyOf(a: string, b: string): string {
  * reach another account's screen, and the way to guarantee that is to never
  * load it in the first place.
  */
-const WITH_SENDER = { sender: { select: { name: true } } } as const;
+const WITH_SENDER = {
+  sender: { select: { name: true } },
+  /*
+   * The card, whenever there is one. Always included rather than fetched
+   * separately: a thread of fifty messages would otherwise be fifty extra
+   * queries, and the columns here are the small half — the snapshot is the
+   * large one and it stays behind `GET /api/shares/:id`.
+   */
+  share: {
+    select: {
+      id: true,
+      title: true,
+      destination: true,
+      startDate: true,
+      endDate: true,
+      dayCount: true,
+      acceptedAt: true,
+      revokedAt: true,
+    },
+  },
+} as const;
 
 type MessageRow = {
   id: string;
@@ -45,6 +67,28 @@ type MessageRow = {
   clientMessageId: string;
   createdAt: Date;
   sender: { name: string };
+  share?: {
+    id: string;
+    title: string;
+    destination: string;
+    startDate: string;
+    endDate: string;
+    dayCount: number;
+    acceptedAt: Date | null;
+    revokedAt: Date | null;
+  } | null;
+};
+
+/** What a share needs written alongside the message that announces it. */
+export type NewShare = {
+  tripId: string;
+  toUserId: string;
+  title: string;
+  destination: string;
+  startDate: string;
+  endDate: string;
+  dayCount: number;
+  snapshot: Prisma.InputJsonValue;
 };
 
 export function toApiMessage(row: MessageRow): ApiDirectMessage {
@@ -56,6 +100,7 @@ export function toApiMessage(row: MessageRow): ApiDirectMessage {
     body: row.body,
     createdAt: row.createdAt.toISOString(),
     clientMessageId: row.clientMessageId,
+    ...(row.share ? { share: toApiShare(row.share) } : {}),
   };
 }
 
@@ -107,6 +152,7 @@ export async function createMessage(
   recipientId: string,
   body: string,
   clientMessageId: string,
+  { share }: { share?: NewShare } = {},
 ): Promise<ApiDirectMessage> {
   await requireRecipient(senderId, recipientId);
 
@@ -114,12 +160,45 @@ export async function createMessage(
     where: { senderId_clientMessageId: { senderId, clientMessageId } },
     update: {},
     create: {
-      senderId,
-      recipientId,
+      /*
+       * Connected rather than assigned by id, which is the difference between
+       * Prisma's checked and unchecked create inputs — and the unchecked one
+       * cannot carry the nested write below. Both accounts were just proved to
+       * exist by `requireRecipient`, so neither connect can miss.
+       */
+      sender: { connect: { id: senderId } },
+      recipient: { connect: { id: recipientId } },
       // Computed here from the authenticated sender, never taken from a client.
       pairKey: pairKeyOf(senderId, recipientId),
       body,
       clientMessageId,
+      /*
+       * The offer, written with the message rather than beside it.
+       *
+       * One nested create is one statement in one transaction, and half of
+       * this pair existing — an offer nobody was told about, or a card
+       * pointing at nothing — is the one state this feature must never reach.
+       * The upsert covers the retry: a second attempt under the same
+       * `clientMessageId` returns the first message and writes no second
+       * offer.
+       */
+      ...(share
+        ? {
+            share: {
+              create: {
+                from: { connect: { id: senderId } },
+                to: { connect: { id: share.toUserId } },
+                trip: { connect: { id: share.tripId } },
+                title: share.title,
+                destination: share.destination,
+                startDate: share.startDate,
+                endDate: share.endDate,
+                dayCount: share.dayCount,
+                snapshot: share.snapshot,
+              },
+            },
+          }
+        : {}),
     },
     include: WITH_SENDER,
   });

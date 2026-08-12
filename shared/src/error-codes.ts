@@ -81,6 +81,19 @@ export const ERROR_CODES = {
    */
   MESSAGE_NOT_YOURS: 'MESSAGE_NOT_YOURS',
 
+  /* ----------------------------------------------------------------- shares */
+
+  SHARE_NOT_FOUND: 'SHARE_NOT_FOUND',
+  /**
+   * The offer is no longer on the table — withdrawn by whoever sent it.
+   *
+   * Distinct from a 404 on purpose: the card is on the recipient's screen and
+   * saying it never existed would be baffling. This says what happened.
+   */
+  SHARE_REVOKED: 'SHARE_REVOKED',
+  /** Only the sender may withdraw an offer, and only before it is taken up. */
+  SHARE_NOT_YOURS: 'SHARE_NOT_YOURS',
+
   NOT_FOUND: 'NOT_FOUND',
   RATE_LIMITED: 'RATE_LIMITED',
   INTERNAL: 'INTERNAL',

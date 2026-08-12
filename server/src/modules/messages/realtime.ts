@@ -34,7 +34,15 @@ const TOKEN_TTL_MS = 60 * 60 * 1000;
  */
 export type MessageRealtimeEvent =
   | { name: 'message'; data: ApiDirectMessage }
-  | { name: 'delete'; data: { id: string; senderId: string; recipientId: string } };
+  | { name: 'delete'; data: { id: string; senderId: string; recipientId: string } }
+  /**
+   * A shared trip changed state — taken up, or withdrawn.
+   *
+   * Carries the whole message rather than a patch: it is small, it is the
+   * shape both clients already reconcile by id, and a second shape would be a
+   * second thing that can disagree with the first.
+   */
+  | { name: 'share'; data: ApiDirectMessage };
 
 let client: Ably.Rest | null = null;
 

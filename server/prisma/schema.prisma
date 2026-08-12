@@ -75,6 +75,11 @@ model User {
   /// Read cursors, one per conversation this account has opened. Declared only
   /// because Prisma requires both ends of a relation; nothing joins from here.
   conversationReads ConversationRead[]
+
+  /// Trips offered and trips received. Two relations to one model again, so
+  /// both need naming.
+  sentShares     TripShare[] @relation("SentShares")
+  receivedShares TripShare[] @relation("ReceivedShares")
 }
 
 /// App preferences, one row per account.
@@ -172,6 +177,9 @@ model Trip {
 
   activeFor User[]    @relation("ActiveTrip")
   bookings  Booking[]
+  /// Offers made of this trip. Declared because Prisma requires both ends;
+  /// deleting the trip only nulls the pointer, it never touches an offer.
+  shares    TripShare[]
 
   @@unique([userId, draftId])
   @@index([userId, createdAt(sort: Desc)])
@@ -421,6 +429,14 @@ model DirectMessage {
   /// data that was hard-deleted before anybody asked for it.
   deletedAt DateTime?
 
+  /// Set when this message is a trip rather than words.
+  ///
+  /// `@unique` because one offer is one message: without it a bug could put
+  /// the same share in two threads, and the second recipient would hold a card
+  /// for something never offered to them.
+  shareId String?    @unique
+  share   TripShare? @relation(fields: [shareId], references: [id], onDelete: Cascade)
+
   createdAt DateTime @default(now())
 
   @@unique([senderId, clientMessageId])
@@ -447,4 +463,58 @@ model ConversationRead {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@id([userId, otherUserId])
+}
+
+/// One trip, offered to one person, frozen at the moment it was offered.
+///
+/// The offer is a copy rather than a pointer, and that is the decision the rest
+/// follows from: the card shows what was actually sent, an edit to the original
+/// afterwards does not rewrite what somebody was handed, and the offer still
+/// opens once the sender has deleted the trip it came from.
+model TripShare {
+  id String @id @default(uuid())
+
+  fromUserId String
+  from       User   @relation("SentShares", fields: [fromUserId], references: [id], onDelete: Cascade)
+
+  toUserId String
+  to       User   @relation("ReceivedShares", fields: [toUserId], references: [id], onDelete: Cascade)
+
+  /// Where it came from — and nullable on purpose. The sender may delete that
+  /// trip tomorrow, and an offer already sitting on somebody's screen has to
+  /// go on working. Nothing reads through it.
+  tripId String?
+  trip   Trip?   @relation(fields: [tripId], references: [id], onDelete: SetNull)
+
+  /// An `ExportedTrip`, exactly as `tripFile.ts` writes one.
+  ///
+  /// JSON by this file's own rule rather than in spite of it: written once,
+  /// read whole, never queried into. No query will ever ask about day three of
+  /// an offer.
+  snapshot Json
+
+  /// Denormalised for the card, deliberately: rendering a thread must not mean
+  /// parsing a JSON document per message.
+  title       String
+  destination String
+  /// `YYYY-MM-DD`, like `Trip` — a trip's dates are calendar days, and stored
+  /// as timestamps they acquire a timezone that moves them.
+  startDate   String
+  endDate     String
+  dayCount    Int
+
+  /// Taken up, and what it became. Both or neither.
+  acceptedAt     DateTime?
+  acceptedTripId String?
+
+  /// Withdrawn by the sender, before anybody took it up.
+  revokedAt DateTime?
+
+  createdAt DateTime @default(now())
+
+  /// The message carrying it. Declared because Prisma requires both ends.
+  message DirectMessage?
+
+  /// "What has been shared with me lately" — the only list this table has.
+  @@index([toUserId, createdAt(sort: Desc)])
 }
