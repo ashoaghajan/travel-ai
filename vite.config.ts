@@ -19,7 +19,20 @@ export default defineConfig({
     // Same-origin in development, which is what makes the httpOnly refresh
     // cookie work without any CORS or SameSite=None concessions.
     proxy: {
-      '/api': { target: 'http://localhost:3001', changeOrigin: true },
+      /*
+       * `127.0.0.1`, not `localhost`.
+       *
+       * macOS resolves `localhost` to `::1` before `127.0.0.1`, so the proxy
+       * followed whatever held the IPv6 loopback on this port — which, the day
+       * another project's dev server was running, was that project. Every
+       * `/api` call reached it instead: GETs came back as its `index.html` and
+       * POSTs as a bare 404, which reads like the API losing its routes rather
+       * than like a neighbour answering the door.
+       *
+       * The API binds every interface, so naming the IPv4 loopback costs
+       * nothing and removes the ambiguity.
+       */
+      '/api': { target: 'http://127.0.0.1:3001', changeOrigin: true },
     },
   },
   test: {
