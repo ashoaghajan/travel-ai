@@ -1000,30 +1000,40 @@ The design should include these visual sections:
 
 ---
 
-## Surface 9: The Lobby — **built**
+## Surface 9: Messages — **built**
 
 Not one of the numbered screens, and deliberately: it is chrome rather than a
 destination. A collapsible column beside the main content at ≥1024px, a
 full-screen `<dialog>` below that, and a toggle in `PageHeader`'s actions on
 every signed-in screen.
 
+- **Two panes on desktop, one at a time below it.** 600px wide: a 210px list of
+  people, then the conversation. The same two views become a drill-down on a
+  phone — the list, then the thread behind a back arrow — which is why the
+  selected person is store state rather than a route.
 - **Bubbles borrow the planner's vocabulary, not its component.** Own messages
-  purple and right, everyone else's grey and left — but `ChatMessage.tsx` is
+  purple and right, the other person's grey and left — but `ChatMessage.tsx` is
   sized for a 640px conversation and this panel is barely half that.
-- **The roster is a row of faces, not a column.** It is context for the
-  conversation rather than the point of the panel, and a column would push the
-  messages off screen as the room fills.
+- **No name on a bubble.** With exactly two people in a conversation the header
+  already says who the other one is, and which side a message sits on says
+  which of the two wrote it.
 - **A presence dot rings the avatar rather than sitting inside it** —
   `.avatar` is `overflow: hidden` — and carries a visually-hidden
   "Online"/"Offline". `--color-success` against `--color-text-muted` is exactly
-  the pair WCAG 1.4.1 exists for; the roster must not signal by hue alone.
-- **One mark on the toggle, never two.** An unread count takes the corner
-  whenever there is one; a green presence dot stands in only when there is
-  nothing to read. Both on a 40px button would make neither legible.
+  the pair WCAG 1.4.1 exists for; the list must not signal by hue alone.
+- **One mark on the toggle, never two.** The unread count — the server's, summed
+  across conversations — takes the corner whenever there is one; a green
+  presence dot stands in only when there is nothing to read. Both on a 40px
+  button would make neither legible.
+- **The preview is one clipped line.** A preview that wrapped would let one long
+  message push every other person off the screen.
 - **The conversation follows only from its live edge.** A reader who has
   scrolled back is offered "New messages ↓" instead of being dragged to the
   bottom — the panel is on every page, so that would happen while they are
   doing something else.
+- **An empty thread says who can read it.** "Only the two of you can read it" —
+  a private message has no public witness, and saying so plainly is the
+  cheapest honest thing this surface can do.
 - **`prefers-reduced-motion`** turns off both the smooth scroll and the
   affordance's entrance.
 

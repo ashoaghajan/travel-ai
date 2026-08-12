@@ -109,7 +109,6 @@ beforeEach(async () => {
   // clearing trips first lets that go null rather than relying on the order
   // two cascades happen to fire in.
   await prisma.chatHistory.deleteMany();
-  await prisma.lobbyMessage.deleteMany();
   await prisma.directMessage.deleteMany();
   await prisma.conversationRead.deleteMany();
   await prisma.recentSearch.deleteMany();

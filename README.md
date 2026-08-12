@@ -16,7 +16,7 @@ cp server/.env.example server/.env
 # Put a JWT_SECRET in it. Generate one with:
 #   node -e "console.log(require('crypto').randomBytes(48).toString('base64url'))"
 # Every other key in that file is optional; each one names what is lost
-# without it. ABLY_API_KEY is the newest — without it the lobby still works,
+# without it. ABLY_API_KEY is the newest — without it messages still work,
 # it just stops updating until you refresh.
 npm run db:migrate
 
@@ -896,59 +896,88 @@ This is not possible with localStorage only.
 
 ---
 
-### 7. The lobby — **built**
+### 7. Direct messages — **built**
 
-One public room that every signed-in account shares — the first surface in this
-app that is not scoped to a single user. It is a panel docked beside the main
-content on desktop, a full-screen dialog on a phone, and a toggle in the page
-header carrying a count of what has been missed.
+Private conversations between two accounts. A panel docked beside the main
+content on desktop — the people on the left, the conversation on the right — a
+full-screen drill-down on a phone, and a toggle in the page header carrying a
+count of everything waiting.
+
+It replaced a single public room that every signed-in account shared. The room
+worked, but it was the wrong product: what was wanted was a list of people you
+could pick one of. `LobbyMessage` and its table are gone (dropped in
+`20260812090000_drop_lobby_messages`), and a great deal of the room carried over
+unchanged — the optimistic bubble, the retry story, the presence rules and the
+no-publish token below are all its work.
 
 ```txt
-GET    /api/lobby/messages          the newest 50, oldest first
-POST   /api/lobby/messages          30 per minute, per account
-DELETE /api/lobby/messages/:id      your own only
-GET    /api/lobby/people            everyone who has posted
-GET    /api/lobby/token             an hour-long listening token
+GET    /api/messages/conversations       every account but yours, + last message + unread
+GET    /api/messages/with/:userId        the newest 50 of that thread, oldest first
+POST   /api/messages/with/:userId        30 per minute, per account
+POST   /api/messages/with/:userId/read   move the read cursor to now
+DELETE /api/messages/:id                 your own only
+GET    /api/messages/token               an hour-long listening token
 ```
 
 Nothing here is called `chat`. That word is already spoken for by the private
 transcript between one reader and the planner (`planner.types.ts`), and the two
 have opposite shapes: that is one conversation per account, read and written
-whole by its owner; this is one conversation shared by everybody, appended to by
-many writers and read as a tail. So `LobbyMessage` is a relational table rather
-than a JSON document, and its index leads with `createdAt` rather than `userId`
-— the only query it serves is the newest fifty across all rows, where a leading
-`userId` would make the index useless.
+whole by its owner; this is appended to by two writers and read as a tail. So
+`DirectMessage` is a relational table rather than a JSON document.
+
+**A conversation is an unordered pair**, and `pairKey` — `min(a,b):max(a,b)`,
+written on create and never accepted from a client — is what gives it an
+identity. Without it every thread read is `(a=A AND b=B) OR (a=B AND b=A)`,
+which no single index serves.
 
 **The client cannot publish.** Realtime is Ably, and the API key never leaves
-the server; the browser gets a token this server signs, pinned to one user id
-and one channel. That token grants `subscribe` and `presence` and deliberately
-**not** `publish`, so every message must go through `POST /api/lobby/messages`,
-where it is validated, throttled and written down before anyone sees it — which
-is what lets every subscriber trust what arrives without re-checking it. A test
-asserts that exact capability, because it is the line the whole design rests on.
+the server; the browser gets a token this server signs, pinned to the caller's
+own user id. It grants `subscribe` on `user:<caller>` and `subscribe` +
+`presence` on `presence:global`, and deliberately **not** `publish` anywhere.
+So every message goes through `POST /api/messages/with/:userId`, where it is
+validated, throttled and written down before anyone sees it — and one browser
+physically cannot attach to another person's inbox, which is what makes a
+private conversation private at the transport rather than by a filter in a
+query. A test asserts that exact capability JSON, because it is the line the
+whole design rests on.
 
-`ABLY_API_KEY` is optional and the degradation is deliberate: without it the
-lobby is still a working room that you refresh — messages are saved and history
-loads — and only live delivery is missing. `GET /api/lobby/token` answers
-`PROVIDER_NOT_CONFIGURED`, the connection resolves to `unavailable`, and the
-panel's subtitle reads "Not live — reopen to refresh" rather than looking
-broken or silently going stale.
+**Two channels, and a message publishes to both ends.** `user:<recipientId>` is
+obvious; `user:<senderId>` is not redundant — it is how the sender's other tabs
+and their phone learn about a message they sent from this one. Presence is
+global and on its own channel, because the people list shows everyone's status
+rather than only the status of people you already have a thread with.
+
+`ABLY_API_KEY` is optional and the degradation is deliberate: without it
+messages still send, persist and load — you just reopen a conversation to see
+anything new. `GET /api/messages/token` answers `PROVIDER_NOT_CONFIGURED`, the
+connection resolves to `unavailable`, and the panel's subtitle reads "Not live
+— reopen to refresh" rather than looking broken or silently going stale. **The
+key's capability must cover `presence:*` and `user:*`**; a key scoped to only
+one of them mints tokens for the other that report success and then deliver
+nothing, forever. See `server/.env.example`.
 
 `clientMessageId` carries the retry story on both sides. A sleeping instance
 takes about a minute to answer and the reader will press the button again long
-before it does, so a send is an upsert on `(userId, clientMessageId)` and the
+before it does, so a send is an upsert on `(senderId, clientMessageId)` and the
 second attempt returns the first message instead of duplicating it. In the
 browser, unconfirmed sends live in their own list: with no server id they cannot
 collide with anything that has one, so confirmed messages upsert by id and the
 POST response and the copy off the channel produce identical state in either
 order — which matters, because the channel usually wins.
 
-An author's email never reaches the room. Messages join `name` only, and
-`/lobby/people` returns the people who have posted, unioned with whoever the
-caller can see in the presence set — rather than enumerating every registered
-account. "Everyone signed in can see each other's names" is the bargain;
-"every account that has ever existed is listable" is a larger one nobody made.
+**Unread is a cursor in Postgres**, not a tally kept since this tab opened.
+`ConversationRead` holds one row per conversation a reader has opened, and
+opening a thread moves it to now — so reading on a phone clears the badge on the
+laptop, and a reload does not resurrect it. A cursor rather than a `readAt` per
+message: marking a thread read is then one upsert instead of an UPDATE across
+every row in it.
+
+**Every account is listable, by name.** `/messages/conversations` returns every
+account but the caller's, capped at 200 and filterable with `?q=`, because you
+cannot message somebody you cannot find. That knowingly reverses the public
+room's narrower rule, and it is recorded rather than discovered later. An email
+never leaves the server: the query projects `id` and `name` only, and a test
+asserts the serialised body contains no address at all.
 
 **Presence is Ably's, not ours.** `enter()` on connect, `get()` for the roster,
 `subscribe()` for changes — no heartbeat, no `lastSeenAt` column, no reaper,
@@ -962,27 +991,29 @@ it, and each is a bug inverted:
   is signed. Three tabs are three members and one person.
 - **Enter carrying nothing.** The `presence` capability lets a client enter
   with arbitrary data beside its correctly-pinned id, so a name taken from
-  there would be whatever that client typed.
-
-The online ids travel up to `/lobby/people` as `?online=`, because presence
-lives in Ably and no server joins it — without them, somebody who connects and
-says nothing has no name to show. They are untrusted and need not be trusted:
-they widen a lookup that already projects `id` and `name`, so a forged one can
-name an account any caller could already enumerate by reading the room.
+  there would be whatever that client typed. Names come from the server-side
+  join and nowhere else.
 
 `close()` leaves the presence set before closing the socket, and `reset()` goes
 through it — otherwise a signed-out reader stays online to everyone else until
-Ably times the member out.
+Ably times the member out. Signing out also drops every thread: private
+conversations are exactly what the next person on this browser must not inherit.
 
 **A cold instance is visible only here.** The API sleeps after fifteen idle
-minutes and takes about a minute to wake. Every other screen simply waits; the
-lobby is the one place where other people's messages keep arriving over the
-socket while your own send hangs, which reads as broken for you specifically.
-So a pending bubble escalates — silent, then "Sending…", then "Still sending —
-the server may be waking up." — and focusing the composer pings `/health` if
-nothing has succeeded in ten minutes. **On focus, never on an interval:** a
-periodic ping would burn the free tier's instance-hours and defeat the sleeping
-it exists to work around.
+minutes and takes about a minute to wake. Every other screen simply waits; this
+is the one place where the other person's messages keep arriving over the socket
+while your own send hangs, which reads as broken for you specifically. So a
+pending bubble escalates — silent, then "Sending…", then "Still sending — the
+server may be waking up." — and focusing the composer pings `/health` if nothing
+has succeeded in ten minutes. **On focus, never on an interval:** a periodic
+ping would burn the free tier's instance-hours and defeat the sleeping it exists
+to work around.
+
+**Still no report and no block**, and that matters more than it did for a public
+room: an unwanted private message has no witness. Proportionate for a small,
+trusted group, and the trigger is written down — if this ever opens past one,
+report and block come before any other messaging feature. Soft delete is kept
+precisely so that stays possible.
 
 ---
 

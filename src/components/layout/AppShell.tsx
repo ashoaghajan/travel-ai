@@ -2,8 +2,8 @@ import { useEffect, useRef } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import { Sidebar } from '../navigation/Sidebar';
 import { BottomNavigation } from '../navigation/BottomNavigation';
-import { LobbyPanel } from '../../features/lobby/components/LobbyPanel';
-import { useLobbyConnection } from '../../features/lobby/useLobbyConnection';
+import { MessagesPanel } from '../../features/messages/components/MessagesPanel';
+import { useMessagesConnection } from '../../features/messages/useMessagesConnection';
 import styles from './AppShell.module.css';
 
 /**
@@ -15,9 +15,10 @@ export function AppShell() {
   const mainRef = useRef<HTMLElement>(null);
   const { pathname } = useLocation();
 
-  // Held here rather than in the panel, so the room stays connected — and the
-  // unread badge stays truthful — while the panel is collapsed.
-  useLobbyConnection();
+  // Held here rather than in the panel, so this account's inbox stays
+  // connected — and the unread badge stays truthful — while the panel is
+  // collapsed.
+  useMessagesConnection();
 
   // `main` scrolls, not the document, so React Router's scroll restoration
   // does not apply — without this a new page opens at the old scroll offset.
@@ -32,11 +33,11 @@ export function AppShell() {
         <Outlet />
       </main>
       {/*
-        Mounted here rather than per page so the room survives navigation —
-        and, because this shell is inside `RequireAuth`, so that it never
-        exists for a signed-out visitor.
+        Mounted here rather than per page so a conversation survives
+        navigation — and, because this shell is inside `RequireAuth`, so that
+        it never exists for a signed-out visitor.
       */}
-      <LobbyPanel />
+      <MessagesPanel />
       <BottomNavigation className={styles.bottomNav} />
     </div>
   );

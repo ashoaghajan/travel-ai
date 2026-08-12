@@ -1,28 +1,37 @@
 import { IconButton } from '../../../components/common/IconButton';
 import { ChatBubbleIcon } from '../../../components/common/icons';
 import { useCurrentUser } from '../../../hooks/useCurrentUser';
-import { lobbyStore, useLobby } from '../../../store/lobby.store';
-import styles from './LobbyToggle.module.css';
+import { messagesStore, useMessages } from '../../../store/messages.store';
+import { countUnread } from '../conversation.filters';
+import styles from './MessagesToggle.module.css';
 
 /**
- * Opens and closes the lobby, and says how much has been missed.
+ * Opens and closes the messages panel, and says how much is waiting.
  *
  * Lives in `PageHeader` beside the account menu, for the reason that file
  * gives for putting the menu there: it is app chrome, in the same corner on
  * every screen, rather than something each page decides about.
  *
  * Renders nothing when nobody is signed in — `PageHeader` is used on the
- * signed-out screens too, and there is no room to open from there.
+ * signed-out screens too, and there is nothing to open from there.
  */
-export function LobbyToggle() {
+export function MessagesToggle() {
   const { isAuthenticated, user } = useCurrentUser();
-  const { isOpen, unread, onlineIds } = useLobby();
+  const { isOpen, conversations, onlineIds } = useMessages();
 
   if (!isAuthenticated) return null;
 
   /*
+   * Everything waiting, across every conversation.
+   *
+   * The server's count rather than a tally kept since this tab opened, which
+   * is what makes it survive a reload and agree with the reader's phone.
+   */
+  const unread = countUnread(conversations);
+
+  /*
    * Somebody other than the reader. Counting yourself would light this for a
-   * reader alone in an empty room, which is the one case where "people are
+   * reader with nobody else around, which is the one case where "people are
    * here" is worth not saying.
    */
   const others = onlineIds.filter((id) => id !== user?.id).length;
@@ -37,16 +46,16 @@ export function LobbyToggle() {
 
   const label =
     unread > 0
-      ? `Lobby, ${unread} new`
+      ? `Messages, ${unread} new`
       : others > 0
-        ? `Lobby, ${others} other ${others === 1 ? 'person' : 'people'} here`
+        ? `Messages, ${others} other ${others === 1 ? 'person' : 'people'} online`
         : isOpen
-          ? 'Close the lobby'
-          : 'Open the lobby';
+          ? 'Close messages'
+          : 'Open messages';
 
   return (
     <span className={styles.wrap}>
-      <IconButton label={label} aria-expanded={isOpen} onClick={() => lobbyStore.toggle()}>
+      <IconButton label={label} aria-expanded={isOpen} onClick={() => messagesStore.toggle()}>
         <ChatBubbleIcon size={20} />
       </IconButton>
 
@@ -56,10 +65,10 @@ export function LobbyToggle() {
         </span>
       ) : null}
 
-      {/* Who is here, while the panel is shut — the reason the connection opens
-          on sign-in rather than on expand. A dot rather than a number: the
-          useful question when collapsed is whether anyone is around, and the
-          count is in the label and in the roster for anyone who wants it. */}
+      {/* Who is around, while the panel is shut — the reason the connection
+          opens on sign-in rather than on expand. A dot rather than a number:
+          the useful question when collapsed is whether anyone is there to
+          answer, and the count is in the label for anyone who wants it. */}
       {badge === 'presence' ? <span className={styles.presence} aria-hidden="true" /> : null}
     </span>
   );

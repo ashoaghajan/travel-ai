@@ -13,13 +13,6 @@
   align-items: flex-start;
 }
 
-.author {
-  padding: 0 var(--space-xs);
-  font-size: var(--font-xs);
-  font-weight: var(--font-weight-semibold);
-  color: var(--color-text-muted);
-}
-
 .row {
   display: flex;
   align-items: center;

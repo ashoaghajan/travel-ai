@@ -5,7 +5,7 @@
  * between one reader and the AI planner. Nothing here is named `chat` for that
  * reason: the word is already spoken for by the transcript.
  *
- * Replaces the lobby, which was one public room everybody shared. The shape of
+ * Replaced one public room everybody shared. The shape of
  * a message is nearly unchanged — the difference that matters is that it now
  * has a recipient, so who may read it is a fact about the row rather than
  * about the app.

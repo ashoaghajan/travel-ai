@@ -66,7 +66,6 @@ model User {
   savedActivities SavedActivity[]
   recentSearches  RecentSearch[]
   chatHistory     ChatHistory?
-  lobbyMessages   LobbyMessage[]
 
   /// Two relations to one model, so both need naming — Prisma cannot tell
   /// which side of a `DirectMessage` a `User[]` was meant to be.
@@ -377,52 +376,18 @@ model ChatHistory {
   updatedAt DateTime @updatedAt
 }
 
-/// One message in the lobby — the app's single public room.
-///
-/// A row per message, unlike `ChatHistory` above, and for the opposite reasons.
-/// That is one conversation per account, read and written whole by its owner;
-/// this is one conversation shared by everybody, appended to by many writers
-/// and read as a tail. A JSON document would make every send a read-modify-
-/// write of the same value under concurrent writers, which is the one shape the
-/// JSON rule at the top of this file is warning against.
-model LobbyMessage {
-  id     String @id @default(uuid())
-  userId String
-  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  /// Plain text, capped by zod at the edge. Never markup: it is rendered as a
-  /// text node, and nothing anywhere linkifies it.
-  body String
-
-  /// The id the sending browser minted, echoed back on the response and later
-  /// on the realtime event. Two jobs. The sender uses it to retire its own
-  /// optimistic bubble whichever of the two arrives first; and with the unique
-  /// constraint below it makes a retry idempotent, which matters because a
-  /// sleeping instance takes a minute to answer and the reader will press the
-  /// button again long before it does.
-  clientMessageId String
-
-  /// Withdrawn by its author. Soft, so an id already sitting on other people's
-  /// screens still resolves, and so that adding moderation later does not
-  /// require data that was hard-deleted before anyone asked for it.
-  deletedAt DateTime?
-
-  createdAt DateTime @default(now())
-
-  @@unique([userId, clientMessageId])
-  /// Not `[userId, createdAt]` like every other feed in this file, and
-  /// deliberately: those are per-account lists, whereas this one is only ever
-  /// read as `ORDER BY createdAt DESC LIMIT 50` across every row, where a
-  /// leading userId would make the index useless for the one query there is.
-  @@index([createdAt(sort: Desc)])
-}
-
 /// One thing somebody said to one other person.
 ///
-/// Replaces `LobbyMessage`, which was one public room shared by everyone. The
-/// shape is nearly the same — plain text, a client-minted id for retries, a
-/// soft delete — and the difference that matters is that a message now has a
-/// recipient, so a conversation is a *pair* rather than the whole app.
+/// Replaced the app's single public room, whose table was dropped in
+/// `20260812..._drop_lobby_messages`. The shape is nearly the same — plain
+/// text, a client-minted id for retries, a soft delete — and the difference
+/// that matters is that a message now has a recipient, so who may read it is a
+/// fact about the row rather than about the app.
+///
+/// A row per message, unlike `ChatHistory` above, and for the opposite reasons.
+/// That is one transcript per account, read and written whole by its owner;
+/// this is appended to by two writers and read as a tail, and a JSON document
+/// would make every send a read-modify-write of the same value.
 model DirectMessage {
   id String @id @default(uuid())
 

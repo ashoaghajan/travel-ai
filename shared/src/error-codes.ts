@@ -69,7 +69,7 @@ export const ERROR_CODES = {
   BOOKING_NOT_FOUND: 'BOOKING_NOT_FOUND',
   BOOKING_ALREADY_ON_TRIP: 'BOOKING_ALREADY_ON_TRIP',
   ACTIVITY_ALREADY_ON_DAY: 'ACTIVITY_ALREADY_ON_DAY',
-  /* ------------------------------------------------------------------ lobby */
+  /* --------------------------------------------------------------- messages */
 
   MESSAGE_NOT_FOUND: 'MESSAGE_NOT_FOUND',
   /**

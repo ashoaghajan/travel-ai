@@ -162,7 +162,8 @@ describe('reading a thread', () => {
   });
 
   /*
-   * The rule the whole feature rests on. The lobby could be read by everybody
+   * The rule the whole feature rests on. The public room it replaced could be
+   * read by everybody
    * by design; this cannot, and a third account must see nothing of it.
    */
   it('shows nothing of a conversation between two other people', async () => {
@@ -244,7 +245,7 @@ describe('the conversation list', () => {
 
     const response = await api().get(CONVERSATIONS).set('Authorization', alice.auth).expect(200);
 
-    // Deliberately broader than the lobby's roster, which listed only people
+    // Deliberately broader than the public room's roster, which listed only people
     // who had posted: you cannot message somebody you cannot find.
     expect(response.body.map((c: { id: string }) => c.id)).toEqual([bob.user.id]);
   });

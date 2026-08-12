@@ -9,7 +9,8 @@ import { prisma } from '../../prisma';
  * No Express in here. Everything below takes ids and returns data, which is
  * what lets the route file stay a list of short handlers.
  *
- * Replaces `lobby.service.ts`, which served one room shared by everybody. The
+ * Replaced the service behind the app's one public room, shared by
+ * everybody. The
  * room needed no membership because there was one of it; a conversation has
  * exactly two members, and every query below is scoped by that fact rather
  * than by a check somewhere else.
@@ -94,7 +95,8 @@ export async function listThread(
 /**
  * Writes a message, or returns the one this send already produced.
  *
- * The `upsert` is the whole retry story, and it is unchanged from the lobby's:
+ * The `upsert` is the whole retry story, and it is unchanged from the public
+ * room's:
  * a cold instance can take a minute to answer, by which time the reader has
  * pressed the button again. `update: {}` means the second attempt changes
  * nothing and hands back the first message, so a retry is safe however many
@@ -172,7 +174,7 @@ export async function markRead(userId: string, otherUserId: string): Promise<voi
  * Everyone you could talk to, with the state of that conversation.
  *
  * **Every account, not only the ones you have written to.** This is the one
- * place this feature is deliberately broader than the lobby it replaces, which
+ * place this feature is deliberately broader than the room it replaced, which
  * listed only people who had posted precisely so accounts were not
  * enumerable — a rule a direct-message product cannot keep, because you cannot
  * message somebody you cannot find. Names only; an email is never selected.

@@ -1,0 +1,120 @@
+/*
+ * The people, down the left on desktop and filling the dialog on a phone.
+ *
+ * Scrolls on its own: the list is every account, and the conversation beside
+ * it must not move when this one gets long.
+ */
+.wrap {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  height: 100%;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border-right: 1px solid var(--color-border);
+}
+
+.search {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: var(--space-sm);
+  background-color: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.field {
+  width: 100%;
+  padding: var(--space-xs) var(--space-sm);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+  background-color: var(--color-surface-muted);
+  color: var(--color-text-main);
+  font-size: var(--font-sm);
+}
+
+.field:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 1px;
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  padding: var(--space-xs);
+  gap: 2px;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  width: 100%;
+  padding: var(--space-xs) var(--space-sm);
+  border: none;
+  border-radius: var(--radius-md);
+  background-color: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.row:hover {
+  background-color: var(--color-surface-muted);
+}
+
+.active {
+  background-color: var(--color-primary-soft);
+}
+
+/* `min-width: 0` is what lets the preview below actually clip: without it a
+   flex item is at least as wide as its content and the row grows instead. */
+.text {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+}
+
+.name {
+  font-size: var(--font-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-main);
+}
+
+/* One line, clipped. A preview that wrapped would let one long message push
+   every other person off the screen. */
+.preview {
+  overflow: hidden;
+  font-size: var(--font-xs);
+  color: var(--color-text-muted);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.unread {
+  flex-shrink: 0;
+  min-width: 20px;
+  padding: 0 6px;
+  border-radius: var(--radius-pill);
+  background-color: var(--color-primary);
+  color: var(--color-text-light);
+  font-size: var(--font-xs);
+  font-weight: var(--font-weight-semibold);
+  line-height: 20px;
+  text-align: center;
+}
+
+.loading {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  padding: var(--space-sm);
+}
+
+.empty {
+  padding: var(--space-md);
+  font-size: var(--font-sm);
+  line-height: var(--line-height-base);
+  color: var(--color-text-muted);
+}

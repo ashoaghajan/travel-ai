@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { IconButton } from '../../../components/common/IconButton';
 import { TrashIcon } from '../../../components/common/icons';
 import { cx } from '../../../utils/cx';
-import styles from './LobbyMessageItem.module.css';
+import styles from './MessageItem.module.css';
 
 /**
  * How long a send waits before it starts explaining itself.
@@ -10,8 +10,8 @@ import styles from './LobbyMessageItem.module.css';
  * Nothing at first, because most sends are done inside a second and a label
  * that appears and vanishes is worse than no label. Then "Sending…". Then, at
  * fifteen seconds, the sentence that matters: the API sleeps after fifteen idle
- * minutes and takes about a minute to wake, and the lobby is the one screen
- * where that is invisible — other people's messages keep arriving over the
+ * minutes and takes about a minute to wake, and this panel is the one screen
+ * where that is invisible — the other person's messages keep arriving over the
  * socket while this one hangs, which reads as broken for this reader
  * specifically rather than as a server waking up.
  */
@@ -46,8 +46,7 @@ function useSendingStage(pending: boolean): SendingStage {
   return stage;
 }
 
-export type LobbyMessageItemProps = {
-  authorName: string;
+export type MessageItemProps = {
   body: string;
   /** ISO timestamp, or absent while the message is still on its way. */
   createdAt?: string;
@@ -73,15 +72,20 @@ function timeOf(createdAt: string): string {
  *
  * The bubble borrows its shape from the planner's, but not its component: that
  * one knows about `'user' | 'ai'` and is sized for a 640px conversation, and
- * this panel is barely half that wide. What carries over is the vocabulary —
- * own messages purple and right, everyone else's grey and left.
+ * this pane is barely half that wide. What carries over is the vocabulary —
+ * own messages purple and right, the other person's grey and left.
+ *
+ * **Nobody's name appears on a bubble.** In a conversation with exactly two
+ * people the header already says who the other one is, and the side a message
+ * sits on says which of the two wrote it. The public room needed the name on
+ * every line; a thread that repeated it would be saying the same thing three
+ * times.
  *
  * The body is rendered as a text node and nothing here linkifies it. That is a
  * rule rather than an omission: turning what a stranger typed into a clickable
- * link is how a chat feature grows a phishing surface.
+ * link is how a messaging feature grows a phishing surface.
  */
-export function LobbyMessageItem({
-  authorName,
+export function MessageItem({
   body,
   createdAt,
   isOwn,
@@ -90,15 +94,11 @@ export function LobbyMessageItem({
   onDelete,
   onRetry,
   onDiscard,
-}: LobbyMessageItemProps) {
+}: MessageItemProps) {
   const stage = useSendingStage(pending);
 
   return (
     <li className={cx(styles.item, isOwn ? styles.own : styles.other)}>
-      {/* Only on other people's messages: repeating your own name back at you
-          on every line is noise, and the alignment already says who it was. */}
-      {isOwn ? null : <span className={styles.author}>{authorName}</span>}
-
       <div className={styles.row}>
         <p className={cx(styles.bubble, pending && styles.pending, failed && styles.failed)}>
           {body}

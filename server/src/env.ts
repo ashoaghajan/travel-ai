@@ -117,24 +117,27 @@ const schema = z.object({
   VIATOR_API_KEY: z.string().min(1).optional(),
 
   /**
-   * Ably — the realtime channel behind the lobby.
+   * Ably — the realtime channel behind direct messages.
    *
    * A genuine secret, and the one key here that must never be handed to a
-   * browser: it can publish and subscribe to everything. What the browser gets
-   * is a token this server signs from it, pinned to one user id and one
-   * channel, which is why the whole flow goes through `GET /api/lobby/token`
-   * rather than a `VITE_` variable.
+   * browser: it can publish and subscribe to everything it is scoped to. What
+   * the browser gets is a token this server signs from it, pinned to one user
+   * id and to that user's own inbox, which is why the whole flow goes through
+   * `GET /api/messages/token` rather than a `VITE_` variable.
    *
-   * Give it a key limited to `publish, subscribe, presence` on `lobby:*`
-   * rather than the root key. Note it needs `presence` even though this server
-   * never enters the presence set: a token's rights are the intersection of
-   * what it asks for and what the signing key holds, so a key without it would
-   * quietly mint tokens that cannot show who is online.
+   * Give it a key limited to `publish, subscribe, presence` on **both**
+   * `user:*` and `presence:*`, rather than the root key. Both, and this is the
+   * failure worth knowing about because nothing reports it: a token's rights
+   * are the intersection of what it asks for and what the signing key holds,
+   * and the request only fails when that intersection is *empty*. A key
+   * covering one namespace mints tokens for the other that report success and
+   * then deliver nothing, forever.
    *
-   * Optional, and the degradation is deliberate: without it the lobby still
-   * works as a room you refresh — messages are saved, history loads, sends
-   * succeed — and only the live delivery is missing. `GET /api/lobby/token`
-   * answers `PROVIDER_NOT_CONFIGURED` and the panel says so.
+   * Optional, and the degradation is deliberate: without it messages are still
+   * saved, threads still load and sends still succeed — only the live delivery
+   * is missing, so you reopen a conversation to see anything new.
+   * `GET /api/messages/token` answers `PROVIDER_NOT_CONFIGURED` and the panel
+   * says so.
    */
   ABLY_API_KEY: z.string().min(1).optional(),
 

@@ -1,26 +1,36 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { IconButton } from '../../../components/common/IconButton';
 import { Skeleton } from '../../../components/common/Skeleton';
-import { CloseIcon } from '../../../components/common/icons';
+import { ArrowLeftIcon, CloseIcon } from '../../../components/common/icons';
 import { useCurrentUser } from '../../../hooks/useCurrentUser';
-import { lobbyStore, useLobby } from '../../../store/lobby.store';
-import { LobbyComposer } from './LobbyComposer';
-import { LobbyMessageItem } from './LobbyMessageItem';
-import { LobbyPeopleList } from './LobbyPeopleList';
-import styles from './LobbyRoom.module.css';
+import { messagesStore, threadFor, useMessages } from '../../../store/messages.store';
+import { MessageComposer } from './MessageComposer';
+import { MessageItem } from './MessageItem';
+import styles from './MessageThread.module.css';
 
 /** How far from the end still counts as following the conversation. */
 const NEAR_BOTTOM_PX = 40;
 
+export type MessageThreadProps = {
+  /** Whose conversation this is, or null when nobody has been picked. */
+  userId: string | null;
+  name: string;
+  isOnline: boolean;
+  /** Only on small screens, where this pane replaced the list. */
+  onBack?: () => void;
+  onClose?: () => void;
+};
+
 /**
- * The room's contents — header, people, conversation, composer.
+ * One conversation: who it is with, what has been said, and the composer.
  *
- * Split out from `LobbyPanel` because the panel is two different containers
- * depending on the screen (a grid column, or a modal dialog) and this is the
- * part that does not care which one it is inside.
+ * Reads its own thread out of the store rather than taking it as a prop, so an
+ * inbound message lands here without the panel above having to re-thread
+ * anything — the store keys every thread by the person on the other end.
  */
-export function LobbyRoom({ onClose }: { onClose: () => void }) {
-  const { messages, pending, people, onlineIds, history, error, connection } = useLobby();
+export function MessageThread({ userId, name, isOnline, onBack, onClose }: MessageThreadProps) {
+  const state = useMessages();
+  const { messages, pending, history } = threadFor(state, userId);
   const { user } = useCurrentUser();
   const endRef = useRef<HTMLDivElement>(null);
   const scrollerRef = useRef<HTMLDivElement>(null);
@@ -49,44 +59,46 @@ export function LobbyRoom({ onClose }: { onClose: () => void }) {
    * Follow the conversation, but only from the bottom of it.
    *
    * Scrolling unconditionally yanks the view away from anybody reading back
-   * through the room — and this panel is on every page, so that happens while
+   * through a thread — and this panel is on every page, so that happens while
    * they are doing something else entirely. Someone who has scrolled up has
    * said where they want to be; a new message is told to them instead.
    *
    * Keyed on the counts rather than the arrays, which are rebuilt on every
-   * change.
+   * change, and on `userId` so that switching person starts at the newest.
    */
   useEffect(() => {
-    if (isAtBottom.current) goToBottom();
+    if (isAtBottom.current) goToBottom(false);
     else setHasMissed(true);
-  }, [messages.length, pending.length, goToBottom]);
+  }, [userId, messages.length, pending.length, goToBottom]);
+
+  if (!userId) {
+    return (
+      <div className={styles.thread}>
+        <p className={styles.blank}>Pick someone to talk to.</p>
+      </div>
+    );
+  }
 
   return (
-    <div className={styles.room}>
+    <div className={styles.thread}>
       <header className={styles.header}>
-        <div>
-          <h2 className={styles.title}>Lobby</h2>
-          {/*
-            Says "everyone signed in" while it is working, and only mentions
-            the connection when there is something the reader would otherwise
-            be confused by — a room that has quietly stopped updating.
-          */}
-          <p className={styles.subtitle}>
-            {connection === 'online' || connection === 'idle' ? (
-              'Everyone signed in'
-            ) : connection === 'connecting' ? (
-              'Connecting…'
-            ) : (
-              <span className={styles.stale}>Not live — reopen to refresh</span>
-            )}
-          </p>
-        </div>
-        <IconButton label="Close the lobby" onClick={onClose}>
-          <CloseIcon size={20} />
-        </IconButton>
-      </header>
+        {onBack ? (
+          <IconButton label="Back to people" onClick={onBack}>
+            <ArrowLeftIcon size={20} />
+          </IconButton>
+        ) : null}
 
-      <LobbyPeopleList people={people} onlineIds={onlineIds} selfId={user?.id} />
+        <div className={styles.who}>
+          <h3 className={styles.name}>{name}</h3>
+          <p className={styles.status}>{isOnline ? 'Online' : 'Offline'}</p>
+        </div>
+
+        {onClose ? (
+          <IconButton label="Close messages" onClick={onClose}>
+            <CloseIcon size={20} />
+          </IconButton>
+        ) : null}
+      </header>
 
       <div
         className={styles.scroller}
@@ -106,43 +118,50 @@ export function LobbyRoom({ onClose }: { onClose: () => void }) {
       >
         {history === 'loading' && messages.length === 0 ? (
           <div className={styles.loading} aria-busy="true">
-            <span className="visually-hidden">Loading the room…</span>
+            <span className="visually-hidden">Loading the conversation…</span>
             <Skeleton height="40px" radius="lg" />
             <Skeleton height="40px" radius="lg" width="70%" />
             <Skeleton height="40px" radius="lg" />
           </div>
         ) : null}
 
-        {history === 'ready' && messages.length === 0 && pending.length === 0 ? (
-          <p className={styles.empty}>
-            Nobody has said anything yet. Everyone signed in can see this room and your name.
+        {history === 'error' ? (
+          <p className={styles.empty} role="alert">
+            We could not load this conversation.
           </p>
         ) : null}
 
-        <ul className={styles.messages} aria-label="Messages">
+        {history === 'ready' && messages.length === 0 && pending.length === 0 ? (
+          <p className={styles.empty}>
+            This is the start of your conversation with {name}. Only the two of you can read it.
+          </p>
+        ) : null}
+
+        {/* Named for the person rather than "Messages": the dialog around it
+            is already called that, and two things with one name is a list a
+            screen-reader user cannot tell apart from the panel holding it. */}
+        <ul className={styles.messages} aria-label={`Conversation with ${name}`}>
           {messages.map((message) => (
-            <LobbyMessageItem
+            <MessageItem
               key={message.id}
-              authorName={message.authorName}
               body={message.body}
               createdAt={message.createdAt}
-              isOwn={message.userId === user?.id}
-              onDelete={() => void lobbyStore.remove(message.id)}
+              isOwn={message.senderId === user?.id}
+              onDelete={() => void messagesStore.remove(userId, message.id)}
             />
           ))}
 
           {/* Always after the confirmed ones: they are the newest thing said,
               and they have no server time to sort by. */}
           {pending.map((entry) => (
-            <LobbyMessageItem
+            <MessageItem
               key={entry.clientMessageId}
-              authorName={user?.name ?? 'You'}
               body={entry.body}
               isOwn
               pending={entry.status === 'pending'}
               failed={entry.status === 'failed'}
-              onRetry={() => void lobbyStore.retry(entry.clientMessageId)}
-              onDiscard={() => lobbyStore.discard(entry.clientMessageId)}
+              onRetry={() => void messagesStore.retry(userId, entry.clientMessageId)}
+              onDiscard={() => messagesStore.discard(userId, entry.clientMessageId)}
             />
           ))}
         </ul>
@@ -160,13 +179,13 @@ export function LobbyRoom({ onClose }: { onClose: () => void }) {
 
       {/* The per-message failure already says what went wrong and offers a way
           out, so this is only for what has no bubble of its own. */}
-      {error && pending.every((entry) => entry.status !== 'failed') ? (
+      {state.error && pending.every((entry) => entry.status !== 'failed') ? (
         <p className={styles.error} role="alert">
-          {error}
+          {state.error}
         </p>
       ) : null}
 
-      <LobbyComposer onSend={(body) => void lobbyStore.send(body)} />
+      <MessageComposer onSend={(body) => void messagesStore.send(userId, body)} />
     </div>
   );
 }

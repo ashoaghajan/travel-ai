@@ -1,20 +1,20 @@
 import { useId, useState } from 'react';
-import { LOBBY_MESSAGE_MAX_LENGTH } from '@ai-travel/shared';
+import { MESSAGE_MAX_LENGTH } from '@ai-travel/shared';
 import { IconButton } from '../../../components/common/IconButton';
 import { ArrowUpIcon } from '../../../components/common/icons';
-import { lobbyService } from '../../../services/lobby.service';
-import styles from './LobbyComposer.module.css';
+import { messagesService } from '../../../services/messages.service';
+import styles from './MessageComposer.module.css';
 
 /** Counts down only once it is close enough to matter. */
 const WARN_AT = 100;
 
-export type LobbyComposerProps = {
+export type MessageComposerProps = {
   onSend: (body: string) => void;
   disabled?: boolean;
 };
 
 /**
- * The one place to type into the room.
+ * The one place to type into a conversation.
  *
  * Written rather than lifted from `PlannerInput`, which hardcoded
  * `id="planner-prompt"` when this was built — and since this panel is on every
@@ -27,12 +27,12 @@ export type LobbyComposerProps = {
  * then scrolls, because a composer that grows without limit eventually eats
  * the conversation it belongs to.
  */
-export function LobbyComposer({ onSend, disabled = false }: LobbyComposerProps) {
+export function MessageComposer({ onSend, disabled = false }: MessageComposerProps) {
   const fieldId = useId();
   const [value, setValue] = useState('');
 
   const trimmed = value.trim();
-  const remaining = LOBBY_MESSAGE_MAX_LENGTH - value.length;
+  const remaining = MESSAGE_MAX_LENGTH - value.length;
   const tooLong = remaining < 0;
   const canSend = trimmed.length > 0 && !tooLong && !disabled;
 
@@ -52,7 +52,7 @@ export function LobbyComposer({ onSend, disabled = false }: LobbyComposerProps) 
       }}
     >
       <label className="visually-hidden" htmlFor={fieldId}>
-        Write to the lobby
+        Write a message
       </label>
 
       <textarea
@@ -68,7 +68,7 @@ export function LobbyComposer({ onSend, disabled = false }: LobbyComposerProps) 
          * `keepWarm` — it is at most one request per ten minutes, and never a
          * timer.
          */
-        onFocus={() => lobbyService.wakeUp()}
+        onFocus={() => messagesService.wakeUp()}
         onChange={(event) => setValue(event.target.value)}
         onKeyDown={(event) => {
           if (event.key !== 'Enter' || event.shiftKey) return;

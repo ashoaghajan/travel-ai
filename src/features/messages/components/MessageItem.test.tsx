@@ -1,13 +1,13 @@
 /** @vitest-environment jsdom */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, render, screen } from '@testing-library/react';
-import { LobbyMessageItem } from './LobbyMessageItem';
+import { MessageItem } from './MessageItem';
 
 /**
  * What a send says about itself while it is in flight.
  *
  * The API sleeps after fifteen idle minutes and takes about a minute to wake,
- * and the lobby is the one screen where that is invisible: other people's
+ * and this panel is the one screen where that is invisible: the other person's
  * messages keep arriving over the socket while your own hangs. The copy exists
  * to turn "broken for me specifically" into "the server is waking up".
  */
@@ -21,7 +21,7 @@ afterEach(() => {
 });
 
 function pendingMessage() {
-  return render(<LobbyMessageItem authorName="Ada" body="hello" isOwn pending />);
+  return render(<MessageItem body="hello" isOwn pending />);
 }
 
 describe('a message on its way', () => {
@@ -54,20 +54,13 @@ describe('a message on its way', () => {
     const { rerender } = pendingMessage();
     act(() => vi.advanceTimersByTime(15_000));
 
-    rerender(
-      <LobbyMessageItem
-        authorName="Ada"
-        body="hello"
-        isOwn
-        createdAt="2026-08-11T10:00:00.000Z"
-      />,
-    );
+    rerender(<MessageItem body="hello" isOwn createdAt="2026-08-11T10:00:00.000Z" />);
 
     expect(screen.queryByText(/still sending/i)).not.toBeInTheDocument();
   });
 
   it('says nothing about waking up when the send has failed', () => {
-    render(<LobbyMessageItem authorName="Ada" body="hello" isOwn failed />);
+    render(<MessageItem body="hello" isOwn failed />);
 
     act(() => vi.advanceTimersByTime(15_000));
 

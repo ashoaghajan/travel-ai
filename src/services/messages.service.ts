@@ -6,10 +6,10 @@ import { http, keepWarm } from './http';
  *
  * No React component may import this file.
  *
- * Thin on purpose, like `lobby.service.ts` before it. Everything interesting
- * about a conversation — reconciling an optimistic bubble with the row that
- * comes back, ordering, retries, which thread an arriving message belongs to —
- * belongs to the store, because none of it is about the wire.
+ * Thin on purpose, as the public room's service was before it. Everything
+ * interesting about a conversation — reconciling an optimistic bubble with the
+ * row that comes back, ordering, retries, which thread an arriving message
+ * belongs to — belongs to the store, because none of it is about the wire.
  *
  * Every path names the other person rather than a conversation id. A thread
  * has no identity of its own here: it is the pair, and the server derives its
@@ -56,8 +56,9 @@ export const messagesService = {
    * Moves the read cursor for one conversation to now.
    *
    * A cursor on the server rather than a count in this tab, which is the one
-   * thing the lobby's unread badge could not do: reading a thread on a phone
-   * has to clear the badge on the laptop too, and survive a reload on both.
+   * thing the public room's unread badge could not do: reading a thread on a
+   * phone has to clear the badge on the laptop too, and survive a reload on
+   * both.
    */
   async markRead(userId: string): Promise<void> {
     await http.post<void>(`/messages/with/${encodeURIComponent(userId)}/read`);

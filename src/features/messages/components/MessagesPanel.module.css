@@ -1,0 +1,89 @@
+/*
+ * The desktop column. Sized here rather than by the grid track, which is
+ * `auto` so that a collapsed panel — rendering nothing at all — costs zero
+ * width and leaves the shell byte-identical to what it was before this
+ * feature existed.
+ */
+.column {
+  display: flex;
+  flex-direction: column;
+  width: var(--layout-messages-width);
+  /* Without this the panes inside grow to their content instead of scrolling,
+     and the shell stretches past the viewport. */
+  min-height: 0;
+  height: 100%;
+  overflow: hidden;
+  border-left: 1px solid var(--color-border);
+}
+
+.dialog {
+  width: 100vw;
+  max-width: none;
+  height: 100dvh;
+  max-height: none;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background-color: var(--color-surface);
+  color: var(--color-text-main);
+  /* The composer sits at the bottom edge on a phone. */
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+.dialog::backdrop {
+  background-color: var(--color-backdrop);
+}
+
+.body {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  height: 100%;
+  background-color: var(--color-surface);
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-md);
+  padding: var(--space-md);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.title {
+  font-size: var(--font-md);
+  font-weight: var(--font-weight-semibold);
+}
+
+.subtitle {
+  font-size: var(--font-xs);
+  color: var(--color-text-muted);
+}
+
+.stale {
+  color: var(--color-warning);
+}
+
+/*
+ * Two panes: the people, then the conversation.
+ *
+ * The list is a fixed track and the thread takes the rest, because the list is
+ * a fixed thing — an avatar, a name and a preview — while a conversation is
+ * whatever it is. `minmax(0, 1fr)` rather than `1fr` so a long unbroken word in
+ * a message cannot push the pane wider than the panel.
+ */
+.panes {
+  display: grid;
+  grid-template-columns: var(--layout-conversations-width) minmax(0, 1fr);
+  flex: 1;
+  min-height: 0;
+}
+
+/* Below the breakpoint there is room for one pane, and it fills the dialog. */
+.pane {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}

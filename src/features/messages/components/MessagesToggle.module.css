@@ -5,8 +5,8 @@
 
 /*
  * The count is `aria-hidden` and duplicated into the button's label instead:
- * a screen reader announcing "3" next to "Open the lobby" says nothing about
- * what three of, whereas "Lobby, 3 new" is the whole sentence.
+ * a screen reader announcing "3" next to "Open messages" says nothing about
+ * what three of, whereas "Messages, 3 new" is the whole sentence.
  */
 .badge {
   position: absolute;

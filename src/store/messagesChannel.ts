@@ -9,8 +9,8 @@ import { messagesService } from '../services/messages.service';
  * four callbacks, which is what lets the store be tested without a socket:
  * jsdom has no `WebSocket`, and nothing else in this repo has ever needed one.
  *
- * **Two channels, replacing the lobby's one.** They are split because they
- * answer different questions and have different audiences:
+ * **Two channels, replacing the public room's single one.** They are split
+ * because they answer different questions and have different audiences:
  *
  * - **`user:<self>`** is this account's inbox. Every message either way lands
  *   here — including the reader's own sends, so their other tabs and devices

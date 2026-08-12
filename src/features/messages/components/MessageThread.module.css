@@ -1,4 +1,4 @@
-.room {
+.thread {
   display: flex;
   flex-direction: column;
   /* The positioning context for `.missed`, which floats over the end of the
@@ -16,24 +16,39 @@
 .header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: var(--space-md);
-  padding: var(--space-md);
+  gap: var(--space-sm);
+  padding: var(--space-sm) var(--space-md);
   border-bottom: 1px solid var(--color-border);
 }
 
-.title {
-  font-size: var(--font-md);
-  font-weight: var(--font-weight-semibold);
+.who {
+  flex: 1;
+  min-width: 0;
 }
 
-.subtitle {
+.name {
+  font-size: var(--font-sm);
+  font-weight: var(--font-weight-semibold);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.status {
   font-size: var(--font-xs);
   color: var(--color-text-muted);
 }
 
-.stale {
-  color: var(--color-warning);
+/* Nobody picked yet. Centred and quiet: it is an invitation, not an error. */
+.blank {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  padding: var(--space-lg);
+  font-size: var(--font-sm);
+  color: var(--color-text-muted);
+  text-align: center;
 }
 
 .scroller {

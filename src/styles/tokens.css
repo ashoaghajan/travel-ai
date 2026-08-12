@@ -136,9 +136,12 @@
    * Layout — DESIGN_SPEC §7
    * --------------------------------------------------------------- */
   --layout-sidebar-width: 280px;
-  /* Narrower than the sidebar: the lobby is company alongside the page, not a
-     second place to be, and it only appears when someone opens it. */
-  --layout-lobby-width: 340px;
+  /* Wider than the sidebar, because it holds two panes: the people, and the
+     conversation with one of them. It only appears when someone opens it. */
+  --layout-messages-width: 600px;
+  /* The left pane. Enough for an avatar, a name and a line of preview, and no
+     more — the conversation is what the panel is for. */
+  --layout-conversations-width: 210px;
   --layout-content-padding: 24px;
   --layout-max-width: 1200px;
 

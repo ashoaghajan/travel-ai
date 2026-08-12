@@ -24,12 +24,12 @@ import type {
  * read would be an infinite render loop, because `useSyncExternalStore`
  * compares snapshots with `Object.is`.
  *
- * Replaces `lobby.store.ts`, which held one room everybody shared. Everything
- * hard about that store was right and is carried over unchanged: the pending
- * list kept apart from the confirmed one, upsert by server id, retry under the
- * same `clientMessageId`, and subscribing before backfilling. What is new is
- * that there are now many conversations rather than one, so all of it is
- * keyed by the person on the other end.
+ * Replaces the store behind the public room, which held one conversation
+ * everybody shared. Everything hard about that store was right and is carried
+ * over unchanged: the pending list kept apart from the confirmed one, upsert by
+ * server id, retry under the same `clientMessageId`, and subscribing before
+ * backfilling. What is new is that there are now many conversations rather than
+ * one, so all of it is keyed by the person on the other end.
  */
 
 /** A message the server has acknowledged. */
@@ -133,7 +133,7 @@ let connections = 0;
 /**
  * This browser's account.
  *
- * Load-bearing in a way it was not in the lobby: it names the channel to
+ * Load-bearing in a way it was not in the public room: it names the channel to
  * listen on, and it is how an arriving message is sorted into a thread — the
  * other end is whichever of the two ids is not this one.
  */

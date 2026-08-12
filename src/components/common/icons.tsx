@@ -193,7 +193,7 @@ export function CrownIcon(props: IconProps) {
   );
 }
 
-/** The lobby — people talking to each other. */
+/** Messages — people talking to each other. */
 export function ChatBubbleIcon(props: IconProps) {
   return (
     <Icon {...props}>

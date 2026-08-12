@@ -8,7 +8,6 @@
 export * from './auth.schemas';
 export * from './booking.schemas';
 export * from './library.schemas';
-export * from './lobby.schemas';
 export * from './messages.schemas';
 export * from './settings.schemas';
 export * from './trip.schemas';
