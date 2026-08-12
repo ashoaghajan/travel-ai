@@ -38,14 +38,6 @@
   box-shadow: var(--shadow-soft);
 }
 
-/* Sits above the stretched link so it stays clickable. */
-.delete {
-  position: absolute;
-  top: var(--space-md);
-  right: var(--space-md);
-  z-index: 2;
-}
-
 /* Sits above the title's stretched link so the buttons stay clickable. */
 .actions {
   position: relative;
@@ -57,11 +49,23 @@
   margin-top: var(--space-sm);
 }
 
-/* To the far end, away from Edit. The two are one slipped click apart
+/* To the far end, away from Edit. Delete and Edit are one slipped click apart
    otherwise, and only one of them is recoverable. */
+.share,
 .delete {
   margin-left: auto;
   color: var(--color-text-muted);
+}
+
+.share:hover:not(:disabled) {
+  color: var(--color-primary);
+}
+
+/* With Share already pushed to the end, Delete follows it rather than being
+   pushed again — two `margin-left: auto` in a row would split the pair across
+   the whole width instead of keeping it together. */
+.paired {
+  margin-left: 0;
 }
 
 .delete:hover:not(:disabled) {

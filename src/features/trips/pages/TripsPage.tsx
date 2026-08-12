@@ -17,6 +17,7 @@ import { formatDayCount } from '../../../utils/trip';
 import { useActiveTripId } from '../../../store/trip.store';
 import { useBookingsByTrip } from '../../../store/booking.store';
 import { EditTripModal } from '../components/EditTripModal';
+import { ShareTripDialog } from '../components/ShareTripDialog';
 import { ImportTripDialog } from '../components/ImportTripDialog';
 import { useSavedTrips } from '../useTrips';
 import styles from './TripsPage.module.css';
@@ -49,7 +50,9 @@ export function TripsPage() {
   // The trip being edited is held by id, not by value: the store hands back a
   // new object on every save, and a stale copy would reopen the old itinerary.
   const [editingTripId, setEditingTripId] = useState<string | null>(null);
+  const [sharingTripId, setSharingTripId] = useState<string | null>(null);
   const editingTrip = trips.find((trip) => trip.id === editingTripId);
+  const sharingTrip = trips.find((trip) => trip.id === sharingTripId);
 
   const [isImporting, setIsImporting] = useState(false);
   const navigate = useNavigate();
@@ -149,6 +152,7 @@ export function TripsPage() {
                 bookings={bookingsByTrip.get(trip.id) ?? []}
                 onDelete={(target) => void deleteTrip(target)}
                 onEdit={(target) => setEditingTripId(target.id)}
+                onShare={(target) => setSharingTripId(target.id)}
                 isDeleting={deletingTripId === trip.id}
               />
             ))}
@@ -165,6 +169,10 @@ export function TripsPage() {
 
       {editingTrip ? (
         <EditTripModal trip={editingTrip} onClose={() => setEditingTripId(null)} />
+      ) : null}
+
+      {sharingTrip ? (
+        <ShareTripDialog trip={sharingTrip} onClose={() => setSharingTripId(null)} />
       ) : null}
 
       {isImporting ? (

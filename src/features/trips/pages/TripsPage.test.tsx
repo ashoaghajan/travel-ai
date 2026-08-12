@@ -3,6 +3,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import { messagesService } from '../../../services/messages.service';
+import { shareService } from '../../../services/share.service';
 import { tripService } from '../../../services/trip.service';
 import { seedTrips } from '../../../test/seedTrips';
 import type { Trip } from '../../../types/trip.types';
@@ -104,5 +106,44 @@ describe('importing from the trips list', () => {
     await user.click(await dialog.findByRole('button', { name: 'Import trip' }));
 
     expect(await screen.findByRole('heading', { name: 'Trip page' })).toBeInTheDocument();
+  });
+});
+
+/**
+ * Handing a trip to somebody, from the list.
+ *
+ * The same dialog the trip screen opens — what this pins is that the card
+ * offers the door, since the list is where somebody scanning their trips
+ * actually decides to send one.
+ */
+describe('sharing from the list', () => {
+  beforeEach(() => {
+    vi.spyOn(messagesService, 'getConversations').mockResolvedValue([
+      { id: 'u_grace', name: 'Grace', lastMessage: null, unread: 0 },
+    ]);
+  });
+
+  it('offers a share control on each trip', async () => {
+    await seedTrips([makeTrip()]);
+    renderPage();
+
+    expect(
+      await screen.findByRole('button', { name: 'Share One week in Yerevan with somebody' }),
+    ).toBeInTheDocument();
+  });
+
+  it('sends the trip that was pressed, not the first one', async () => {
+    await seedTrips([makeTrip(), makeTrip({ id: 'trip_2', title: 'Berlin in Early Autumn' })]);
+    const share = vi.spyOn(shareService, 'shareTrip').mockResolvedValue({} as never);
+
+    const user = userEvent.setup();
+    renderPage();
+
+    await user.click(
+      await screen.findByRole('button', { name: 'Share Berlin in Early Autumn with somebody' }),
+    );
+    await user.click(await screen.findByRole('button', { name: /Grace/ }));
+
+    expect(share.mock.calls[0][0]).toBe('trip_2');
   });
 });

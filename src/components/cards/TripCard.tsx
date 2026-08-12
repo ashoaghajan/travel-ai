@@ -4,7 +4,14 @@ import { Card } from '../common/Card';
 import { CardImage } from '../common/CardImage';
 import { Button } from '../common/Button';
 import { IconButton } from '../common/IconButton';
-import { CalendarIcon, MapPinIcon, TrashIcon, UsersIcon, WalletIcon } from '../common/icons';
+import {
+  CalendarIcon,
+  MapPinIcon,
+  ShareIcon,
+  TrashIcon,
+  UsersIcon,
+  WalletIcon,
+} from '../common/icons';
 import { cx } from '../../utils/cx';
 import { formatDateRange } from '../../utils/date';
 import { formatDayCount, formatTravellers, formatTripTotal, tripTotal } from '../../utils/trip';
@@ -30,6 +37,8 @@ export type TripCardProps = {
   onDelete?: (trip: Trip) => void;
   /** Omit to render a card without the edit control. */
   onEdit?: (trip: Trip) => void;
+  /** Omit to render a card without the share control. */
+  onShare?: (trip: Trip) => void;
   isDeleting?: boolean;
   className?: string;
 };
@@ -44,6 +53,7 @@ export function TripCard({
   as = 'div',
   onDelete,
   onEdit,
+  onShare,
   isDeleting = false,
   className,
 }: TripCardProps) {
@@ -105,10 +115,25 @@ export function TripCard({
             opened, and put it a slipped click from Edit. The red is spent
             where it belongs, on the confirm that actually does it.
           */}
+          {/*
+            Grouped with Delete rather than beside View and Edit, and quiet for
+            the same reason: those two are what the card is *for*, and a third
+            filled button would make the row a menu. Share sits first in the
+            pair because it is the one somebody might mean to press.
+          */}
+          {onShare ? (
+            <IconButton
+              label={`Share ${trip.title} with somebody`}
+              className={styles.share}
+              onClick={() => onShare(trip)}
+            >
+              <ShareIcon size={18} />
+            </IconButton>
+          ) : null}
           {onDelete ? (
             <IconButton
               label={`Delete ${trip.title}`}
-              className={styles.delete}
+              className={cx(styles.delete, onShare && styles.paired)}
               disabled={isDeleting}
               onClick={() => setIsConfirming(true)}
             >
