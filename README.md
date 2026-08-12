@@ -1079,6 +1079,70 @@ by the person who now owns it.
 
 ---
 
+### 9. Friends — **built**
+
+Messaging shipped open to every account, which was right for two people and
+wrong for twenty. A conversation now needs both ends to have agreed to it: one
+asks, the other accepts, and only then may either of them write.
+
+```txt
+GET    /api/friends                 accepted friends, name and since
+GET    /api/friends/requests        { incoming, outgoing }
+GET    /api/friends/stats           { friends, incoming, outgoing, totalUsers }
+GET    /api/friends/search?q=       every account, each with where you stand
+POST   /api/friends/:userId         ask — or accept, if they asked first
+POST   /api/friends/:userId/accept  accept theirs
+DELETE /api/friends/:userId         cancel, decline, or unfriend
+```
+
+**One row per pair**, keyed by `pairKey` exactly as a conversation is, holding a
+request while it is pending and the friendship once it is accepted. A request
+*becomes* a friendship, so two tables would need a transaction to move a row
+between them and a rule for which to believe in the meantime. The key is unique,
+so two people cannot end up holding two connections however they raced to ask
+each other — a constraint rather than a check, and constraints do not have race
+conditions.
+
+**Every answer is written from the reader's side**: `outgoing` means you asked,
+`incoming` means they did. A single "pending" would leave every screen working
+out which of the two it was looking at.
+
+**One `DELETE` covers cancel, decline and unfriend**, because they are one fact:
+the connection stops existing. Which of the three words applies is something the
+row knows and the caller should not have to. Declining leaves no trace, so the
+pair may try again — see the consequence recorded below.
+
+**The guard is one chokepoint.** `requireRecipient` in `messages.service.ts` is
+already what every send, every thread read and every move of a read cursor goes
+through, and — via `createMessage` — every shared trip. The friendship check
+lives there rather than in the routes, so a route added next year gets it
+without knowing it exists. A stranger is a **403**, not a 404: they exist and
+are findable by name, and pretending otherwise would make "add a friend"
+impossible to explain.
+
+**The conversation list is the friend list.** It selects from `Friendship`
+rather than filtering `User` afterwards, so the cap counts people the reader can
+actually write to. Finding somebody new is the friends page's job.
+
+**The migration backfills.** Every distinct `pairKey` in `DirectMessage` became
+an accepted friendship dated from the first thing either party said, because
+everyone already talking is already a friend — and a feature that quietly severs
+existing conversations is not one anybody asked for.
+
+**A request arrives without a reload.** The server publishes a `friend` event to
+both inboxes on the channel each already has; it carries nothing, and the client
+refetches. A friendship has no fields worth putting on a wire, and there is one
+socket per tab — a second connection for one event a day would be a second thing
+to keep alive.
+
+**Recorded consequence: nobody can stop being asked.** Declining leaves no
+record, so a person who will not take no for an answer can ask again.
+Proportionate for a small trusted group, and written down rather than discovered:
+**if this opens up, decline-remembers and block are the first two things to
+build**, before any other friends feature.
+
+---
+
 ## Backend Preparation Rule
 
 Even in Stage 1, frontend services should be written as if they will later call APIs.

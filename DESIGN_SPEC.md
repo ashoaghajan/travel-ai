@@ -1072,6 +1072,34 @@ Not a screen: a card inside a conversation, and a read-only dialog behind it.
 
 ---
 
+## Surface 11: Friends — **built**
+
+One page at `/friends`, three sections, and a count in the sidebar.
+
+- **Three sections rather than three routes.** They are one task seen from three
+  angles: somebody who has just accepted a request wants to watch it move into
+  their friend list, and somebody who has just added a stranger wants to see the
+  request they now have outstanding.
+- **Incoming requests come first**, because they are the only part of the screen
+  where somebody is waiting on the reader.
+- **Every row says where the reader stands, in words** — "Wants to be friends",
+  "Waiting for an answer", "Friends since 2 August". A verb on a button says
+  what pressing does, not where you already are.
+- **People already on a list are dropped from the search results.** Showing
+  somebody a third time is noise.
+- **Removing a friend confirms, inline.** It is quiet, it is not urgent, and it
+  takes a conversation off two screens — the shape of action that should not
+  happen on a slipped click. A modal for one sentence would be heavier than the
+  thing it guards.
+- **The count in the sidebar is inside the link's own text**, so a screen reader
+  says "Friends, 2 waiting" as one thing. A bare number beside a word says
+  nothing about what two of.
+- **The messages panel's empty state points here.** Its list is friends now, so
+  "there is nobody else signed up yet" would be wrong and a dead end in one
+  sentence.
+
+---
+
 # 12. Short Instruction For Coding Agent
 
 ```txt

@@ -89,6 +89,7 @@ function makeHandlers() {
   return {
     onMessage: vi.fn<(message: ApiDirectMessage) => void>(),
     onShare: vi.fn<(message: ApiDirectMessage) => void>(),
+    onFriend: vi.fn<() => void>(),
     onDelete: vi.fn<(event: MessageDeletedEvent) => void>(),
     onState: vi.fn<(state: MessagesConnectionState) => void>(),
     onPresence: vi.fn<(userIds: string[]) => void>(),
@@ -154,6 +155,17 @@ describe('connect', () => {
       share: { id: 's_1', acceptedAt: '2026-08-12T10:00:00.000Z' },
     });
     expect(handlers.onMessage).not.toHaveBeenCalled();
+  });
+
+  it('hands a friendship change upward, carrying nothing', async () => {
+    const sdk = fakeSdk();
+    await connect(SELF, handlers);
+
+    sdk.emit('friend', {});
+
+    // Nothing to carry: the listener refetches, because a friendship has no
+    // fields and the other end may have changed it again already.
+    expect(handlers.onFriend).toHaveBeenCalled();
   });
 
   /*

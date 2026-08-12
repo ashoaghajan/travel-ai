@@ -2,6 +2,7 @@ import { peopleSearchSchema } from '@ai-travel/shared/schemas';
 import { Router } from 'express';
 import type { Request, Response } from 'express';
 import { requireAuth, userIdOf } from '../auth/requireAuth';
+import { publishToBoth } from '../messages/realtime';
 import {
   acceptRequest,
   friendStats,
@@ -66,15 +67,32 @@ friendsRouter.post(
   async (request: Request, response: Response) => {
     const status = await requestFriend(userIdOf(request), otherIdOf(request));
 
+    await announce(userIdOf(request), otherIdOf(request));
+
     response.status(201).json({ status });
   },
 );
+
+/**
+ * Tells both ends that something about them changed.
+ *
+ * On the inbox channel each of them already has, because there is one socket
+ * per tab and a second connection for this would be a second thing to keep
+ * alive for one event a day. It carries nothing: the client refetches, which
+ * is the same rule the rest of this store follows — the other end may have
+ * changed it again in the meantime.
+ */
+async function announce(a: string, b: string): Promise<void> {
+  await publishToBoth([a, b], { name: 'friend', data: {} });
+}
 
 friendsRouter.post(
   '/friends/:userId/accept',
   requireAuth,
   async (request: Request, response: Response) => {
     const status = await acceptRequest(userIdOf(request), otherIdOf(request));
+
+    await announce(userIdOf(request), otherIdOf(request));
 
     response.json({ status });
   },
@@ -92,6 +110,8 @@ friendsRouter.delete(
   requireAuth,
   async (request: Request, response: Response) => {
     await removeFriend(userIdOf(request), otherIdOf(request));
+
+    await announce(userIdOf(request), otherIdOf(request));
 
     response.status(204).end();
   },

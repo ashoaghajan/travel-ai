@@ -1,6 +1,7 @@
 import { useSyncExternalStore } from 'react';
 import type { ApiConversation, ApiDirectMessage } from '@ai-travel/shared';
 import { messagesService } from '../services/messages.service';
+import { friendStore } from './friend.store';
 import { storageService, STORAGE_KEYS } from '../services/localStorage.service';
 import { createId } from '../utils/id';
 import * as messagesChannel from './messagesChannel';
@@ -261,6 +262,12 @@ export const messagesStore = {
       .connect(userId, {
         onMessage: (message) => accept(message),
         onShare: (message) => applyShare(message),
+        /*
+         * Handled here because this is the socket — there is one per tab, so
+         * everything realtime rides the inbox channel. The friend store owns
+         * what to do about it, which is to ask again.
+         */
+        onFriend: () => void friendStore.refresh(),
         onDelete: (event) => withdraw(event),
         onState: (next) => setState({ connection: next }),
         onPresence: (userIds) => arrive(userIds),

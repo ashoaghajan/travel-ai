@@ -92,3 +92,23 @@
   margin-top: auto;
   padding-top: var(--space-lg);
 }
+
+/*
+ * A count on a navigation link — friend requests waiting, today.
+ *
+ * `margin-left: auto` so it sits at the end of the row whatever the label is,
+ * and the same pill the messages toggle uses, because they are the same claim:
+ * something here is waiting for you.
+ */
+.badge {
+  min-width: 20px;
+  margin-left: auto;
+  padding: 0 6px;
+  border-radius: var(--radius-pill);
+  background-color: var(--color-primary);
+  color: var(--color-text-light);
+  font-size: var(--font-xs);
+  font-weight: var(--font-weight-semibold);
+  line-height: 20px;
+  text-align: center;
+}

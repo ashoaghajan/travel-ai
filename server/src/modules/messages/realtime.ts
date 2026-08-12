@@ -42,7 +42,15 @@ export type MessageRealtimeEvent =
    * shape both clients already reconcile by id, and a second shape would be a
    * second thing that can disagree with the first.
    */
-  | { name: 'share'; data: ApiDirectMessage };
+  | { name: 'share'; data: ApiDirectMessage }
+  /**
+   * Somebody asked, answered or withdrew a friend request.
+   *
+   * Carries nothing: the client refetches. There is no shape here that could
+   * go stale or disagree with the table, and a friendship has no fields worth
+   * putting on a wire — it exists or it does not.
+   */
+  | { name: 'friend'; data: Record<string, never> };
 
 let client: Ably.Rest | null = null;
 

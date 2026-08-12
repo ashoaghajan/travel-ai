@@ -52,6 +52,14 @@ export type MessagesChannelHandlers = {
    * was *said* — a badge for a card changing colour would be a lie.
    */
   onShare: (message: ApiDirectMessage) => void;
+  /**
+   * Somebody asked, answered or withdrew a friend request.
+   *
+   * Carries nothing, deliberately: the listener refetches. A friendship has no
+   * fields worth putting on a wire, and there is one socket per tab — a second
+   * connection for one event a day would be a second thing to keep alive.
+   */
+  onFriend: () => void;
   onDelete: (event: MessageDeletedEvent) => void;
   onState: (state: MessagesConnectionState) => void;
   /** The whole roster, rebuilt — never a delta. See `readPresence`. */
@@ -170,6 +178,7 @@ export async function connect(
   inbox.subscribe('message', (message) => handlers.onMessage(message.data as ApiDirectMessage));
   inbox.subscribe('delete', (message) => handlers.onDelete(message.data as MessageDeletedEvent));
   inbox.subscribe('share', (message) => handlers.onShare(message.data as ApiDirectMessage));
+  inbox.subscribe('friend', () => handlers.onFriend());
 
   const presence = realtime.channels.get(PRESENCE_CHANNEL).presence;
 

@@ -1,5 +1,6 @@
 import { NavLink } from 'react-router-dom';
 import { ROUTES } from '../../app/routes';
+import { useFriendStats } from '../../store/friend.store';
 import { useTrips } from '../../store/trip.store';
 import { Button } from '../common/Button';
 import { Logo } from '../common/Logo';
@@ -12,16 +13,30 @@ import { RecentTrips } from './RecentTrips';
 import { UpgradeCard } from './UpgradeCard';
 import styles from './Sidebar.module.css';
 
-function NavItemLink({ item }: { item: NavItem }) {
+function NavItemLink({ item, badge = 0 }: { item: NavItem; badge?: number }) {
   const { label, path, icon: ItemIcon } = item;
 
   return (
     <li>
-      <NavLink to={path} className={({ isActive }) => cx(styles.navLink, isActive && styles.active)}>
+      <NavLink
+        to={path}
+        className={({ isActive }) => cx(styles.navLink, isActive && styles.active)}
+      >
         <span className={styles.navIcon}>
           <ItemIcon size={20} />
         </span>
         {label}
+        {/*
+          The count is inside the link's own text rather than beside it, so a
+          screen reader says "Friends, 2 waiting" as one thing. A bare "2" next
+          to a word says nothing about what two of.
+        */}
+        {badge > 0 ? (
+          <span className={styles.badge}>
+            <span className="visually-hidden">, {badge} waiting</span>
+            <span aria-hidden="true">{badge}</span>
+          </span>
+        ) : null}
       </NavLink>
     </li>
   );
@@ -40,6 +55,13 @@ export type SidebarProps = {
 const RECENT_TRIPS_LIMIT = 5;
 
 export function Sidebar({ className }: SidebarProps) {
+  /*
+   * Read here rather than in `navigation.config.ts`, which is a list of links
+   * and should stay one. Reading the stats also loads them, which is what
+   * makes a request that arrived while the reader was on another page show up
+   * in the corner of the sidebar rather than only on the friends page.
+   */
+  const friendStats = useFriendStats();
   const trips = useTrips();
 
   return (
@@ -90,7 +112,14 @@ export function Sidebar({ className }: SidebarProps) {
 
         <ul className={styles.navList}>
           {ACCOUNT_NAV.map((item) => (
-            <NavItemLink key={item.id} item={item} />
+            <NavItemLink
+              key={item.id}
+              item={item}
+              // Only friends has one today. Passing it by id rather than
+              // putting a count in the nav config keeps that file a list of
+              // links rather than a thing that reads stores.
+              badge={item.id === 'friends' ? friendStats.incoming : 0}
+            />
           ))}
         </ul>
       </nav>
