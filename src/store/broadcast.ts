@@ -12,7 +12,7 @@
  * tab's copy, and they can be at different versions.
  */
 
-export type BroadcastTopic = 'trips' | 'bookings' | 'savedActivities';
+export type BroadcastTopic = 'trips' | 'bookings' | 'savedActivities' | 'friends';
 
 const CHANNEL_NAME = 'ai-travel-planner';
 

@@ -8,6 +8,7 @@ import {
   SuitcaseIcon,
   TicketIcon,
   UserIcon,
+  UsersIcon,
 } from '../common/icons';
 
 export type NavItem = {
@@ -37,6 +38,12 @@ const PROFILE_ITEM: NavItem = {
 
 export const ACCOUNT_NAV: NavItem[] = [
   PROFILE_ITEM,
+  /*
+   * Beside Profile rather than in the main group, because it is about the
+   * account rather than about a trip — and because the main four are the
+   * journey the app is for.
+   */
+  { id: 'friends', label: 'Friends', path: ROUTES.friends, icon: UsersIcon },
   { id: 'settings', label: 'Settings', path: ROUTES.settings, icon: SettingsIcon },
 ];
 

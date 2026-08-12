@@ -22,6 +22,7 @@ export const ROUTES = {
   activities: '/activities',
   activityDetails: '/activities/:activityId',
   bookings: '/bookings',
+  friends: '/friends',
   profile: '/profile',
   settings: '/settings',
 } as const;

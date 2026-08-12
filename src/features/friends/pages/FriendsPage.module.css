@@ -1,0 +1,89 @@
+.page {
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+}
+
+.content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+  width: 100%;
+  max-width: 720px;
+  padding: var(--layout-content-padding);
+}
+
+.heading {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  margin-bottom: var(--space-sm);
+  font-size: var(--font-md);
+  font-weight: var(--font-weight-semibold);
+}
+
+/* The number beside a heading, where a section has one worth naming. */
+.count {
+  min-width: 22px;
+  padding: 0 6px;
+  border-radius: var(--radius-pill);
+  background-color: var(--color-primary);
+  color: var(--color-text-light);
+  font-size: var(--font-xs);
+  font-weight: var(--font-weight-semibold);
+  line-height: 22px;
+  text-align: center;
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  list-style: none;
+}
+
+.search {
+  margin-bottom: var(--space-sm);
+}
+
+.field {
+  width: 100%;
+  padding: var(--space-sm) var(--space-md);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+  background-color: var(--color-surface-muted);
+  color: var(--color-text-main);
+  font-size: var(--font-sm);
+}
+
+.field:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 1px;
+}
+
+.loading {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.empty {
+  padding: var(--space-sm) 0;
+  font-size: var(--font-sm);
+  line-height: var(--line-height-base);
+  color: var(--color-text-muted);
+}
+
+/* Sits inside the row's actions, so the question is beside its answer rather
+   than in a dialog heavier than the thing it guards. */
+.confirmText {
+  font-size: var(--font-xs);
+  color: var(--color-text-muted);
+}
+
+.error {
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-md);
+  background-color: var(--color-danger-soft);
+  color: var(--color-danger);
+  font-size: var(--font-sm);
+}

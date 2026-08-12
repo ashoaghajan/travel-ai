@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { ROUTES } from '../../../app/routes';
 import { PageHeader } from '../../../components/layout/PageHeader';
@@ -6,6 +6,7 @@ import { Avatar } from '../../../components/common/Avatar';
 import { Button } from '../../../components/common/Button';
 import { Card } from '../../../components/common/Card';
 import { EmptyState } from '../../../components/common/EmptyState';
+import { friendStore, useFriendStats } from '../../../store/friend.store';
 import { TripCard } from '../../../components/cards/TripCard';
 import { SuitcaseIcon } from '../../../components/common/icons';
 import { useCurrentUser } from '../../../hooks/useCurrentUser';
@@ -41,6 +42,18 @@ export function ProfilePage() {
     }
   }
 
+  const friendStats = useFriendStats();
+
+  /*
+   * Reading them loads them, so this is only for a revisit — where the counts
+   * are already held and may have moved since. Only the counts: this screen
+   * shows numbers and never a name.
+   */
+  const hadStats = useRef(friendStats.totalUsers > 0);
+  useEffect(() => {
+    if (hadStats.current) void friendStore.refreshStats();
+  }, []);
+
   const stats = useMemo(() => {
     const days = trips.reduce((total, trip) => total + trip.itinerary.length, 0);
     const destinations = new Set(trips.map((trip) => trip.destination));
@@ -53,8 +66,24 @@ export function ProfilePage() {
         value: destinations.size,
         label: destinations.size === 1 ? 'Destination' : 'Destinations',
       },
+      {
+        id: 'friends',
+        value: friendStats.friends,
+        label: friendStats.friends === 1 ? 'Friend' : 'Friends',
+      },
+      /*
+       * A fact about the app rather than about a person, which is why it can
+       * sit on everybody's profile: it names nobody. It is also the honest
+       * answer to "who else is here?" now that the messages panel only lists
+       * the people you have agreed to talk to.
+       */
+      {
+        id: 'people',
+        value: friendStats.totalUsers,
+        label: friendStats.totalUsers === 1 ? 'Person on AI Travel' : 'People on AI Travel',
+      },
     ];
-  }, [trips]);
+  }, [trips, friendStats]);
 
   const recentTrips = trips.slice(0, RECENT_TRIPS_LIMIT);
   const bookingsByTrip = useBookingsByTrip();

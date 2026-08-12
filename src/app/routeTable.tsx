@@ -12,6 +12,7 @@ import { HotelsPage } from '../features/hotels/pages/HotelsPage';
 import { ExplorePage } from '../features/explore/pages/ExplorePage';
 import { ActivityDetailsPage } from '../features/explore/pages/ActivityDetailsPage';
 import { BookingsPage } from '../features/bookings/pages/BookingsPage';
+import { FriendsPage } from '../features/friends/pages/FriendsPage';
 import { ProfilePage } from '../features/profile/pages/ProfilePage';
 import { SettingsPage } from '../features/settings/pages/SettingsPage';
 import { LoginPage } from '../features/auth/pages/LoginPage';
@@ -119,6 +120,11 @@ export const routes: RouteObject[] = [
                 path: ROUTES.bookings,
                 element: <BookingsPage />,
                 handle: { title: 'Bookings' },
+              },
+              {
+                path: ROUTES.friends,
+                element: <FriendsPage />,
+                handle: { title: 'Friends' },
               },
               {
                 path: ROUTES.profile,

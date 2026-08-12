@@ -1,0 +1,43 @@
+.row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-sm);
+  border-radius: var(--radius-md);
+  /* No marker: this app has no global list reset — each module clears its own. */
+  list-style: none;
+}
+
+.row:hover {
+  background-color: var(--color-surface-muted);
+}
+
+/* `min-width: 0` is what lets a long name clip rather than push the buttons
+   off the end of the row. */
+.text {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+}
+
+.name {
+  overflow: hidden;
+  font-size: var(--font-sm);
+  font-weight: var(--font-weight-medium);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* Where the reader stands, in words rather than left to a verb on a button. */
+.standing {
+  font-size: var(--font-xs);
+  color: var(--color-text-muted);
+}
+
+.actions {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: var(--space-xs);
+}

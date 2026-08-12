@@ -8,6 +8,7 @@ import { searchService } from '../services/search.service';
 import { settingsService } from '../services/settings.service';
 import { tripImportService } from '../services/tripImport.service';
 import { bookingStore } from './booking.store';
+import { friendStore } from './friend.store';
 import { messagesStore } from './messages.store';
 import { savedActivityStore } from './savedActivity.store';
 import { tripStore } from './trip.store';
@@ -125,6 +126,8 @@ function forgetAccount(): void {
   // Private conversations, and the socket carrying this account's inbox — the
   // next person to sign in on this browser must inherit neither.
   messagesStore.reset();
+  // Nor who the last account was friends with.
+  friendStore.reset();
   settingsService.clearCache();
   chatService.clearCache();
   searchService.clearCache();
