@@ -40,6 +40,16 @@ export function usePlanner() {
   const messagesRef = useRef(messages);
 
   const [status, setStatus] = useState<PlannerStatus>('idle');
+
+  /**
+   * The turn in flight, so it can be called off.
+   *
+   * Deliberately **not** aborted on unmount. The reply is written to storage
+   * when it finishes, so navigating away mid-answer and coming back finds it
+   * waiting — cancelling on unmount would throw away an answer nobody asked to
+   * stop.
+   */
+  const abortRef = useRef<AbortController | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [savingMessageId, setSavingMessageId] = useState<string | null>(null);
 
@@ -115,6 +125,18 @@ export function usePlanner() {
       const trimmed = prompt.trim();
       if (!trimmed) return;
 
+      /*
+       * A new prompt supersedes the one in flight.
+       *
+       * Which is what somebody means by typing while an answer is arriving:
+       * they have changed their mind, and waiting for a reply they no longer
+       * want before asking is the behaviour this exists to remove.
+       */
+      abortRef.current?.abort();
+
+      const controller = new AbortController();
+      abortRef.current = controller;
+
       setError(null);
 
       const base: PlannerMessage[] = [
@@ -149,6 +171,7 @@ export function usePlanner() {
               paintMessages(reply());
             },
           },
+          { signal: controller.signal },
         );
 
         // A turn that produced neither words nor a trip has nothing to show,
@@ -158,7 +181,33 @@ export function usePlanner() {
         // The one write to storage for this turn.
         commitMessages(reply());
         setStatus('idle');
+        abortRef.current = null;
       } catch (caught) {
+        /*
+         * Stopped, rather than broken.
+         *
+         * Read from the signal rather than from the error, because what
+         * arrives here is whatever `fetch` chose to reject with — and a turn
+         * the reader called off is not a failure to report. No banner, no
+         * error state, and however much had arrived stays where it is.
+         *
+         * **Only while this is still the turn in flight.** When the stop came
+         * from a newer prompt, that turn is already painting its own answer
+         * and its `base` contains whatever this one had said — so writing this
+         * snapshot back would undo a live conversation with a stale copy of
+         * itself, and setting the status would claim nothing is happening
+         * while something is.
+         */
+        if (controller.signal.aborted) {
+          if (abortRef.current !== controller) return;
+
+          if (content || trip) commitMessages(reply());
+          setStatus('idle');
+          abortRef.current = null;
+
+          return;
+        }
+
         // Whatever arrived before the failure stays on screen — losing half an
         // answer is more confusing than keeping it beside the error.
         if (content || trip) commitMessages(reply());
@@ -224,7 +273,20 @@ export function usePlanner() {
     [saveTrip],
   );
 
+  /**
+   * Calls off the turn in flight.
+   *
+   * Whatever arrived stays: it is half an answer rather than a mistake, and
+   * deleting words somebody has already read is a strange thing for a Stop
+   * button to do.
+   */
+  const stop = useCallback(() => {
+    abortRef.current?.abort();
+  }, []);
+
   const clearConversation = useCallback(() => {
+    // Nothing should go on writing into a conversation that has been emptied.
+    abortRef.current?.abort();
     chatService.clear();
     messagesRef.current = SEED_CONVERSATION;
     setMessages(SEED_CONVERSATION);
@@ -240,6 +302,7 @@ export function usePlanner() {
     isGenerating: status === 'generating',
     savedTripIdFor,
     generate,
+    stop,
     saveTrip,
     customiseTrip,
     clearConversation,

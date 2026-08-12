@@ -31,6 +31,7 @@ export function PlannerPage() {
     error,
     savingMessageId,
     isGenerating,
+    stop,
     savedTripIdFor,
     generate,
     saveTrip,
@@ -152,7 +153,11 @@ export function PlannerPage() {
               {error ?? exportError}
             </p>
           ) : null}
-          <PlannerInput disabled={isGenerating} onSend={(prompt) => void generate(prompt)} />
+          <PlannerInput
+            isGenerating={isGenerating}
+            onSend={(prompt) => void generate(prompt)}
+            onStop={stop}
+          />
         </div>
       </div>
     </div>

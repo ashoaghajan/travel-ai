@@ -196,3 +196,117 @@ describe('generate', () => {
     expect(chat).not.toHaveBeenCalled();
   });
 });
+
+/**
+ * Changing your mind while an answer is arriving.
+ *
+ * The planner's replies are long, and the field used to be disabled until one
+ * finished — so the most ordinary thing somebody wants to do, interrupt, meant
+ * waiting the whole thing out.
+ */
+describe('stopping', () => {
+  /** A reply that streams a word, then waits until the caller gives up. */
+  function modelStalls() {
+    return vi.spyOn(plannerService, 'chat').mockImplementation(
+      async (_history, handlers, options) =>
+        new Promise((_resolve, reject) => {
+          handlers.onText('Kyoto is ');
+
+          options?.signal?.addEventListener('abort', () => {
+            // What `fetch` does with an aborted read.
+            reject(new DOMException('The operation was aborted.', 'AbortError'));
+          });
+        }),
+    );
+  }
+
+  it('keeps the half that arrived', async () => {
+    modelStalls();
+    const { result } = renderHook(() => usePlanner());
+
+    act(() => void result.current.generate('Plan Kyoto'));
+    await waitFor(() => expect(result.current.isGenerating).toBe(true));
+
+    act(() => result.current.stop());
+
+    await waitFor(() => expect(result.current.isGenerating).toBe(false));
+    // Half an answer rather than a mistake: deleting words somebody has already
+    // read is a strange thing for a Stop button to do.
+    expect(aiMessages(result.current.messages).at(-1)?.content).toBe('Kyoto is ');
+  });
+
+  it('is not a failure', async () => {
+    modelStalls();
+    const { result } = renderHook(() => usePlanner());
+
+    act(() => void result.current.generate('Plan Kyoto'));
+    await waitFor(() => expect(result.current.isGenerating).toBe(true));
+
+    act(() => result.current.stop());
+
+    await waitFor(() => expect(result.current.status).toBe('idle'));
+    // A turn the reader called off leaves no banner.
+    expect(result.current.error).toBeNull();
+  });
+
+  it('does nothing when nothing is running', () => {
+    const { result } = renderHook(() => usePlanner());
+
+    expect(() => result.current.stop()).not.toThrow();
+    expect(result.current.status).toBe('idle');
+  });
+
+  it('lets a new prompt supersede the answer in flight', async () => {
+    const chat = vi.spyOn(plannerService, 'chat').mockImplementation(
+      async (history, handlers, options) => {
+        const prompt = history.at(-1)?.content ?? '';
+
+        if (prompt === 'Plan Kyoto') {
+          handlers.onText('Kyoto is ');
+          return new Promise((_resolve, reject) => {
+            options?.signal?.addEventListener('abort', () => {
+              reject(new DOMException('The operation was aborted.', 'AbortError'));
+            });
+          });
+        }
+
+        handlers.onText('Osaka it is.');
+      },
+    );
+
+    const { result } = renderHook(() => usePlanner());
+
+    act(() => void result.current.generate('Plan Kyoto'));
+    await waitFor(() => expect(result.current.isGenerating).toBe(true));
+
+    // Typing a second prompt is how somebody says they have changed their mind.
+    act(() => void result.current.generate('Actually, Osaka'));
+
+    await waitFor(() => expect(result.current.isGenerating).toBe(false));
+    expect(chat).toHaveBeenCalledTimes(2);
+
+    const contents = aiMessages(result.current.messages).map((message) => message.content);
+    expect(contents.at(-1)).toBe('Osaka it is.');
+    // And the abandoned half is still there, above the new question.
+    expect(contents).toContain('Kyoto is ');
+    expect(result.current.error).toBeNull();
+  });
+
+  it('does not answer offline a question that was withdrawn', async () => {
+    // The one case where "the API is not configured" and "the reader changed
+    // their mind" look identical from inside the service.
+    const chat = vi.spyOn(plannerService, 'chat');
+    chat.mockImplementation(async (_history, _handlers, options) => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      if (options?.signal?.aborted) throw new DOMException('aborted', 'AbortError');
+    });
+
+    const { result } = renderHook(() => usePlanner());
+
+    act(() => void result.current.generate('Plan Kyoto'));
+    act(() => result.current.stop());
+
+    await waitFor(() => expect(result.current.isGenerating).toBe(false));
+    expect(result.current.error).toBeNull();
+  });
+});

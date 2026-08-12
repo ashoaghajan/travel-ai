@@ -229,14 +229,23 @@ export const plannerService = {
    * `history` is oldest-first and ends with the prompt just typed. It is
    * replayed in full on every message because the API holds no session — which
    * is also why the caller caps it.
+   *
+   * `signal` aborts the read. The half of an answer that already arrived stays
+   * where it is: the caller has been painting it as it came, and taking it back
+   * would be a stranger thing to do than leaving it.
    */
-  async chat(history: PlannerChatMessage[], handlers: PlannerHandlers): Promise<void> {
+  async chat(
+    history: PlannerChatMessage[],
+    handlers: PlannerHandlers,
+    { signal }: { signal?: AbortSignal } = {},
+  ): Promise<void> {
     const prompt = history.at(-1)?.content ?? '';
     let started = false;
 
     try {
       for await (const event of stream<PlannerStreamEvent>('/planner/chat', {
         body: { messages: history },
+        signal,
       })) {
         switch (event.type) {
           case 'delta':
@@ -259,6 +268,15 @@ export const plannerService = {
     } catch (caught) {
       if (started || caught instanceof PlannerError) throw caught;
       if (!isUnconfigured(caught)) throw caught;
+
+      /*
+       * Somebody pressed Stop before the first token.
+       *
+       * Without this the offline fallback would answer a question that has
+       * been withdrawn — the one case where "the API is not configured" and
+       * "the reader changed their mind" look identical from here.
+       */
+      if (signal?.aborted) throw caught;
 
       const { reply, trip } = await answerOffline(prompt);
       handlers.onText(reply);

@@ -394,3 +394,12 @@ export function SmileyIcon(props: IconProps) {
     </Icon>
   );
 }
+
+/** Stop a generation that is under way. */
+export function StopIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <rect x="7" y="7" width="10" height="10" rx="2" fill="currentColor" stroke="none" />
+    </Icon>
+  );
+}
