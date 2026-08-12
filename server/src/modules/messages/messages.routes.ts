@@ -42,9 +42,11 @@ export function resetMessagesRateLimit(): void {
  *
  * Sized to a person talking, not to what the database will take. Counted
  * across all of a reader's conversations rather than per thread, because the
- * thing being limited is a person, not a relationship.
+ * thing being limited is a person, not a relationship — and shared with
+ * `sharesRouter` for the same reason: offering a trip is one more thing one
+ * account can do to another, and it writes a great deal more than a sentence.
  */
-const sendRateLimit = rateLimit({
+export const sendRateLimit = rateLimit({
   store,
   windowMs: 60 * 1000,
   limit: 30,

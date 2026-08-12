@@ -2,6 +2,7 @@ import { createTripSchema, shareTripSchema } from '@ai-travel/shared/schemas';
 import { Router } from 'express';
 import type { Request, Response } from 'express';
 import { requireAuth, userIdOf } from '../auth/requireAuth';
+import { sendRateLimit } from '../messages/messages.routes';
 import { publishToBoth } from '../messages/realtime';
 import { acceptShare, getShare, messageForShare, revokeShare, shareTrip } from './shares.service';
 
@@ -35,6 +36,16 @@ function idOf(request: Request, name: string): string {
 sharesRouter.post(
   '/trips/:id/share',
   requireAuth,
+  /*
+   * The same budget a written message spends, and after the guard so it is
+   * keyed on the account rather than the address.
+   *
+   * Sharing was unthrottled while sending "hello" was not, which is backwards:
+   * a share writes a snapshot of a whole itinerary, so it is the heavier of the
+   * two by some margin. One budget per person rather than two, because what is
+   * being limited is a person doing things to another account.
+   */
+  sendRateLimit,
   async (request: Request, response: Response) => {
     const { toUserId, trip } = shareTripSchema.parse(request.body);
     const clientMessageId = clientMessageIdOf(request);

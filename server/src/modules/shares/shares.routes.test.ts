@@ -1,6 +1,7 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { ERROR_CODES } from '@ai-travel/shared';
 import { api, errorCode, signUp } from '../../test/harness';
+import { resetMessagesRateLimit } from '../messages/messages.routes';
 
 /**
  * Sharing a trip through a conversation.
@@ -417,5 +418,72 @@ describe('privacy', () => {
 
     expect(JSON.stringify(thread.body)).not.toContain('@example.com');
     expect(JSON.stringify(message)).not.toContain('@example.com');
+  });
+});
+
+/**
+ * Sharing spends the same budget as talking.
+ *
+ * It was unthrottled while sending "hello" was not, which is backwards: a
+ * share writes a snapshot of a whole itinerary, so it is the heavier of the
+ * two by some margin.
+ */
+describe('throttling', () => {
+  beforeEach(() => {
+    resetMessagesRateLimit();
+    process.env.DISABLE_RATE_LIMIT = '0';
+  });
+
+  afterEach(() => {
+    process.env.DISABLE_RATE_LIMIT = '1';
+    resetMessagesRateLimit();
+  });
+
+  it('refuses a share once the account has spent its messages', async () => {
+    const context = await pairWithTrip();
+
+    for (let index = 0; index < 30; index += 1) {
+      await api()
+        .post(`/api/messages/with/${context.bob.id}`)
+        .set('Authorization', context.auth.alice)
+        .send({ body: 'hello', clientMessageId: `cm_${index}` })
+        .expect(201);
+    }
+
+    const response = await api()
+      .post(`${TRIPS}/${context.trip.id}/share`)
+      .set('Authorization', context.auth.alice)
+      .send({ toUserId: context.bob.id, trip: snapshot(), clientMessageId: 'cm_share_late' })
+      .expect(429);
+
+    // One budget per person rather than two: what is being limited is somebody
+    // doing things to another account.
+    expect(errorCode(response)).toBe(ERROR_CODES.RATE_LIMITED);
+  });
+
+  it('leaves another account alone', async () => {
+    const context = await pairWithTrip();
+
+    for (let index = 0; index < 30; index += 1) {
+      await api()
+        .post(`/api/messages/with/${context.bob.id}`)
+        .set('Authorization', context.auth.alice)
+        .send({ body: 'hello', clientMessageId: `cm_${index}` })
+        .expect(201);
+    }
+
+    // Bob has spent nothing, and an address bucket would have throttled him
+    // for sharing a machine with Alice.
+    const trip = await api()
+      .post(TRIPS)
+      .set('Authorization', context.auth.bob)
+      .send(tripBody())
+      .expect(201);
+
+    await api()
+      .post(`${TRIPS}/${trip.body.id}/share`)
+      .set('Authorization', context.auth.bob)
+      .send({ toUserId: context.alice.id, trip: snapshot(), clientMessageId: 'cm_bob' })
+      .expect(201);
   });
 });

@@ -3,6 +3,7 @@ import { IconButton } from '../../../components/common/IconButton';
 import { SuitcaseIcon } from '../../../components/common/icons';
 import { shareService } from '../../../services/share.service';
 import { messagesStore } from '../../../store/messages.store';
+import { shareFailureMessage } from '../share.filters';
 import { useTrips } from '../../../store/trip.store';
 import { createId } from '../../../utils/id';
 import { buildTripFile } from '../../../utils/tripFile';
@@ -78,8 +79,8 @@ export function ShareTripPicker({ userId, disabled = false }: ShareTripPickerPro
       messagesStore.receive(message);
       setIsOpen(false);
       triggerRef.current?.focus();
-    } catch {
-      setError('We could not share that trip.');
+    } catch (caught) {
+      setError(shareFailureMessage(caught));
     } finally {
       setSendingId(null);
     }

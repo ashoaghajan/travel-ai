@@ -49,14 +49,14 @@ export type ApiSharedTrip = {
   trip: unknown;
 };
 
-/** How many shares one account may be handed; the rest is scrolling. */
-export const SHARE_LIST_LIMIT = 100;
-
-/**
- * The most a snapshot may weigh.
+/*
+ * There is deliberately no size constant here.
  *
- * The same ceiling `express.json` puts on a trip, because it is a trip: a trip
- * that cannot be exported cannot be shared, and the refusal says so in those
- * words rather than failing somewhere in the middle of a transaction.
+ * A snapshot is bounded by `express.json({ limit: '1mb' })`, which refuses the
+ * body before any of this runs and is rendered as a `PAYLOAD_TOO_LARGE` 413 by
+ * the error handler. A second number beside it could only ever disagree with
+ * the one actually enforced.
+ *
+ * There is no share-list endpoint either: an offer is read through the message
+ * carrying it, so nothing lists shares on their own.
  */
-export const MAX_SHARE_BYTES = 1024 * 1024;

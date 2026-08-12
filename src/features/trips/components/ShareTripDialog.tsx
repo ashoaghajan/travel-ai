@@ -7,6 +7,7 @@ import { Skeleton } from '../../../components/common/Skeleton';
 import { CloseIcon } from '../../../components/common/icons';
 import { messagesService } from '../../../services/messages.service';
 import { shareService } from '../../../services/share.service';
+import { shareFailureMessage } from '../../messages/share.filters';
 import type { TripDraft } from '../../../types/trip.types';
 import { createId } from '../../../utils/id';
 import { buildTripFile } from '../../../utils/tripFile';
@@ -18,7 +19,6 @@ export type ShareTripDialogProps = {
 };
 
 const LOAD_ERROR = 'We could not load the list of people.';
-const SHARE_ERROR = 'We could not share that trip. Try again.';
 
 /**
  * Sends a trip to somebody, from the trip.
@@ -78,8 +78,8 @@ export function ShareTripDialog({ trip, onClose }: ShareTripDialogProps) {
         createId('share'),
       );
       setSentTo(person.id);
-    } catch {
-      setError(SHARE_ERROR);
+    } catch (caught) {
+      setError(shareFailureMessage(caught));
     } finally {
       setSendingTo(null);
     }
