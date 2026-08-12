@@ -8,6 +8,7 @@
 export * from './api.types';
 export * from './currency.types';
 export * from './error-codes';
+export * from './friend.types';
 export * from './messages.types';
 export * from './occupancy';
 export * from './planner.types';

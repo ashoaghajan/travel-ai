@@ -81,6 +81,19 @@ export const ERROR_CODES = {
    */
   MESSAGE_NOT_YOURS: 'MESSAGE_NOT_YOURS',
 
+  /* ---------------------------------------------------------------- friends */
+
+  /**
+   * A conversation needs both ends to have agreed to it.
+   *
+   * A 403 rather than a 404: the person exists, they are findable by name on
+   * the friends page, and pretending otherwise would make "add a friend"
+   * impossible to explain. What is missing is permission, which is what 403
+   * means.
+   */
+  NOT_FRIENDS: 'NOT_FRIENDS',
+  FRIEND_REQUEST_NOT_FOUND: 'FRIEND_REQUEST_NOT_FOUND',
+
   /* ----------------------------------------------------------------- shares */
 
   SHARE_NOT_FOUND: 'SHARE_NOT_FOUND',

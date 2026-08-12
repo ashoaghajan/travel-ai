@@ -112,6 +112,7 @@ beforeEach(async () => {
   await prisma.directMessage.deleteMany();
   // After the messages that point at them, before the trips they point at.
   await prisma.tripShare.deleteMany();
+  await prisma.friendship.deleteMany();
   await prisma.conversationRead.deleteMany();
   await prisma.recentSearch.deleteMany();
   await prisma.savedActivity.deleteMany();

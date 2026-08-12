@@ -80,6 +80,10 @@ model User {
   /// both need naming.
   sentShares     TripShare[] @relation("SentShares")
   receivedShares TripShare[] @relation("ReceivedShares")
+
+  /// Friend requests asked and answered. Named for the same reason.
+  sentFriendRequests     Friendship[] @relation("SentFriendRequests")
+  receivedFriendRequests Friendship[] @relation("ReceivedFriendRequests")
 }
 
 /// App preferences, one row per account.
@@ -463,6 +467,48 @@ model ConversationRead {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@id([userId, otherUserId])
+}
+
+/// One connection between two accounts, asked for by one of them.
+///
+/// A request and a friendship are the same row at different times, because a
+/// request *becomes* a friendship. Two tables would need a transaction to move
+/// a row between them and a rule for which one to believe in the meantime.
+model Friendship {
+  id String @id @default(uuid())
+
+  /// `min(a,b):max(a,b)`, exactly as `DirectMessage.pairKey`.
+  ///
+  /// Unique, so two people cannot end up holding two connections however they
+  /// raced to ask each other — a constraint rather than a check, and
+  /// constraints do not have race conditions.
+  pairKey String @unique
+
+  /// Who asked, and who was asked.
+  ///
+  /// Both kept after acceptance: "you added them" and "they added you" is the
+  /// difference between the two halves of the requests screen, and only the
+  /// addressee may accept.
+  requesterId String
+  requester   User   @relation("SentFriendRequests", fields: [requesterId], references: [id], onDelete: Cascade)
+
+  addresseeId String
+  addressee   User   @relation("ReceivedFriendRequests", fields: [addresseeId], references: [id], onDelete: Cascade)
+
+  /// `pending` | `accepted`. A string rather than an enum — see the header.
+  ///
+  /// There is deliberately no `declined`: declining deletes the row. Keeping
+  /// one would be a record of a refusal neither person asked us to keep, and it
+  /// would need its own rule for when somebody may ask again.
+  status String @default("pending")
+
+  createdAt   DateTime  @default(now())
+  respondedAt DateTime?
+
+  /// The two lists the requests screen is made of: who is waiting on me, and
+  /// who am I waiting on.
+  @@index([addresseeId, status])
+  @@index([requesterId, status])
 }
 
 /// One trip, offered to one person, frozen at the moment it was offered.
