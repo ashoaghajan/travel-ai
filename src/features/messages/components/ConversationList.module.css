@@ -43,6 +43,9 @@
   flex-direction: column;
   padding: var(--space-xs);
   gap: 2px;
+  /* There is no global list reset in this app — each module clears its own,
+     and a flex container does not suppress the marker on its own children. */
+  list-style: none;
 }
 
 .row {

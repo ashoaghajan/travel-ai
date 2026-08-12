@@ -10,6 +10,7 @@ import { MessageComposer } from './MessageComposer';
 import { MessageItem } from './MessageItem';
 import { SharedTripCard } from './SharedTripCard';
 import { SharedTripPreview } from './SharedTripPreview';
+import { ShareTripPicker } from './ShareTripPicker';
 import styles from './MessageThread.module.css';
 
 /** How far from the end still counts as following the conversation. */
@@ -184,7 +185,9 @@ export function MessageThread({ userId, name, isOnline, onBack, onClose }: Messa
                     isOwn={row.message.senderId === user?.id}
                     isBusy={shared.isBusy}
                     onPreview={() => void shared.preview(row.message.share!.id)}
-                    onAccept={() => void shared.accept(row.message.share!.id)}
+                    onAccept={() =>
+                      void shared.accept(row.message.share!.id, row.message.senderName)
+                    }
                     onRevoke={() => void shared.revoke(row.message.share!.id)}
                   />
                 ) : null}
@@ -232,7 +235,10 @@ export function MessageThread({ userId, name, isOnline, onBack, onClose }: Messa
         </p>
       ) : null}
 
-      <MessageComposer onSend={(body) => void messagesStore.send(userId, body)} />
+      <MessageComposer
+        onSend={(body) => void messagesStore.send(userId, body)}
+        attachment={<ShareTripPicker userId={userId} />}
+      />
 
       {shared.isPreviewOpen ? (
         <SharedTripPreview

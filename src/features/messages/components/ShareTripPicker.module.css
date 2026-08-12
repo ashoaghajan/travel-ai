@@ -1,0 +1,88 @@
+.root {
+  position: relative;
+  display: flex;
+}
+
+/*
+ * Above the composer, anchored to its left edge — the same shape the emoji
+ * picker takes, because it is the same kind of thing. Wider, because a trip
+ * title is words rather than a glyph.
+ */
+.popover {
+  position: absolute;
+  bottom: calc(100% + var(--space-xs));
+  left: 0;
+  z-index: 2;
+  width: max-content;
+  min-width: 13rem;
+  max-width: min(20rem, calc(100vw - 2 * var(--space-md)));
+  max-height: 15rem;
+  overflow-y: auto;
+  padding: var(--space-xs);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background-color: var(--color-surface);
+  box-shadow: var(--shadow-lg);
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  list-style: none;
+}
+
+.trip {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  width: 100%;
+  padding: var(--space-xs) var(--space-sm);
+  border: 0;
+  border-radius: var(--radius-md);
+  background: none;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.trip:hover:not(:disabled) {
+  background-color: var(--color-surface-muted);
+}
+
+.trip:disabled {
+  cursor: default;
+}
+
+.trip:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: -2px;
+}
+
+/* One line: a long title must not make the popover as wide as the panel. */
+.title {
+  overflow: hidden;
+  font-size: var(--font-sm);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.meta {
+  font-size: var(--font-xs);
+  color: var(--color-text-muted);
+}
+
+.empty {
+  padding: var(--space-sm);
+  font-size: var(--font-xs);
+  line-height: var(--line-height-base);
+  color: var(--color-text-muted);
+}
+
+.error {
+  padding: var(--space-xs) var(--space-sm);
+  border-radius: var(--radius-sm);
+  background-color: var(--color-danger-soft);
+  color: var(--color-danger);
+  font-size: var(--font-xs);
+}

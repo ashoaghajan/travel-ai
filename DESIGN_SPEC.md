@@ -1061,7 +1061,14 @@ Not a screen: a card inside a conversation, and a read-only dialog behind it.
   permanent once taken up.
 - **Sharing lives on the trip, beside Export.** The two are the same act with
   different destinations: one writes the trip to a file, the other hands it to
-  somebody in the app.
+  somebody in the app. The trips list carries the same control, grouped with
+  Delete at the end of the card's row rather than beside View and Edit — those
+  two are what a card is *for*, and a third filled button would make the row a
+  menu.
+- **The composer has its own picker**, beside the emoji one and built the same
+  way: a trigger, a popover, Escape and click-outside to dismiss. Sharing comes
+  up mid-sentence, and leaving the thread to find the trip is how a feature goes
+  unused.
 
 ---
 

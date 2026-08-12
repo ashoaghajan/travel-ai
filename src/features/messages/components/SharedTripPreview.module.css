@@ -60,6 +60,8 @@
   display: flex;
   flex-direction: column;
   gap: var(--space-md);
+  /* Each day already says "Day 1"; the marker would number them twice. */
+  list-style: none;
 }
 
 .day {
@@ -91,6 +93,7 @@
   flex-direction: column;
   gap: 2px;
   margin-top: var(--space-sm);
+  list-style: none;
 }
 
 .activity {

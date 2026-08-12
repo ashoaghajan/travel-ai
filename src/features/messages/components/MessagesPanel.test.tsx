@@ -7,6 +7,7 @@ import { messagesService } from '../../../services/messages.service';
 import { shareService } from '../../../services/share.service';
 import { messagesStore } from '../../../store/messages.store';
 import { tripStore } from '../../../store/trip.store';
+import { seedTrips } from '../../../test/seedTrips';
 import { MessagesPanel } from './MessagesPanel';
 
 /**
@@ -402,6 +403,8 @@ describe('a shared trip', () => {
     // photograph resolved against this build.
     expect(accept.mock.calls[0][0]).toBe('s_1');
     expect(accept.mock.calls[0][1]).toMatchObject({ title: 'Berlin in Early Autumn' });
+    // And it says where it came from, once, in a note the reader can delete.
+    expect(accept.mock.calls[0][1].notes?.[0].text).toMatch(/^Shared by Grace on /);
 
     // The card changes under the finger that pressed it, without waiting for
     // the channel to say so.
@@ -430,6 +433,48 @@ describe('a shared trip', () => {
       id: 'trip_9',
       title: 'Berlin in Early Autumn',
     }));
+  });
+
+  it('shares a trip without leaving the conversation', async () => {
+    await seedTrips([
+      {
+        id: 'trip_7',
+        title: 'One week in Yerevan',
+        destination: 'Yerevan',
+        startDate: '2027-09-02',
+        endDate: '2027-09-06',
+        travellers: 2,
+        coverImage: '',
+        itinerary: [],
+        createdAt: 'x',
+        updatedAt: 'x',
+      },
+    ]);
+    const share = vi
+      .spyOn(shareService, 'shareTrip')
+      .mockResolvedValue(message({ id: 'dm_9', senderId: SELF.id, recipientId: 'u_grace' }));
+
+    const user = userEvent.setup();
+    await openConversationWith(user);
+
+    await user.click(await screen.findByRole('button', { name: 'Share a trip' }));
+    await user.click(await screen.findByRole('button', { name: /One week in Yerevan/ }));
+
+    // Sharing usually comes up mid-sentence; leaving the thread to find the
+    // trip is how a feature goes unused.
+    await waitFor(() => expect(share).toHaveBeenCalled());
+    expect(share.mock.calls[0][0]).toBe('trip_7');
+    expect(share.mock.calls[0][1]).toBe('u_grace');
+  });
+
+  it('says so when there is nothing to share', async () => {
+    await seedTrips([]);
+
+    const user = userEvent.setup();
+    await openConversationWith(user);
+    await user.click(await screen.findByRole('button', { name: 'Share a trip' }));
+
+    expect(await screen.findByText('You have no trips to share yet.')).toBeInTheDocument();
   });
 
   it('lets the sender take an offer back', async () => {

@@ -1,4 +1,5 @@
 import { useId, useRef, useState } from 'react';
+import type { ReactNode } from 'react';
 import { MESSAGE_MAX_LENGTH } from '@ai-travel/shared';
 import { IconButton } from '../../../components/common/IconButton';
 import { ArrowUpIcon } from '../../../components/common/icons';
@@ -13,6 +14,14 @@ const WARN_AT = 100;
 export type MessageComposerProps = {
   onSend: (body: string) => void;
   disabled?: boolean;
+  /**
+   * Rendered beside the emoji button — the trip picker, today.
+   *
+   * A slot rather than the picker itself, because that one needs to know which
+   * conversation this is and the composer deliberately does not: it takes text
+   * and hands it back.
+   */
+  attachment?: ReactNode;
 };
 
 /**
@@ -29,7 +38,11 @@ export type MessageComposerProps = {
  * then scrolls, because a composer that grows without limit eventually eats
  * the conversation it belongs to.
  */
-export function MessageComposer({ onSend, disabled = false }: MessageComposerProps) {
+export function MessageComposer({
+  onSend,
+  disabled = false,
+  attachment,
+}: MessageComposerProps) {
   const fieldId = useId();
   const [value, setValue] = useState('');
   const fieldRef = useRef<HTMLTextAreaElement>(null);
@@ -81,6 +94,7 @@ export function MessageComposer({ onSend, disabled = false }: MessageComposerPro
         Write a message
       </label>
 
+      {attachment}
       <EmojiPicker onPick={addEmoji} disabled={disabled} />
 
       <textarea

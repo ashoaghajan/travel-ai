@@ -1066,6 +1066,17 @@ has taken up; once somebody has added the trip it is theirs, and reaching into
 another account to delete a trip is not what revoke means. The card says which of
 those happened rather than disappearing.
 
+**Three ways in, one dialog.** The trip screen and each card in the trips list
+open the same person picker; inside a conversation the composer has its own,
+which shares straight into the thread it belongs to. Sharing usually comes up
+mid-sentence, and having to leave the thread to find the trip is how a feature
+goes unused.
+
+**A copy says where it came from**, once, as the first note on it: "Shared by
+Grace on 12 August 2026." A note rather than a column, so it travels with the
+trip wherever it goes next, survives the offer being deleted, and can be removed
+by the person who now owns it.
+
 ---
 
 ## Backend Preparation Rule
