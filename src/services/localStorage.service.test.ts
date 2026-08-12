@@ -22,6 +22,7 @@ describe('storage keys', () => {
       // Where a panel sits on this screen, which is a property of the device
       // rather than of the account — so it stays here rather than in settings.
       lobbyOpen: 'ai-travel-planner:lobbyOpen',
+      messagesOpen: 'ai-travel-planner:messagesOpen',
       bookings: 'ai-travel-planner:bookings',
       // Reference data, not user data: the airports the reader has picked, so
       // `partner.links.ts` can name a destination city without a round trip.

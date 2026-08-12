@@ -24,6 +24,12 @@ export const STORAGE_KEYS = {
    * preference worth carrying to another one.
    */
   lobbyOpen: 'ai-travel-planner:lobbyOpen',
+  /**
+   * Whether the messages panel was left open. The same class of thing as
+   * `lobbyOpen`, which it replaces once the lobby goes: where a panel sits on
+   * this screen is a property of the device, not of the account.
+   */
+  messagesOpen: 'ai-travel-planner:messagesOpen',
   /** Flights, stays, tickets and activities attached to a trip — or to none yet. */
   bookings: 'ai-travel-planner:bookings',
   /**

@@ -9,6 +9,7 @@ import { settingsService } from '../services/settings.service';
 import { tripImportService } from '../services/tripImport.service';
 import { bookingStore } from './booking.store';
 import { lobbyStore } from './lobby.store';
+import { messagesStore } from './messages.store';
 import { savedActivityStore } from './savedActivity.store';
 import { tripStore } from './trip.store';
 
@@ -123,6 +124,9 @@ function forgetAccount(): void {
   bookingStore.reset();
   savedActivityStore.reset();
   lobbyStore.reset();
+  // Private conversations, and the socket carrying this account's inbox — the
+  // next person to sign in on this browser must inherit neither.
+  messagesStore.reset();
   settingsService.clearCache();
   chatService.clearCache();
   searchService.clearCache();
