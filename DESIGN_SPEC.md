@@ -574,6 +574,15 @@ Right map visual:
 - Purple route line.
 - Purple destination markers.
 - Labels for route stops.
+- **The planner places each day; the geocoder is the fallback.** A day is named
+  the way a person would name it — "Saadiyat Island", "Mina & airport" — and the
+  gazetteer behind the geocoder holds cities and towns. It answers NOT_FOUND for
+  most districts and, worse, fuzzy-matches some to a real town in the wrong
+  emirate, which draws a confident pin in the wrong place. So the model that
+  named the district also gives its coordinates, and geocoding is what happens
+  only when it didn't. A stop that still cannot be placed is **named under the
+  map rather than dropped** — a map quietly showing two of six stops looks
+  finished, and is the more dishonest of the two.
 
 Map labels:
 

@@ -42,6 +42,20 @@ export type PlannerDayPlan = {
   /** Where this day is spent — a district or a nearby town, not the country. */
   destination: string;
   summary: string;
+  /**
+   * Where that district actually is, for the map.
+   *
+   * Asked of the model rather than geocoded afterwards, because `destination`
+   * is a label a person would write — "Grand Mosque & Al Bateen", "Mina &
+   * airport" — and the gazetteer behind our geocoder holds populated places.
+   * It answers NOT_FOUND for most districts, and worse, fuzzy-matches some of
+   * them to a real town in the wrong emirate. A model that can name the
+   * district knows where it is; asking costs nothing and lands the pin.
+   *
+   * Optional because a plan is still a plan without it, and every day that
+   * arrives without one falls back to geocoding exactly as before.
+   */
+  coordinates?: { lat: number; lng: number };
   activities: PlannerActivityPlan[];
 };
 

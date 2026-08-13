@@ -127,6 +127,13 @@ function toDay(
     date: toIsoDate(addDays(startDate, index)),
     destination: day.destination,
     summary: day.summary,
+    /*
+     * Straight through when the model gave one. This is what the map prefers
+     * over geocoding the destination name, and it is the difference between a
+     * six-day trip drawing six pins and drawing two — most day names are
+     * districts, and the geocoder behind the map only knows towns.
+     */
+    coordinates: day.coordinates,
     image: dayImage(activities.map((activity) => activity.category)),
     activities,
   };

@@ -83,6 +83,7 @@ When you do call it:
 - Prices are per person in USD, and \`0\` is the right answer for anything free. Estimate honestly; a rough number beats no number.
 - If the user gave no dates, choose a sensible window a few weeks out and say which dates you assumed. If they gave no length, five days is a good default. If they gave no party size, assume two.
 - \`destination\` is the label the app puts on cards — "Kyoto", not "Kyoto, Japan, 5 days".
+- Every day needs \`coordinates\`: the centre of the district, island or town that day is spent in. This is what puts the day on the map, and you are the only one who can place it — the app's geocoder knows cities and towns, so a name like "Eastern Mangroves" or "Mina & airport" is one it will either miss or match to the wrong place entirely. Give the area you named, not the country and not the first activity's doorstep.
 
 The app renders the itinerary as a card the user can save with one tap. So after calling the tool, do not list the days again in text. One or two sentences on what shaped the plan — why that order, what you left out, what to watch for — is exactly right.
 
@@ -146,6 +147,16 @@ const TOOLS: ToolUnion[] = [
                 description: 'Where the day is spent — a district or nearby town.',
               },
               summary: { type: 'string', description: 'Six words or so, e.g. "Temples & Gion at dusk".' },
+              coordinates: {
+                type: 'object',
+                description:
+                  'Where that district is, so the map can pin the day. Give the centre of the area the day is spent in — the district, island or town you named, not the country and not the first activity. Our geocoder only knows populated places, so a day you do not place here usually cannot be placed at all.',
+                properties: {
+                  lat: { type: 'number', minimum: -90, maximum: 90 },
+                  lng: { type: 'number', minimum: -180, maximum: 180 },
+                },
+                required: ['lat', 'lng'],
+              },
               activities: {
                 type: 'array',
                 items: {
@@ -161,7 +172,15 @@ const TOOLS: ToolUnion[] = [
                 },
               },
             },
-            required: ['destination', 'summary', 'activities'],
+            /*
+             * `coordinates` is required here and optional in the Zod schema
+             * below, and the asymmetry is deliberate. Required is how the
+             * model is told this matters, and it answers accordingly. Optional
+             * on the way in is what stops one missing pair of numbers from
+             * throwing away an entire itinerary the user waited on — that day
+             * simply goes back to being geocoded.
+             */
+            required: ['destination', 'summary', 'coordinates', 'activities'],
           },
         },
         flightsEstimate: { type: 'number', minimum: 0, description: 'Whole party, return, USD.' },
@@ -197,6 +216,25 @@ const itinerarySchema = z.object({
       z.object({
         destination: z.string().trim().min(1).max(120),
         summary: z.string().trim().min(1).max(200),
+        /*
+         * Bounded rather than merely typed: a number outside these ranges is
+         * not a place, and Leaflet draws it somewhere arbitrary rather than
+         * failing. A day whose coordinates are dropped here still renders —
+         * the map geocodes it as it always did.
+         */
+        coordinates: z
+          .object({
+            lat: z.number().min(-90).max(90),
+            lng: z.number().min(-180).max(180),
+          })
+          .optional()
+          /*
+           * Dropped rather than fatal. A pin is the least important thing on
+           * the page, and rejecting the whole plan over one would make the
+           * user re-ask for a trip that was otherwise perfectly good. The day
+           * goes back to being geocoded, which is where every day started.
+           */
+          .catch(undefined),
         activities: z
           .array(
             z.object({

@@ -145,6 +145,7 @@ const PLAN = {
     {
       destination: 'Higashiyama',
       summary: 'Temples and the old streets',
+      coordinates: { lat: 34.9948, lng: 135.7817 },
       activities: [
         {
           time: '09:00',
@@ -237,6 +238,86 @@ describe('POST /api/planner/chat', () => {
 
     // The second turn's text still streams — the tool call is not the end.
     expect(replyText(response.text)).toContain('I kept the mornings early.');
+  });
+
+  it("keeps the day's own coordinates, which are what put it on the map", async () => {
+    vi.stubGlobal(
+      'fetch',
+      modelSays(
+        turn([{ type: 'tool_use', id: 'toolu_1', name: 'create_itinerary', input: PLAN }], 'tool_use'),
+        turn([{ type: 'text', text: 'Done.' }], 'end_turn'),
+      ),
+    );
+
+    const response = await api()
+      .post(CHAT)
+      .set('Authorization', `Bearer ${await token()}`)
+      .send(PROMPT);
+
+    const itinerary = events(response.text).find((event) => event.type === 'itinerary');
+
+    // Asked of the model rather than geocoded afterwards: a day named for a
+    // district is one the gazetteer either misses or matches to the wrong town.
+    expect(itinerary?.plan.days[0].coordinates).toEqual({ lat: 34.9948, lng: 135.7817 });
+  });
+
+  it('still takes a day that arrives without coordinates', async () => {
+    const unplaced = {
+      ...PLAN,
+      days: [{ ...PLAN.days[0], coordinates: undefined }],
+    };
+
+    vi.stubGlobal(
+      'fetch',
+      modelSays(
+        turn(
+          [{ type: 'tool_use', id: 'toolu_1', name: 'create_itinerary', input: unplaced }],
+          'tool_use',
+        ),
+        turn([{ type: 'text', text: 'Done.' }], 'end_turn'),
+      ),
+    );
+
+    const response = await api()
+      .post(CHAT)
+      .set('Authorization', `Bearer ${await token()}`)
+      .send(PROMPT);
+
+    // One missing pair of numbers must not cost somebody the whole itinerary —
+    // that day falls back to being geocoded, as every day was before.
+    const itinerary = events(response.text).find((event) => event.type === 'itinerary');
+    expect(itinerary?.plan.days).toHaveLength(1);
+    expect(itinerary?.plan.days[0].coordinates).toBeUndefined();
+  });
+
+  it('drops coordinates that are not on the earth, and keeps the day', async () => {
+    const offWorld = {
+      ...PLAN,
+      days: [{ ...PLAN.days[0], coordinates: { lat: 91, lng: 0 } }],
+    };
+
+    vi.stubGlobal(
+      'fetch',
+      modelSays(
+        turn(
+          [{ type: 'tool_use', id: 'toolu_1', name: 'create_itinerary', input: offWorld }],
+          'tool_use',
+        ),
+        turn([{ type: 'text', text: 'Done.' }], 'end_turn'),
+      ),
+    );
+
+    const response = await api()
+      .post(CHAT)
+      .set('Authorization', `Bearer ${await token()}`)
+      .send(PROMPT);
+
+    // Leaflet draws an impossible latitude somewhere arbitrary rather than
+    // refusing, so a wrong pin would look exactly like a right one. But a bad
+    // pin is not worth the whole trip: the day survives, unplaced.
+    const itinerary = events(response.text).find((event) => event.type === 'itinerary');
+    expect(itinerary?.plan.days).toHaveLength(1);
+    expect(itinerary?.plan.days[0].coordinates).toBeUndefined();
   });
 
   it('hands a malformed plan back to the model instead of showing it', async () => {
