@@ -201,6 +201,71 @@ describe('when something goes wrong', () => {
   });
 });
 
+/**
+ * A phone ends the session after each utterance whatever `continuous` says.
+ *
+ * Taken at face value that means a tap per sentence, which is not dictation.
+ */
+describe('a session ending on its own', () => {
+  beforeEach(() => installSpeechApi());
+
+  it('opens another while the reader still wants to be heard', () => {
+    const { result } = renderHook(() => useSpeech({ onText: vi.fn() }));
+    act(() => result.current.start());
+
+    act(() => live?.onend?.());
+
+    expect(result.current.isListening).toBe(true);
+    expect((live as unknown as { started: number }).started).toBe(1);
+  });
+
+  it('does not, once they have stopped', () => {
+    const { result } = renderHook(() => useSpeech({ onText: vi.fn() }));
+    act(() => result.current.start());
+
+    act(() => result.current.stop());
+
+    expect(result.current.isListening).toBe(false);
+  });
+
+  it('does not, after a refusal', () => {
+    const { result } = renderHook(() => useSpeech({ onText: vi.fn() }));
+    act(() => result.current.start());
+
+    act(() => live?.onerror?.({ error: 'not-allowed' }));
+    act(() => live?.onend?.());
+
+    // A blocked microphone does not become unblocked by trying again.
+    expect(result.current.isListening).toBe(false);
+  });
+
+  it('gives up when session after session hears nothing', () => {
+    const { result } = renderHook(() => useSpeech({ onText: vi.fn() }));
+    act(() => result.current.start());
+
+    // A browser that will not listen at all, rather than a reader who paused.
+    for (let attempt = 0; attempt < 6; attempt += 1) act(() => live?.onend?.());
+
+    expect(result.current.isListening).toBe(false);
+  });
+
+  it('keeps going as long as it is hearing something', () => {
+    const onText = vi.fn();
+    const { result } = renderHook(() => useSpeech({ onText }));
+    act(() => result.current.start());
+
+    // Six utterances, each ending its own session — an ordinary minute of
+    // dictation on a phone.
+    for (let utterance = 0; utterance < 6; utterance += 1) {
+      act(() => live?.onresult?.(said(`sentence ${utterance}`, true)));
+      act(() => live?.onend?.());
+    }
+
+    expect(result.current.isListening).toBe(true);
+    expect(onText).toHaveBeenCalledTimes(6);
+  });
+});
+
 describe('leaving the screen', () => {
   beforeEach(() => installSpeechApi());
 
@@ -213,5 +278,17 @@ describe('leaving the screen', () => {
     // A microphone left open after the screen is gone is a privacy problem
     // rather than a leak of memory.
     expect((live as unknown as { aborted: number }).aborted).toBe(1);
+  });
+
+  it('does not open another on the way out', () => {
+    const { result, unmount } = renderHook(() => useSpeech({ onText: vi.fn() }));
+    act(() => result.current.start());
+    const ending = live;
+
+    unmount();
+    // Whatever the engine does as it tears down must not restart it.
+    act(() => ending?.onend?.());
+
+    expect((live as unknown as { started: number }).started).toBe(1);
   });
 });

@@ -20,7 +20,24 @@ import { useCallback, useEffect, useRef, useState } from 'react';
  * something else — and writing each revision into the field would fight
  * whatever the reader is typing. Finals are appended; the interim text is only
  * shown.
+ *
+ * **A session ending is not the reader changing their mind.** `continuous` is a
+ * request rather than a guarantee, and on a phone it is largely ignored: both
+ * mobile engines tend to end the session after each utterance. Taken at face
+ * value that means a tap per sentence, which is not dictation. So the intent to
+ * listen is held separately from the session, and a session that ends while the
+ * intent stands is replaced — with a cap, so a browser that refuses to listen
+ * at all cannot spin.
  */
+
+/**
+ * How many sessions may end having heard nothing before this gives up.
+ *
+ * One or two is ordinary — a pause, a false start. A run of them is a browser
+ * that will not listen at all, and restarting it forever would hold a
+ * microphone open against a wall.
+ */
+const EMPTY_RESTART_LIMIT = 4;
 
 /** The parts of the API this file uses, named rather than pulled from `lib.dom`. */
 type SpeechRecognitionLike = {
@@ -90,6 +107,18 @@ export function useSpeech({ onText }: { onText: (text: string) => void }): Speec
 
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
 
+  /** Whether the reader still wants to be listened to, whatever the session did. */
+  const wantsToListenRef = useRef(false);
+
+  /**
+   * Sessions that have ended without hearing anything, in a row.
+   *
+   * The brake on the restart above. A browser that ends every session
+   * immediately — no microphone, a permission quietly refused, an engine that
+   * will not run in this context — would otherwise be restarted forever.
+   */
+  const emptyRestartsRef = useRef(0);
+
   /*
    * Held in a ref so the recognition's handlers always call the current one.
    * They are attached once, at start, and would otherwise close over whatever
@@ -101,10 +130,12 @@ export function useSpeech({ onText }: { onText: (text: string) => void }): Speec
   const [isSupported] = useState(() => recognitionConstructor() !== null);
 
   const stop = useCallback(() => {
+    wantsToListenRef.current = false;
     recognitionRef.current?.stop();
   }, []);
 
-  const start = useCallback(() => {
+  /** Opens one session. The intent to listen outlives it — see `onend`. */
+  const open = useCallback(() => {
     if (recognitionRef.current) return;
 
     const Recognition = recognitionConstructor();
@@ -122,6 +153,10 @@ export function useSpeech({ onText }: { onText: (text: string) => void }): Speec
     recognition.interimResults = true;
 
     recognition.onresult = (event) => {
+      // Something was heard, so this is a working session rather than one of a
+      // run of empty ones.
+      emptyRestartsRef.current = 0;
+
       let pending = '';
 
       for (let index = event.resultIndex; index < event.results.length; index += 1) {
@@ -136,15 +171,39 @@ export function useSpeech({ onText }: { onText: (text: string) => void }): Speec
     };
 
     recognition.onerror = (event) => {
-      // `no-speech` fires on an ordinary pause and stops the session; saying
-      // so would be nagging somebody who is merely thinking.
-      if (event.error !== 'no-speech') setError(messageFor(event.error));
+      // `no-speech` fires on an ordinary pause and stops the session; saying so
+      // would be nagging somebody who is merely thinking, and the session is
+      // replaced below as if nothing had happened.
+      if (event.error === 'no-speech') return;
+
+      // Anything else is a reason to stop asking: a blocked microphone does not
+      // become unblocked by trying again immediately.
+      wantsToListenRef.current = false;
+      setError(messageFor(event.error));
     };
 
     recognition.onend = () => {
       recognitionRef.current = null;
-      setIsListening(false);
       setInterim('');
+
+      /*
+       * A phone ends the session after each utterance whatever `continuous`
+       * says. Somebody still holding the microphone open means to keep going,
+       * so a new session takes over — unless several in a row have heard
+       * nothing, which is what a browser that cannot listen looks like.
+       */
+      if (wantsToListenRef.current) {
+        emptyRestartsRef.current += 1;
+
+        if (emptyRestartsRef.current <= EMPTY_RESTART_LIMIT) {
+          open();
+          return;
+        }
+
+        wantsToListenRef.current = false;
+      }
+
+      setIsListening(false);
     };
 
     setError(null);
@@ -157,18 +216,32 @@ export function useSpeech({ onText }: { onText: (text: string) => void }): Speec
       // Already running, or refused outright. Either way there is nothing
       // listening and nothing to clean up.
       recognitionRef.current = null;
+      wantsToListenRef.current = false;
       setError(messageFor(undefined));
     }
   }, []);
 
+  const start = useCallback(() => {
+    wantsToListenRef.current = true;
+    emptyRestartsRef.current = 0;
+    open();
+  }, [open]);
+
   const toggle = useCallback(() => {
-    if (recognitionRef.current) stop();
+    if (wantsToListenRef.current) stop();
     else start();
   }, [start, stop]);
 
   // A microphone left listening after the screen is gone is the one thing here
-  // worth being careful about.
-  useEffect(() => () => recognitionRef.current?.abort(), []);
+  // worth being careful about — and the intent has to go with it, or `onend`
+  // would open another session on the way out.
+  useEffect(
+    () => () => {
+      wantsToListenRef.current = false;
+      recognitionRef.current?.abort();
+    },
+    [],
+  );
 
   return { isSupported, isListening, interim, error, start, stop, toggle };
 }
