@@ -2,6 +2,7 @@ import type {
   ApiUser,
   AuthSessionResponse,
   LoginRequest,
+  UserPlan,
   RegisterRequest,
 } from '@ai-travel/shared';
 import { http, setAccessToken } from './http';
@@ -70,6 +71,20 @@ export const authService = {
 
   async updateName(name: string): Promise<ApiUser> {
     return http.patch<ApiUser>('/me', { name });
+  },
+
+  /**
+   * Change the account's tier.
+   *
+   * **A placeholder for a payment provider.** Nothing here takes money, so
+   * upgrading is a request the browser is allowed to make — which means anyone
+   * who reads the network tab can be Pro for nothing. That is deliberate while
+   * there is no billing: the tier shapes what somebody gets by default rather
+   * than withholding it. The day a provider exists, this method and its
+   * endpoint go, and the flag moves by webhook instead.
+   */
+  async setPlan(plan: UserPlan): Promise<ApiUser> {
+    return http.post<ApiUser>('/me/plan', { plan });
   },
 
   /**

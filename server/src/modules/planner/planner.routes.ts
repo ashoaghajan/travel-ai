@@ -5,7 +5,8 @@ import type { Request, Response } from 'express';
 import rateLimit, { MemoryStore } from 'express-rate-limit';
 import { z } from 'zod';
 import { HttpError } from '../../errors';
-import { requireAuth } from '../auth/requireAuth';
+import { prisma } from '../../prisma';
+import { requireAuth, userIdOf } from '../auth/requireAuth';
 import { isConfigured, providerNotConfigured, streamChat, toHttpError } from './anthropic';
 
 /**
@@ -108,6 +109,31 @@ function openStream(response: Response): void {
  */
 plannerRouter.post('/planner/chat', chatRateLimit, requireAuth, async (request, response) => {
   const { messages } = chatSchema.parse(request.body);
+
+  /*
+   * The tier, checked here rather than only in the browser.
+   *
+   * A free client never reaches this — it answers from the rule engine and
+   * makes no request at all — so in ordinary use this refusal is unreachable.
+   * It exists because a gate the client alone enforces is a suggestion, and
+   * this endpoint is the one thing in the app that spends money per call.
+   *
+   * Read fresh rather than taken from the token: upgrading must work on the
+   * next prompt, and an access token minted before the upgrade would otherwise
+   * carry a stale tier until it expired.
+   */
+  const account = await prisma.user.findUnique({
+    where: { id: userIdOf(request) },
+    select: { plan: true },
+  });
+
+  if (account?.plan !== 'pro') {
+    throw new HttpError(
+      403,
+      ERROR_CODES.PRO_REQUIRED,
+      'The conversational planner is a Pro feature.',
+    );
+  }
 
   // Before the stream opens, so this arrives as a normal envelope and the
   // client can fall back to its offline planner on the code alone.

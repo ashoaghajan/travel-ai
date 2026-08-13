@@ -258,3 +258,45 @@ describe('draft identity', () => {
     expect(first.trip.draftId).not.toBe(second.trip.draftId);
   });
 });
+
+describe('answerLocally', () => {
+  /** The handler pair the planner screen passes in, recorded. */
+  function handlers() {
+    return { onText: vi.fn(), onTrip: vi.fn() };
+  }
+
+  async function answer(prompt: string, options?: { signal?: AbortSignal }) {
+    const spy = handlers();
+    const pending = plannerService.answerLocally(prompt, spy, options);
+    await vi.advanceTimersByTimeAsync(2000);
+    await pending;
+
+    return spy;
+  }
+
+  it('hands back the same shape as a streamed turn', async () => {
+    const spy = await answer('7 days in Bali');
+
+    // The transcript, the trip card, Save and Customise are all downstream of
+    // these two calls, and none of them should be able to tell the tiers apart.
+    expect(spy.onText).toHaveBeenCalledWith(expect.stringContaining('Bali'));
+    expect(spy.onTrip).toHaveBeenCalledWith(expect.objectContaining({ draftId: expect.any(String) }));
+  });
+
+  it('says so without a trip when it cannot answer', async () => {
+    const spy = await answer('what is the airspeed velocity of an unladen swallow');
+
+    expect(spy.onText).toHaveBeenCalled();
+    // The ceiling the free tier actually has. An empty bubble would be worse.
+    expect(spy.onTrip).not.toHaveBeenCalled();
+  });
+
+  it('stays quiet when the turn was already called off', async () => {
+    const spy = await answer('7 days in Bali', { signal: AbortSignal.abort() });
+
+    // Local answers are too fast to interrupt usefully, but somebody who has
+    // just pressed Stop should not be handed the reply anyway.
+    expect(spy.onText).not.toHaveBeenCalled();
+    expect(spy.onTrip).not.toHaveBeenCalled();
+  });
+});

@@ -49,6 +49,15 @@ export const ERROR_CODES = {
    * fault of ours.
    */
   PROVIDER_ERROR: 'PROVIDER_ERROR',
+  /**
+   * This account is on the free tier and asked for the Pro planner.
+   *
+   * Its own code rather than a bare 403 because it is the one refusal in the
+   * app with a remedy the reader can act on themselves. In ordinary use nobody
+   * sees it: a free client answers locally and never calls the endpoint. It
+   * exists because a gate only the client enforces is a suggestion.
+   */
+  PRO_REQUIRED: 'PRO_REQUIRED',
 
   /* generic */
   VALIDATION_FAILED: 'VALIDATION_FAILED',

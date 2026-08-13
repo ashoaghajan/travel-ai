@@ -46,6 +46,20 @@ export const updateMeSchema = z.object({
   name: z.string().trim().min(1, 'Enter your name.').max(MAX_NAME_LENGTH).optional(),
 });
 
+/**
+ * The body of `POST /api/me/plan`.
+ *
+ * **A placeholder for a payment provider's webhook.** Until one exists, the
+ * browser asks for the tier and gets it — so Pro shapes what somebody gets by
+ * default rather than restricting anybody, and anyone reading the network tab
+ * can have it. The day billing lands, this schema and its route are deleted
+ * and the flag moves the way it does everywhere else: from the provider,
+ * never from a request the browser can make.
+ */
+export const setPlanSchema = z.object({
+  plan: z.enum(['free', 'pro']),
+});
+
 /** `lower(trim(email))` — the form the unique constraint is built on. */
 export function toEmailKey(email: string): string {
   return email.trim().toLowerCase();

@@ -126,6 +126,76 @@ describe('PATCH /api/me', () => {
   });
 });
 
+describe('POST /api/me/plan', () => {
+  it('starts every new account on free', async () => {
+    const { user } = await signUp();
+
+    expect(user.plan).toBe('free');
+    expect(user.proSince).toBeNull();
+  });
+
+  it('upgrades, and dates it', async () => {
+    const { accessToken } = await signUp();
+
+    const response = await api()
+      .post('/api/me/plan')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({ plan: 'pro' });
+
+    expect(response.status).toBe(200);
+    expect(response.body.plan).toBe('pro');
+    expect(Date.parse(response.body.proSince)).not.toBeNaN();
+  });
+
+  it('clears the date on the way back down', async () => {
+    const { accessToken } = await signUp();
+    const auth = `Bearer ${accessToken}`;
+
+    await api().post('/api/me/plan').set('Authorization', auth).send({ plan: 'pro' }).expect(200);
+
+    const response = await api()
+      .post('/api/me/plan')
+      .set('Authorization', auth)
+      .send({ plan: 'free' });
+
+    expect(response.body.plan).toBe('free');
+    // Kept, it would describe a spell the account is no longer in — and the
+    // profile would show "Pro since April" to somebody on free.
+    expect(response.body.proSince).toBeNull();
+  });
+
+  it('refuses a tier that does not exist', async () => {
+    const { accessToken } = await signUp();
+
+    const response = await api()
+      .post('/api/me/plan')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({ plan: 'enterprise' });
+
+    expect(response.status).toBe(422);
+    expect(errorCode(response)).toBe(ERROR_CODES.VALIDATION_FAILED);
+  });
+
+  it('needs a token', async () => {
+    const response = await api().post('/api/me/plan').send({ plan: 'pro' });
+
+    expect(response.status).toBe(401);
+  });
+
+  it('can only change the account the token names', async () => {
+    const victim = await signUp({ email: 'victim2@example.com' });
+    const attacker = await signUp({ email: 'attacker2@example.com' });
+
+    await api()
+      .post('/api/me/plan')
+      .set('Authorization', `Bearer ${attacker.accessToken}`)
+      .send({ plan: 'pro', userId: victim.user.id, id: victim.user.id });
+
+    const untouched = await prisma.user.findUniqueOrThrow({ where: { id: victim.user.id } });
+    expect(untouched.plan).toBe('free');
+  });
+});
+
 describe('the server itself', () => {
   it('answers a health check without a token', async () => {
     const response = await api().get('/api/health');

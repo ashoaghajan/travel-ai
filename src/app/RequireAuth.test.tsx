@@ -56,6 +56,8 @@ const ADA: ApiUser = {
   identities: [],
   hasPassword: true,
   activeTripId: null,
+  plan: 'free',
+  proSince: null,
   settings: {
     theme: 'system' as const,
     currency: 'USD',

@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ERROR_CODES } from '@ai-travel/shared';
 import type { PlannerStreamEvent } from '@ai-travel/shared';
 import { api, errorCode, signUp } from '../../test/harness';
+import { prisma } from '../../prisma';
 import { resetEnvCache } from '../../env';
 import { resetAnthropicClient } from './anthropic';
 import { resetPlannerRateLimit } from './planner.routes';
@@ -128,7 +129,29 @@ const replyText = (text: string) =>
     .map((event) => event.text)
     .join('');
 
+/**
+ * A Pro account's token — what almost every test here needs.
+ *
+ * Registration creates a free account, and free accounts are refused by this
+ * endpoint, so the upgrade is part of arranging a test of the model path
+ * rather than an afterthought. `freeToken` below is the other half.
+ */
 async function token(): Promise<string> {
+  const { user, accessToken } = await signUp();
+
+  /*
+   * Straight to the row rather than through `POST /api/me/plan`. That endpoint
+   * has its own tests; going through it here would put a second HTTP round
+   * trip in front of every test in this file, which is load this suite does
+   * not need and latency it should not pay to arrange a fixture.
+   */
+  await prisma.user.update({ where: { id: user.id }, data: { plan: 'pro' } });
+
+  return accessToken;
+}
+
+/** A free account's token. Registration already gives one; this names it. */
+async function freeToken(): Promise<string> {
   const { accessToken } = await signUp();
   return accessToken;
 }
@@ -179,6 +202,63 @@ afterEach(() => {
   resetAnthropicClient();
   resetWeatherCache();
   vi.unstubAllGlobals();
+});
+
+describe('the Pro gate', () => {
+  it('refuses a free account', async () => {
+    const model = vi.fn();
+    vi.stubGlobal('fetch', model);
+
+    const response = await api()
+      .post(CHAT)
+      .set('Authorization', `Bearer ${await freeToken()}`)
+      .send(PROMPT);
+
+    expect(response.status).toBe(403);
+    expect(errorCode(response)).toBe('PRO_REQUIRED');
+
+    // Refused before the stream opens and before anything is billed. A gate
+    // that pays the provider and then says no is not a gate.
+    expect(response.headers['content-type']).not.toContain('text/event-stream');
+    expect(model).not.toHaveBeenCalled();
+  });
+
+  it('lets an account through the moment it upgrades', async () => {
+    vi.stubGlobal('fetch', modelSays(turn([{ type: 'text', text: 'Kyoto it is.' }], 'end_turn')));
+
+    const { accessToken } = await signUp();
+
+    await api()
+      .post(CHAT)
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send(PROMPT)
+      .expect(403);
+
+    await api()
+      .post('/api/me/plan')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({ plan: 'pro' })
+      .expect(200);
+
+    // The same token, minted before the upgrade. The tier is read from the row
+    // on every call precisely so an upgrade does not wait for it to expire.
+    await api().post(CHAT).set('Authorization', `Bearer ${accessToken}`).send(PROMPT).expect(200);
+  });
+
+  it('refuses again once an account goes back to free', async () => {
+    vi.stubGlobal('fetch', modelSays(turn([{ type: 'text', text: 'Hello.' }], 'end_turn')));
+
+    const accessToken = await token();
+    await api().post(CHAT).set('Authorization', `Bearer ${accessToken}`).send(PROMPT).expect(200);
+
+    await api()
+      .post('/api/me/plan')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({ plan: 'free' })
+      .expect(200);
+
+    await api().post(CHAT).set('Authorization', `Bearer ${accessToken}`).send(PROMPT).expect(403);
+  });
 });
 
 describe('POST /api/planner/chat', () => {

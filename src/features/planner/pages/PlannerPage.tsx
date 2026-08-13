@@ -9,7 +9,9 @@ import { BookmarkIcon, DownloadIcon, TrashIcon } from '../../../components/commo
 import { ChatMessage } from '../components/ChatMessage';
 import { ItineraryPreview } from '../components/ItineraryPreview';
 import { PlannerInput } from '../components/PlannerInput';
+import { PlannerTierNote } from '../components/PlannerTierNote';
 import { TypingIndicator } from '../components/TypingIndicator';
+import { useCurrentUser } from '../../../hooks/useCurrentUser';
 import { usePlanner } from '../usePlanner';
 import { useTripExport } from '../../trips/useTripExport';
 import styles from './PlannerPage.module.css';
@@ -38,6 +40,7 @@ export function PlannerPage() {
     customiseTrip,
     clearConversation,
   } = usePlanner();
+  const { isPro } = useCurrentUser();
   const navigate = useNavigate();
   const { exportTrip, error: exportError } = useTripExport();
   const pageEndRef = useRef<HTMLDivElement>(null);
@@ -169,6 +172,10 @@ export function PlannerPage() {
               {error ?? exportError}
             </p>
           ) : null}
+          {/* Free accounts only. A permanent advertisement to somebody who has
+              already upgraded is the cheapest way to make a paid thing feel
+              unpaid — see `UpgradeCard`, which disappears for the same reason. */}
+          {isPro ? null : <PlannerTierNote />}
           <PlannerInput
             isGenerating={isGenerating}
             onSend={(prompt) => void generate(prompt)}

@@ -48,6 +48,21 @@ model User {
   /// Set once the browser's local data has been claimed by this account (Phase 4).
   localImportCompletedAt DateTime?
 
+  /// 'free' | 'pro'. A string rather than an enum, per this schema's own rule.
+  ///
+  /// It gates exactly one thing: the planner reaching Claude. Everything else
+  /// in the app — dictation, activity search, geocoding, weather, flights,
+  /// hotels — is the same on both tiers, because none of them is a model.
+  ///
+  /// Set by `POST /api/me/plan`, which is a stand-in for a payment provider's
+  /// webhook and is to be deleted the day one exists.
+  plan String @default("free")
+
+  /// When this account became Pro, for the profile to show. Null on free, and
+  /// cleared on the way back down so it always describes the current spell
+  /// rather than the first one.
+  proSince DateTime?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

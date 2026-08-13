@@ -95,6 +95,13 @@ export function toApiUser(
     hasPassword: user.passwordHash !== null,
     activeTripId: user.activeTripId,
     settings: toApiSettings(settings),
+    /*
+     * Narrowed on the way out rather than trusted. The column is a string, and
+     * anything that is not exactly 'pro' is free — so a value nobody planned
+     * for fails closed, which for a paid tier is the only safe direction.
+     */
+    plan: user.plan === 'pro' ? 'pro' : 'free',
+    proSince: user.proSince?.toISOString() ?? null,
   };
 }
 

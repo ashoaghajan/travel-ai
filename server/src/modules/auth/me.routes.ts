@@ -1,4 +1,4 @@
-import { updateMeSchema } from '@ai-travel/shared/schemas';
+import { setPlanSchema, updateMeSchema } from '@ai-travel/shared/schemas';
 import { Router } from 'express';
 import { notFound } from '../../errors';
 import { prisma } from '../../prisma';
@@ -35,6 +35,31 @@ meRouter.patch('/', async (request, response) => {
   const user = await prisma.user.update({
     where: { id: userIdOf(request) },
     data: patch,
+    include: { identities: true, settings: true },
+  });
+
+  response.json(toApiUser(user, user.identities, user.settings));
+});
+
+/**
+ * `POST /api/me/plan` — become Pro, or go back to free.
+ *
+ * **This route is a stand-in for a payment provider's webhook and must be
+ * deleted the day one exists.** Nothing here takes money, so the only honest
+ * way to have a tier at all is to let somebody ask for it: anyone who reads
+ * the network tab can be Pro for nothing. That is a deliberate property, not
+ * an oversight — until billing lands, the tier shapes the default experience
+ * rather than withholding anything.
+ *
+ * `proSince` is cleared on the way down rather than kept, so it always
+ * describes the spell the account is in now and not the first one it ever had.
+ */
+meRouter.post('/plan', async (request, response) => {
+  const { plan } = setPlanSchema.parse(request.body);
+
+  const user = await prisma.user.update({
+    where: { id: userIdOf(request) },
+    data: { plan, proSince: plan === 'pro' ? new Date() : null },
     include: { identities: true, settings: true },
   });
 

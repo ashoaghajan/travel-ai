@@ -292,6 +292,36 @@ export const plannerService = {
   },
 
   /**
+   * One turn from the rule engine, shaped like a turn from the model.
+   *
+   * What a free account gets, and the same code the no-key fallback in `chat`
+   * has always run — given a name of its own now that it is a destination
+   * rather than a last resort. The handler shape is identical to `chat`'s, so
+   * the transcript, the trip card, Save and Customise cannot tell the two
+   * apart, and neither can the caller beyond choosing which to call.
+   *
+   * It does not stream, because there is nothing to stream: the answer is
+   * built locally and arrives whole. That is the honest difference between the
+   * tiers and it needs no apology — an instant reply is not a worse one.
+   *
+   * `signal` is accepted and checked once, on the way in. A local answer is
+   * too fast to interrupt usefully, but a caller that has just pressed Stop
+   * should not then be handed a reply it asked not to receive.
+   */
+  async answerLocally(
+    prompt: string,
+    handlers: PlannerHandlers,
+    { signal }: { signal?: AbortSignal } = {},
+  ): Promise<void> {
+    const { reply, trip } = await answerOffline(prompt);
+
+    if (signal?.aborted) return;
+
+    handlers.onText(reply);
+    if (trip) handlers.onTrip(trip);
+  },
+
+  /**
    * The whole answer at once.
    *
    * The offline path, exposed for the seeded conversation and for anything that

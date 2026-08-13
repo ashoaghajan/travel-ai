@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from 'react';
-import type { ApiUser, LoginRequest, RegisterRequest } from '@ai-travel/shared';
+import type { ApiUser, LoginRequest, RegisterRequest, UserPlan } from '@ai-travel/shared';
 import { authService } from '../services/auth.service';
 import { signedOut } from '../services/http';
 import { claimLocalData, releaseLocalData } from '../services/localData.service';
@@ -215,6 +215,20 @@ export const authStore = {
 
   async updateName(name: string): Promise<void> {
     const user = await authService.updateName(name);
+    setState({ status: 'authenticated', user });
+  },
+
+  /**
+   * Upgrade, or go back to free.
+   *
+   * The server's answer replaces the user rather than the tier being patched
+   * in locally, so `proSince` is the one the row actually holds. Everything
+   * that reads the tier — the planner's engine, the sidebar card, the profile
+   * row — is watching this store, so the change lands everywhere at once and
+   * the next prompt runs on the new engine with no reload.
+   */
+  async setPlan(plan: UserPlan): Promise<void> {
+    const user = await authService.setPlan(plan);
     setState({ status: 'authenticated', user });
   },
 

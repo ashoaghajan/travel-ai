@@ -7,6 +7,14 @@ export type CurrentUser = {
   isAuthenticated: boolean;
   /** True only while the initial session check is still outstanding. */
   isLoading: boolean;
+  /**
+   * Whether this account gets the conversational planner.
+   *
+   * False while boot is still settling, which is the safe direction: the free
+   * planner answers locally and instantly, so a moment of it is invisible,
+   * whereas assuming Pro too early would call an endpoint that answers 403.
+   */
+  isPro: boolean;
 };
 
 /**
@@ -22,5 +30,6 @@ export function useCurrentUser(): CurrentUser {
     user,
     isAuthenticated: status === 'authenticated',
     isLoading: status === 'unknown',
+    isPro: user?.plan === 'pro',
   };
 }

@@ -1,0 +1,41 @@
+/*
+ * Quiet by construction. It sits directly above the composer, which is the
+ * busiest control on the screen, and anything with a border or a fill here
+ * would read as a second thing to deal with before typing.
+ */
+.note {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-sm);
+  padding: 0 var(--space-sm);
+  color: var(--color-text-muted);
+  font-size: var(--font-xs);
+  line-height: 1.5;
+}
+
+.icon {
+  flex: none;
+  /* Optically aligned to the first line of text rather than its box. */
+  margin-top: 2px;
+  color: var(--color-primary);
+}
+
+.strong {
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-main);
+}
+
+/* `margin-left: auto` rather than a gap: the link stays at the far edge on a
+   wide screen and wraps under the sentence on a narrow one. */
+.link {
+  flex: none;
+  margin-left: auto;
+  color: var(--color-primary);
+  font-weight: var(--font-weight-semibold);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.link:hover {
+  text-decoration: underline;
+}

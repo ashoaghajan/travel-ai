@@ -81,7 +81,25 @@ export type ApiUser = {
    * trip has since been deleted.
    */
   activeTripId: string | null;
+  /**
+   * Which planner this account gets.
+   *
+   * Rides the user for the same reason `settings` does: the planner has to
+   * know which engine to run before the first prompt, and a second round trip
+   * to find out would be one the free tier never needed.
+   */
+  plan: UserPlan;
+  /** ISO timestamp, or null on a free account. What the profile shows. */
+  proSince: string | null;
 };
+
+/**
+ * The two tiers.
+ *
+ * A union rather than an enum, matching the schema: the database column is a
+ * string, and one spelling of the values is enough.
+ */
+export type UserPlan = 'free' | 'pro';
 
 export type GoogleCredentialRequest = {
   /** The ID token the Google Identity Services button handed the browser. */

@@ -5,8 +5,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, renderHook, waitFor } from '@testing-library/react';
 import type { PlannerMessage } from '../../types/planner.types';
 import type { TripDraft } from '../../types/trip.types';
+import type { ApiUser } from '@ai-travel/shared';
 import { PlannerError, plannerService } from '../../services/planner.service';
 import { chatService } from '../../services/chat.service';
+import { authService } from '../../services/auth.service';
+import { authStore } from '../../store/auth.store';
 import { usePlanner } from './usePlanner';
 
 /**
@@ -42,11 +45,40 @@ function modelSays(...chunks: string[]) {
 const aiMessages = (messages: PlannerMessage[]) =>
   messages.filter((message) => message.author === 'ai');
 
-beforeEach(() => {
+/**
+ * A Pro account, because streaming is the Pro planner.
+ *
+ * A free account answers from the rule engine and never calls `chat` at all,
+ * so without this every test in this file would be exercising the wrong
+ * engine — and passing, quietly, for the wrong reason.
+ */
+const PRO_USER: ApiUser = {
+  id: 'u_pro',
+  name: 'Ada Lovelace',
+  email: 'ada@example.com',
+  isGuest: false,
+  createdAt: '2026-01-01T00:00:00.000Z',
+  identities: [],
+  hasPassword: true,
+  activeTripId: null,
+  plan: 'pro',
+  proSince: '2026-08-13T00:00:00.000Z',
+  settings: {
+    theme: 'system',
+    currency: 'USD',
+    notifications: { tripReminders: true, priceAlerts: false },
+  },
+};
+
+beforeEach(async () => {
   localStorage.clear();
+  authStore.reset();
+  vi.spyOn(authService, 'restore').mockResolvedValue(PRO_USER);
+  await authStore.bootstrap();
 });
 
 afterEach(() => {
+  authStore.reset();
   vi.restoreAllMocks();
 });
 

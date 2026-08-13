@@ -6,6 +6,7 @@ import { chatService } from '../../services/chat.service';
 import { tripStore, useTrips } from '../../store/trip.store';
 import { bookingStore } from '../../store/booking.store';
 import { SEED_CONVERSATION } from '../../mock/planner';
+import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { createId } from '../../utils/id';
 
 const GENERATION_ERROR = 'Something went wrong while planning that trip. Please try again.';
@@ -32,6 +33,7 @@ const HISTORY_LIMIT = 20;
  */
 export function usePlanner() {
   const trips = useTrips();
+  const { isPro } = useCurrentUser();
 
   const [messages, setMessages] = useState<PlannerMessage[]>(() =>
     chatService.getMessages(SEED_CONVERSATION),
@@ -155,24 +157,44 @@ export function usePlanner() {
         { id: replyId, author: 'ai', content, trip },
       ];
 
+      const handlers = {
+        onText: (text: string) => {
+          content += text;
+          paintMessages(reply());
+        },
+        onTrip: (draft: TripDraft) => {
+          trip = draft;
+          paintMessages(reply());
+        },
+      };
+
       try {
-        await plannerService.chat(
-          // Only the recent turns: the whole history is re-sent and re-read on
-          // every message, so an unbounded conversation would cost more with
-          // each one. Matches the server's own cap.
-          base.slice(-HISTORY_LIMIT).map(({ author, content: text }) => ({ author, content: text })),
-          {
-            onText: (text) => {
-              content += text;
-              paintMessages(reply());
-            },
-            onTrip: (draft) => {
-              trip = draft;
-              paintMessages(reply());
-            },
-          },
-          { signal: controller.signal },
-        );
+        /*
+         * The engine comes from the account, not from whether the server
+         * answered.
+         *
+         * A free account never calls the chat endpoint — it would be refused
+         * with `PRO_REQUIRED`, and asking in order to be told no would put a
+         * round trip in front of every free reply. The tier is read at send
+         * time rather than captured, so upgrading takes effect on the next
+         * prompt with no reload.
+         *
+         * `chat` keeps its own fallback to this same rule engine for a Pro
+         * account on a server with no key — so the two tiers are two ways of
+         * reaching one implementation, not two implementations.
+         */
+        await (isPro
+          ? plannerService.chat(
+              // Only the recent turns: the whole history is re-sent and re-read
+              // on every message, so an unbounded conversation would cost more
+              // with each one. Matches the server's own cap.
+              base
+                .slice(-HISTORY_LIMIT)
+                .map(({ author, content: text }) => ({ author, content: text })),
+              handlers,
+              { signal: controller.signal },
+            )
+          : plannerService.answerLocally(trimmed, handlers, { signal: controller.signal }));
 
         // A turn that produced neither words nor a trip has nothing to show,
         // and an empty bubble is worse than saying so.
@@ -216,7 +238,10 @@ export function usePlanner() {
         setError(caught instanceof PlannerError ? caught.message : GENERATION_ERROR);
       }
     },
-    [commitMessages, paintMessages],
+    // `isPro` belongs here: an upgrade must change which engine the next
+    // prompt runs, and a callback that closed over the old tier would keep
+    // answering from templates until something else happened to remake it.
+    [commitMessages, paintMessages, isPro],
   );
 
   /**
