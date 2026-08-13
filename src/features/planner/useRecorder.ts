@@ -1,5 +1,5 @@
 import { useCallback, useRef, useState } from 'react';
-import { speechService } from '../../services/speech.service';
+import { DictationUnavailableError, speechService } from '../../services/speech.service';
 
 /**
  * Dictation for the devices the browser cannot serve.
@@ -41,6 +41,15 @@ export type Recorder = {
   isRecording: boolean;
   /** True between the recording stopping and the words arriving. */
   isTranscribing: boolean;
+  /**
+   * True once the server has said it has no transcription key.
+   *
+   * Only ever learned by asking: whether a key is set is the server's business
+   * and there is no endpoint that volunteers it, so the first recording is what
+   * finds out. From then on the button goes away rather than inviting a second
+   * recording that cannot succeed either.
+   */
+  isUnavailable: boolean;
   error: string | null;
   start: () => void;
   stop: () => void;
@@ -50,6 +59,7 @@ export type Recorder = {
 export function useRecorder({ onText }: { onText: (text: string) => void }): Recorder {
   const [isRecording, setIsRecording] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
+  const [isUnavailable, setIsUnavailable] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const recorderRef = useRef<MediaRecorder | null>(null);
@@ -118,7 +128,19 @@ export function useRecorder({ onText }: { onText: (text: string) => void }): Rec
         .then((text) => {
           if (text) onTextRef.current(text);
         })
-        .catch(() => {
+        .catch((failure: unknown) => {
+          /*
+           * "Try again" is the right advice for a provider that stumbled and
+           * exactly the wrong advice for one that was never switched on: the
+           * second recording fails identically, and the reader is left thinking
+           * their voice is the problem.
+           */
+          if (failure instanceof DictationUnavailableError) {
+            setIsUnavailable(true);
+            setError('Dictation is not switched on for this server.');
+            return;
+          }
+
           setError('We could not make out that recording. Try again.');
         })
         .finally(() => setIsTranscribing(false));
@@ -141,6 +163,7 @@ export function useRecorder({ onText }: { onText: (text: string) => void }): Rec
     isSupported,
     isRecording,
     isTranscribing,
+    isUnavailable,
     error,
     start: () => void start(),
     stop,

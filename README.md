@@ -16,8 +16,9 @@ cp server/.env.example server/.env
 # Put a JWT_SECRET in it. Generate one with:
 #   node -e "console.log(require('crypto').randomBytes(48).toString('base64url'))"
 # Every other key in that file is optional; each one names what is lost
-# without it. ABLY_API_KEY is the newest — without it messages still work,
-# it just stops updating until you refresh.
+# without it. ABLY_API_KEY: without it messages still work, they just stop
+# updating until you refresh. GROQ_API_KEY is the newest — without it a
+# desktop still dictates, but a phone cannot.
 npm run db:migrate
 
 # Two terminals, or two tabs:
@@ -1145,6 +1146,49 @@ record, so a person who will not take no for an answer can ask again.
 Proportionate for a small trusted group, and written down rather than discovered:
 **if this opens up, decline-remembers and block are the first two things to
 build**, before any other friends feature.
+
+---
+
+### 10. Dictating a prompt — **built**
+
+A microphone in the planner's composer. **Two routes, because one of them does
+not work on a phone.**
+
+A desktop uses `SpeechRecognition`, which is live, needs no key and costs
+nothing. The mobile engines repeat themselves — the same phrase two or three
+times over — and three attempts at reconstructing their event stream failed to
+fix it. The stream was the bug: revisions arrive out of order and nothing in the
+browser can tell a correction from a repetition. So a phone does not stream at
+all. It records, stops, and `POST /api/speech/transcribe` sends the audio to
+Whisper (`whisper-large-v3-turbo`, through Groq) for **one pass over one
+recording**. There is nothing to reassemble, so nothing can be reassembled
+wrongly.
+
+Which route a device takes is decided by `(pointer: coarse)` — a finger — and
+not by the user agent, because no user-agent string has answered "is this a
+phone" honestly in a decade. Both hooks are called either way, since hooks
+cannot be conditional; only the chosen one is ever started.
+
+**The audio goes through our server, and is stored by nobody.** The key is a
+real secret and a key in a browser is a key anybody can spend, so the recording
+is uploaded here, forwarded, and dropped — there is no column to write it to and
+no reason to keep somebody's voice. The route is authenticated, rate-limited to
+20 recordings a minute per account (it spends a provider's quota and carries
+megabytes per call, which the message limiter does not), and capped at 8MB, so
+a phone on a bad connection fails quickly instead of uploading for a minute
+first. A recording nobody ends stops itself after 60 seconds, and the
+microphone's tracks are released the moment it does — on a phone the recording
+indicator stays lit until they are, and a light that outlives the recording is
+alarming in a way a leak is not.
+
+`GROQ_API_KEY` is optional and the degradation is deliberate: a desktop is
+unaffected, and a phone's first recording comes back "Dictation is not switched
+on for this server", after which the microphone withdraws rather than inviting a
+second recording that will fail identically. **It does not fall back to the
+browser's own engine on a phone** — that is the engine this route exists to
+escape, and a mangled sentence is worse than an honest refusal. That one failure
+gets its own error type (`DictationUnavailableError`) precisely because it is the
+only one where "try again" is a lie.
 
 ---
 

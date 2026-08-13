@@ -51,7 +51,14 @@ export function useDictation({ onText }: { onText: (text: string) => void }): Di
 
   if (useRecording) {
     return {
-      isSupported: true,
+      /*
+       * A deployment with no transcription key cannot dictate on a phone, and
+       * the live engine is not the consolation it looks like: it is the engine
+       * whose repeating this route exists to escape. So the button goes rather
+       * than falling back to something known to produce a mangled sentence.
+       * The message stays on screen after it does.
+       */
+      isSupported: !recorder.isUnavailable,
       isActive: recorder.isRecording,
       isTranscribing: recorder.isTranscribing,
       interim: '',

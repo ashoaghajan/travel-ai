@@ -3,7 +3,7 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, renderHook, waitFor } from '@testing-library/react';
-import { speechService } from '../../services/speech.service';
+import { DictationUnavailableError, speechService } from '../../services/speech.service';
 import { useRecorder } from './useRecorder';
 
 /**
@@ -160,6 +160,23 @@ describe('recording', () => {
 
     await waitFor(() => expect(result.current.error).toMatch(/could not make out/i));
     expect(result.current.isTranscribing).toBe(false);
+    // A provider that stumbled is worth another press.
+    expect(result.current.isUnavailable).toBe(false);
+  });
+
+  it('stops offering dictation when the server has no key', async () => {
+    vi.spyOn(speechService, 'transcribe').mockRejectedValue(new DictationUnavailableError());
+
+    const { result } = renderHook(() => useRecorder({ onText: vi.fn() }));
+    await act(async () => result.current.start());
+    act(() => recorded());
+    act(() => result.current.stop());
+
+    // "Try again" would be a lie here: the second recording fails identically,
+    // and the reader would think their voice was the problem.
+    await waitFor(() => expect(result.current.isUnavailable).toBe(true));
+    expect(result.current.error).toMatch(/not switched on/i);
+    expect(result.current.error).not.toMatch(/try again/i);
   });
 });
 

@@ -1117,19 +1117,34 @@ One page at `/friends`, three sections, and a count in the sidebar.
 
 A microphone in the planner's composer, left of the send button.
 
-- **The browser transcribes, not a provider.** `SpeechRecognition` needs no key,
-  no account and no audio leaving through our server. The cost is stated rather
-  than hidden: Firefox has no implementation, and Chrome sends the audio to
-  Google.
-- **The control appears only where the API does.** A button that cannot work is
-  worse than no button.
+- **A desktop transcribes itself; a phone sends the audio.** `SpeechRecognition`
+  needs no key and no account, and on a desktop it works — so a desktop keeps
+  using it, live and for nothing. The mobile engines repeat themselves, the same
+  phrase two or three times over, and three attempts at reading their event
+  stream failed to tame it. So a phone records instead and one pass of Whisper
+  transcribes the recording. **One take, one transcript, nothing to reassemble
+  wrongly.** The cost is stated rather than hidden: the phone waits for the
+  sentence to end instead of watching words appear.
+- **Told apart by pointer, not by user agent.** A coarse pointer is a finger,
+  and no user-agent string has answered "is this a phone" honestly in a decade.
+- **The audio is never stored** — not in the browser, not on our server, not at
+  the provider beyond the request. It exists for as long as it takes to become a
+  sentence, and the key stays on the server because a key in a browser is a key
+  anybody can spend.
+- **The control appears only where it can work.** Firefox has no live engine; a
+  deployment with no transcription key cannot serve a phone, and says so once
+  and then withdraws the microphone rather than inviting a second recording that
+  will fail the same way.
 - **Quiet until it is listening**, then filled and slowly pulsing — the one
   pulse in this app that earns itself, because a microphone somebody has
   forgotten is open is a privacy problem rather than a decoration. Silent under
   `prefers-reduced-motion`, where the fill carries it.
-- **Settled words go in the field; revised ones go in the placeholder.** The API
-  rewrites what it thinks it heard as somebody speaks, and writing each revision
-  into the field would fight whatever they are typing.
+- **Settled words go in the field; revised ones go in the placeholder.** The live
+  engine rewrites what it thinks it heard as somebody speaks, and writing each
+  revision into the field would fight whatever they are typing. A phone has no
+  revisions to show, so its placeholder reads "Transcribing…" during the one
+  wait it has, and the button is dead for that moment rather than inviting a
+  press that would start a second recording.
 - **Dictation appends.** Somebody may have typed half a sentence before reaching
   for the microphone; what they said continues it.
 
