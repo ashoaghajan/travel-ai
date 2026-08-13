@@ -402,6 +402,9 @@ Recent Trips
 Upgrade to Pro
 ```
 
+"Upgrade to Pro" is shown to free accounts only — see Surface 13. On a Pro
+account the sidebar simply ends at the recent trips.
+
 Recent trips examples:
 
 ```txt
@@ -1156,6 +1159,46 @@ A microphone in the planner's composer, left of the send button.
   press that would start a second recording.
 - **Dictation appends.** Somebody may have typed half a sentence before reaching
   for the microphone; what they said continues it.
+
+---
+
+## Surface 13: Free and Pro — **built**
+
+Two planners behind one composer. Free builds trips from templates and answers
+weather and place questions; Pro writes the trip with Claude and can be talked
+to. The design problem is not the gate — it is saying which one is answering
+without making the free one feel broken.
+
+- **A quiet line above the composer, for free accounts only.** Not a modal, not
+  a toast, not a badge on every reply: a fact about the tool, in the place the
+  tool is used. It describes both tiers in one sentence and puts Upgrade at the
+  end of it.
+- **Nothing about a free reply apologises for itself.** The rule engine's own
+  copy — "Sure! Here's a 5-day Kyoto itinerary crafted for you" — stays exactly
+  as it was. The line above the composer is what makes the difference visible;
+  a disclaimer stapled to every bubble would make a working answer look like a
+  degraded one.
+- **The upsell appears only where the ceiling is actually hit** — a question the
+  planner cannot answer, or a place it cannot find. Never on a successful
+  answer, and never on an outage: the weather service being down is not a
+  limitation of the tier, and offering to sell an upgrade on somebody else's
+  downtime is the worst possible moment to ask.
+- **The sidebar card disappears for a Pro account**, and so does the composer
+  line. A permanent advertisement to somebody who has already bought is the
+  cheapest way to make a paid product feel unpaid.
+- **The upgrade confirms itself by disappearing.** No toast, no redirect, no
+  celebration screen. The card is gone, the line is gone, and the next reply is
+  written by Claude. Anything more would be ceremony around a state change the
+  reader can already see.
+- **The profile carries the tier**, with a crown, the date it started, and the
+  way back to free — the half an upgrade flow usually forgets. A row beside the
+  connected accounts rather than a page of its own: it is a fact about the
+  account and belongs with the other facts.
+- **The offer is a filled button; the way back is a quiet one.** Leaving is not
+  hidden — it just does not compete with staying.
+- **It says there is no payment.** Until a provider is wired up, the button
+  gives Pro away, and the screen that describes the account is the wrong place
+  to be coy about that.
 
 ---
 

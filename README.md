@@ -822,42 +822,45 @@ file over 4 MB before reading it at all.
 
 ---
 
-### 3. Planner API
-
-Move itinerary generation to the backend.
+### 3. Planner API — **built**
 
 ```txt
-POST /api/planner/generate
+POST /api/planner/chat
 ```
 
-The frontend sends the user prompt.
+Not `/generate`, and not request/response: the endpoint **streams**. The client
+sends the recent turns of the conversation and reads server-sent events as they
+arrive, so a reply appears a few words at a time instead of after a long blank
+pause. The itinerary comes back as its own event rather than as text to parse.
 
-The backend returns a structured itinerary.
+It is the only streaming endpoint in this API and the only one that costs money
+per call, which is what section 11 is about.
 
 ---
 
-### 4. AI Integration
+### 4. AI Integration — **built**
 
-Integrate one AI provider later.
+**Claude, through the Anthropic API** — not OpenAI or Azure, as this section
+guessed before there was a decision. The planner is a tool-use loop:
+`create_itinerary` for a plan and `get_weather` for a forecast, with the
+model's tool input validated against a Zod schema before anything is trusted.
 
-Possible providers:
-
-```txt
-OpenAI
-Azure OpenAI
-```
-
-Expected flow:
+The flow the section sketched still holds, with one correction — the trip is
+**not** saved on the way through:
 
 ```txt
 User prompt
 Frontend
 Backend API
-AI provider
-Structured itinerary response
-Database save
+Claude (tool use)
+Structured itinerary event
 Frontend render
+Database save — only if the reader taps Save
 ```
+
+A generated itinerary is a suggestion until somebody keeps it. Writing every
+draft to the database would fill an account with trips nobody asked for; see
+the plan-versus-booking split for the same reasoning applied one level down.
 
 ---
 
@@ -1198,6 +1201,79 @@ browser's own engine on a phone** — that is the engine this route exists to
 escape, and a mangled sentence is worse than an honest refusal. That one failure
 gets its own error type (`DictationUnavailableError`) precisely because it is the
 only one where "try again" is a lie.
+
+---
+
+### 11. Two planners, one gate — **built**
+
+The planner called Claude on every prompt for every account. That is the only
+thing in this app that costs money per use, and "Upgrade to Pro" had been in
+the sidebar since Stage 1 with nothing behind it.
+
+**Free is not a stub.** `mockAi.service.ts` and `utils/intent.ts` never left:
+they read a destination, a length, a party size and a start date out of a
+sentence and build a real trip, and they answer weather and place questions
+from Open-Meteo and OpenTripMap. That was the whole product before the API
+existed. So this is two planners and one gate, not a feature taken away.
+
+**Exactly one endpoint is gated**, and it is worth saying so because "AI
+features" sounds broader than this is: `POST /api/planner/chat`. Dictation,
+activity search, geocoding, weather, flights and hotels are unchanged, because
+none of them is a model.
+
+```txt
+User.plan      'free' | 'pro'   — a string, not an enum, per the schema's rule
+User.proSince  DateTime?        — cleared on the way back down
+
+POST /api/me/plan  { plan }  → the updated ApiUser
+```
+
+**The tier picks the engine in the browser.** A free account never calls the
+chat endpoint at all — being told 403 in order to learn what the client already
+knew would put a round trip in front of every free reply:
+
+```ts
+await (isPro ? plannerService.chat(history, handlers, { signal })
+             : plannerService.answerLocally(prompt, handlers, { signal }));
+```
+
+**The server checks anyway**, reading the row rather than trusting the token —
+so an upgrade lands on the next prompt instead of waiting for the token to
+expire, and a gate the client alone enforces stays a gate. `plan` rides
+`ApiUser` for the same reason `settings` does: the planner must know which
+engine to run before the first prompt.
+
+`chat` keeps its own fallback to the same rule engine for a Pro account on a
+server with no `ANTHROPIC_API_KEY`. Two ways to reach one implementation, not
+two implementations.
+
+**Every existing account starts free**, including the ones already using this
+app. Grandfathering would have left the free planner untested by the only
+people in a position to notice it being bad, and one click puts an account
+back.
+
+**The upsell lands where the ceiling is felt, and nowhere else.** The plan put
+it on `intent.ts` returning `unknown`; a browser showed that branch is rarely
+reached, because the classifier is eager — "what should I pack for a cold
+climate?" is read as a place lookup and dies as "I could not find a place
+called 'a cold climate'". The hint hangs off both dead ends now, and off
+neither a successful answer nor a weather-service outage: an outage is not a
+ceiling, and Pro would not fix it.
+
+**Recorded consequence: until billing exists, Pro is self-service and therefore
+not a restriction.** `POST /api/me/plan` is a placeholder for a payment
+provider's webhook — anyone who reads the network tab can be Pro for nothing.
+That is deliberate: the tier shapes what somebody gets by default rather than
+withholding it. The day a provider is wired up, that route and
+`authService.setPlan` are deleted, and the flag moves the way it does
+everywhere else — from the provider, never from a request the browser can make.
+Four places say so in their own docblock — the Prisma column, the Zod schema,
+the Express route and the client service method — so whoever does that work
+does not have to find them all by grepping.
+
+**Recorded consequence: two engines is two behaviours to keep working.** The
+rule engine had been dead weight in the bundle since the API arrived. It is
+back in the product, and its tests are load-bearing again.
 
 ---
 
