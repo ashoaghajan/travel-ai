@@ -39,6 +39,16 @@ import { useCallback, useEffect, useRef, useState } from 'react';
  */
 const EMPTY_RESTART_LIMIT = 4;
 
+/**
+ * How long an identical phrase counts as an echo rather than a repetition.
+ *
+ * Engines replay the last utterance into the session that replaces them, so
+ * "create a trip" arrives twice a fraction of a second apart. Somebody who
+ * genuinely says a word twice takes longer than this to do it — and the cost of
+ * being wrong either way is one word, against a prompt that was unusable.
+ */
+const ECHO_WINDOW_MS = 2000;
+
 /** The parts of the API this file uses, named rather than pulled from `lib.dom`. */
 type SpeechRecognitionLike = {
   lang: string;
@@ -119,6 +129,24 @@ export function useSpeech({ onText }: { onText: (text: string) => void }): Speec
    */
   const emptyRestartsRef = useRef(0);
 
+  /**
+   * How much of this session's result list has already been committed.
+   *
+   * **Not `event.resultIndex`.** That is what this used to trust, and it is
+   * what made a phone repeat every phrase: `results` is cumulative for the
+   * session, and mobile engines hand it back with the index pointing at the
+   * start rather than at what is new. Reading from there re-commits everything
+   * already said, again on every event — "create a trip, create a trip, create
+   * a trip" — which is exactly the shape of the bug this replaces.
+   *
+   * Counting what has been taken makes the index irrelevant: each result is
+   * committed once, whatever the engine claims is new.
+   */
+  const committedRef = useRef(0);
+
+  /** The last phrase committed, and when — see `ECHO_WINDOW_MS`. */
+  const lastFinalRef = useRef<{ text: string; at: number }>({ text: '', at: 0 });
+
   /*
    * Held in a ref so the recognition's handlers always call the current one.
    * They are attached once, at start, and would otherwise close over whatever
@@ -134,6 +162,24 @@ export function useSpeech({ onText }: { onText: (text: string) => void }): Speec
     recognitionRef.current?.stop();
   }, []);
 
+  /**
+   * Hands one settled phrase upward, unless it is the echo of the last one.
+   *
+   * A session that ends mid-sentence and is replaced often replays its final
+   * utterance into its successor, where the count above cannot see it: that is
+   * a different list, numbered from zero. Two identical phrases a moment apart
+   * are that; two a few seconds apart are somebody saying a word twice.
+   */
+  const commitFinal = useCallback((text: string) => {
+    const now = Date.now();
+    const last = lastFinalRef.current;
+
+    if (text === last.text && now - last.at < ECHO_WINDOW_MS) return;
+
+    lastFinalRef.current = { text, at: now };
+    onTextRef.current(text);
+  }, []);
+
   /** Opens one session. The intent to listen outlives it — see `onend`. */
   const open = useCallback(() => {
     if (recognitionRef.current) return;
@@ -143,6 +189,8 @@ export function useSpeech({ onText }: { onText: (text: string) => void }): Speec
 
     const recognition = new Recognition();
     recognitionRef.current = recognition;
+    // A new session numbers its results from zero again.
+    committedRef.current = 0;
 
     // The reader's own language, so a French speaker is not transcribed as if
     // they were speaking English.
@@ -153,24 +201,38 @@ export function useSpeech({ onText }: { onText: (text: string) => void }): Speec
     recognition.interimResults = true;
 
     recognition.onresult = (event) => {
+      // An old session, still talking after being replaced. Anything it says
+      // belongs to a microphone nobody is holding open.
+      if (recognitionRef.current !== recognition) return;
+
       // Something was heard, so this is a working session rather than one of a
       // run of empty ones.
       emptyRestartsRef.current = 0;
 
       let pending = '';
 
-      for (let index = event.resultIndex; index < event.results.length; index += 1) {
+      for (let index = committedRef.current; index < event.results.length; index += 1) {
         const result = event.results[index];
-        const text = result[0]?.transcript ?? '';
+        const text = (result[0]?.transcript ?? '').trim();
 
-        if (result.isFinal) onTextRef.current(text.trim());
-        else pending += text;
+        if (!result.isFinal) {
+          pending += result[0]?.transcript ?? '';
+          continue;
+        }
+
+        // Taken, whatever happens next: a result that has settled cannot
+        // settle again, and counting it here is what stops it being read a
+        // second time when the engine re-sends the list.
+        committedRef.current = index + 1;
+        if (text) commitFinal(text);
       }
 
       setInterim(pending.trim());
     };
 
     recognition.onerror = (event) => {
+      if (recognitionRef.current !== recognition) return;
+
       // `no-speech` fires on an ordinary pause and stops the session; saying so
       // would be nagging somebody who is merely thinking, and the session is
       // replaced below as if nothing had happened.
@@ -183,6 +245,17 @@ export function useSpeech({ onText }: { onText: (text: string) => void }): Speec
     };
 
     recognition.onend = () => {
+      /*
+       * Only the session that is actually current may end things.
+       *
+       * Engines fire this late, and sometimes twice. Taken at face value, a
+       * stale end would null the reference to the *live* session and open
+       * another beside it — two recognisers on one microphone, both
+       * transcribing, which is the second half of why a phone repeated
+       * everything. Three stale ends made it three.
+       */
+      if (recognitionRef.current !== recognition) return;
+
       recognitionRef.current = null;
       setInterim('');
 
@@ -219,11 +292,12 @@ export function useSpeech({ onText }: { onText: (text: string) => void }): Speec
       wantsToListenRef.current = false;
       setError(messageFor(undefined));
     }
-  }, []);
+  }, [commitFinal]);
 
   const start = useCallback(() => {
     wantsToListenRef.current = true;
     emptyRestartsRef.current = 0;
+    lastFinalRef.current = { text: '', at: 0 };
     open();
   }, [open]);
 

@@ -59,10 +59,23 @@ function installSpeechApi({ failToStart = false } = {}) {
 
 /** What the API sends as somebody speaks: revisions, then something settled. */
 function said(transcript: string, isFinal: boolean) {
-  return {
-    resultIndex: 0,
-    results: Object.assign([Object.assign([{ transcript }], { isFinal })], { length: 1 }),
-  };
+  return heard([[transcript, isFinal]]);
+}
+
+/**
+ * A whole result list, as an engine actually sends one.
+ *
+ * `results` is cumulative for the session — every phrase heard so far, not only
+ * the new one — and `resultIndex` is meant to say where the new part starts.
+ * Mobile engines routinely send it as 0 regardless, which is what the second
+ * argument here is for.
+ */
+function heard(phrases: [string, boolean][], resultIndex = 0) {
+  const results = phrases.map(([transcript, isFinal]) =>
+    Object.assign([{ transcript }], { isFinal }),
+  );
+
+  return { resultIndex, results: Object.assign(results, { length: results.length }) };
 }
 
 beforeEach(() => {
@@ -161,6 +174,89 @@ describe('what it heard', () => {
     act(() => result.current.stop());
 
     expect(result.current.interim).toBe('');
+  });
+});
+
+/**
+ * Why a phone repeated everything.
+ *
+ * Two mechanisms, both of them ours rather than the browser's, and both
+ * reproduced here from what mobile engines actually do.
+ */
+describe('the repetition bug', () => {
+  beforeEach(() => installSpeechApi());
+
+  it('commits each phrase once, however the engine numbers the list', () => {
+    const onText = vi.fn();
+    const { result } = renderHook(() => useSpeech({ onText }));
+    act(() => result.current.start());
+
+    // A phone sends the whole list every time, with the index pointing at the
+    // start rather than at what is new.
+    act(() => live?.onresult?.(heard([['create a trip', true]])));
+    act(() => live?.onresult?.(heard([['create a trip', true], ['to Abu Dhabi', true]])));
+    act(() =>
+      live?.onresult?.(
+        heard([['create a trip', true], ['to Abu Dhabi', true], ['on the 17th', true]]),
+      ),
+    );
+
+    // Reading from `resultIndex` gave "create a trip, create a trip, create a
+    // trip" — one more copy of everything on every event.
+    expect(onText.mock.calls.map(([text]) => text)).toEqual([
+      'create a trip',
+      'to Abu Dhabi',
+      'on the 17th',
+    ]);
+  });
+
+  it('ignores a session that has already been replaced', () => {
+    const onText = vi.fn();
+    const { result } = renderHook(() => useSpeech({ onText }));
+    act(() => result.current.start());
+
+    const stale = live;
+    // The session ends and is replaced, as it does after every utterance on a
+    // phone.
+    act(() => stale?.onend?.());
+    const current = live;
+
+    // The old one, still talking. Believed, it would put a second recogniser
+    // on the same microphone and transcribe everything twice.
+    act(() => stale?.onresult?.(heard([['ghost', true]])));
+    act(() => stale?.onend?.());
+
+    expect(onText).not.toHaveBeenCalled();
+    expect(live).toBe(current);
+    expect(result.current.isListening).toBe(true);
+  });
+
+  it('drops the replay of the last phrase into the next session', () => {
+    const onText = vi.fn();
+    const { result } = renderHook(() => useSpeech({ onText }));
+    act(() => result.current.start());
+
+    act(() => live?.onresult?.(heard([['create a trip', true]])));
+    act(() => live?.onend?.());
+    // The successor opens with what its predecessor already said.
+    act(() => live?.onresult?.(heard([['create a trip', true]])));
+
+    expect(onText).toHaveBeenCalledTimes(1);
+  });
+
+  it('still hears somebody who genuinely repeats themselves', () => {
+    vi.useFakeTimers();
+    const onText = vi.fn();
+    const { result } = renderHook(() => useSpeech({ onText }));
+    act(() => result.current.start());
+
+    act(() => live?.onresult?.(heard([['yes', true]])));
+    act(() => vi.advanceTimersByTime(3000));
+    act(() => live?.onresult?.(heard([['yes', true], ['yes', true]])));
+
+    // Two seconds apart is a person, not an echo.
+    expect(onText).toHaveBeenCalledTimes(2);
+    vi.useRealTimers();
   });
 });
 
