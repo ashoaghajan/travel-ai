@@ -1271,6 +1271,14 @@ Four places say so in their own docblock — the Prisma column, the Zod schema,
 the Express route and the client service method — so whoever does that work
 does not have to find them all by grepping.
 
+**`UpgradeToProDialog` is the seam that work lands on.** Both ways in — the
+sidebar card and the profile's plan row — open it rather than upgrading
+directly, and the request lives in the dialog rather than in either caller. So
+the sentence somebody agrees to is written once, and the day there is something
+to pay, the dialog becomes the screen that says what it costs without either
+caller changing. Going back to free does not ask: it costs nothing and the
+button that undoes it is the one that replaces it.
+
 **Recorded consequence: two engines is two behaviours to keep working.** The
 rule engine had been dead weight in the bundle since the API arrived. It is
 back in the product, and its tests are load-bearing again.

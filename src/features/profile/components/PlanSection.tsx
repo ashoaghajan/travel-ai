@@ -4,6 +4,7 @@ import { CrownIcon } from '../../../components/common/icons';
 import { useCurrentUser } from '../../../hooks/useCurrentUser';
 import { authStore } from '../../../store/auth.store';
 import { formatLongDate } from '../../../utils/date';
+import { UpgradeToProDialog } from '../../pro/components/UpgradeToProDialog';
 import styles from './PlanSection.module.css';
 
 /**
@@ -15,22 +16,37 @@ import styles from './PlanSection.module.css';
  * the sidebar card up.
  *
  * **This is where somebody goes back to free**, which is the half an upgrade
- * flow usually forgets. Nothing here takes money, so nothing here needs a
- * confirmation step — the way back is one press and costs nothing.
+ * flow usually forgets.
+ *
+ * **The two directions are asked for differently, on purpose.** Upgrading opens
+ * `UpgradeToProDialog` and waits for a yes, because it is the direction that
+ * will one day take money and the dialog is where a payment provider lands.
+ * Going back to free happens on the press: nothing is lost by it, and the
+ * button that undoes it is the one that replaces it.
  */
 export function PlanSection() {
   const { user, isPro } = useCurrentUser();
   const [busy, setBusy] = useState(false);
+  const [isAsking, setIsAsking] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   if (!user) return null;
 
-  async function change(plan: 'free' | 'pro') {
+  /**
+   * Going back to free, which happens on the press.
+   *
+   * Upgrading asks first — see `UpgradeToProDialog`, and the reason is that it
+   * is the direction that will one day cost money. This direction never will,
+   * and nothing is lost by it: the trips stay, the account stays, and the
+   * button to come back is the one that replaces this. A confirmation here
+   * would be ceremony around an action that undoes itself.
+   */
+  async function backToFree() {
     setBusy(true);
     setError(null);
 
     try {
-      await authStore.setPlan(plan);
+      await authStore.setPlan('free');
     } catch {
       setError('That did not go through. Try again.');
     } finally {
@@ -73,7 +89,7 @@ export function PlanSection() {
           <button
             type="button"
             className={isPro ? styles.downgrade : styles.upgrade}
-            onClick={() => void change(isPro ? 'free' : 'pro')}
+            onClick={() => (isPro ? void backToFree() : setIsAsking(true))}
             disabled={busy}
           >
             {busy ? 'Saving…' : isPro ? 'Back to Free' : 'Upgrade to Pro'}
@@ -94,6 +110,8 @@ export function PlanSection() {
           </p>
         ) : null}
       </Card>
+
+      {isAsking ? <UpgradeToProDialog onClose={() => setIsAsking(false)} /> : null}
     </section>
   );
 }

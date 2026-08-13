@@ -1,0 +1,79 @@
+/* Matches the other dialogs in this app rather than inventing a shape for the
+   one that happens to be about money. */
+.dialog {
+  width: min(28rem, calc(100vw - 2 * var(--space-lg)));
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-lg);
+  background-color: var(--color-surface);
+  color: var(--color-text-main);
+  box-shadow: var(--shadow-card);
+}
+
+.dialog::backdrop {
+  background-color: var(--color-backdrop);
+}
+
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  padding: var(--space-xl);
+}
+
+.icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-md);
+  background-color: var(--color-primary-soft);
+  color: var(--color-primary);
+}
+
+.title {
+  font-size: var(--font-lg);
+  font-weight: var(--font-weight-semibold);
+}
+
+.lead {
+  font-size: var(--font-sm);
+  line-height: var(--line-height-snug);
+  color: var(--color-text-main);
+}
+
+.detail {
+  margin-top: calc(-1 * var(--space-xs));
+  font-size: var(--font-xs);
+  line-height: var(--line-height-snug);
+  color: var(--color-text-muted);
+}
+
+/* Set apart from the description rather than buried in it: it is the one line
+   somebody might feel misled about later. */
+.note {
+  padding: var(--space-md);
+  border-radius: var(--radius-md);
+  background-color: var(--color-primary-soft);
+  font-size: var(--font-xs);
+  line-height: var(--line-height-snug);
+  color: var(--color-text-muted);
+}
+
+.noteStrong {
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-main);
+}
+
+.error {
+  font-size: var(--font-xs);
+  color: var(--color-danger);
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-sm);
+  margin-top: var(--space-xs);
+}

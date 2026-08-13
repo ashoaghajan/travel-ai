@@ -3,7 +3,7 @@
  */
 import type { ApiUser } from '@ai-travel/shared';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { authService } from '../../services/auth.service';
 import { authStore } from '../../store/auth.store';
@@ -43,8 +43,19 @@ async function settle(as: ApiUser | null) {
   await authStore.bootstrap();
 }
 
+// jsdom does not implement the native dialog methods.
+function installDialogApi() {
+  HTMLDialogElement.prototype.showModal = vi.fn(function showModal(this: HTMLDialogElement) {
+    this.open = true;
+  });
+  HTMLDialogElement.prototype.close = vi.fn(function close(this: HTMLDialogElement) {
+    this.open = false;
+  });
+}
+
 beforeEach(() => {
   localStorage.clear();
+  installDialogApi();
 });
 
 afterEach(() => {
@@ -84,25 +95,44 @@ describe('UpgradeCard', () => {
     expect(container).toBeEmptyDOMElement();
   });
 
-  it('upgrades, and then disappears', async () => {
+  it('asks before upgrading, rather than upgrading', async () => {
+    await settle(user('free'));
+    const setPlan = vi.spyOn(authService, 'setPlan').mockResolvedValue(user('pro'));
+
+    render(<UpgradeCard />);
+    await userEvent.click(screen.getByRole('button', { name: 'Upgrade' }));
+
+    expect(await screen.findByRole('dialog')).toBeInTheDocument();
+    // The card's button opens the question; it does not answer it.
+    expect(setPlan).not.toHaveBeenCalled();
+  });
+
+  it('upgrades once confirmed, and then disappears', async () => {
     await settle(user('free'));
     vi.spyOn(authService, 'setPlan').mockResolvedValue(user('pro'));
 
     const { container } = render(<UpgradeCard />);
     await userEvent.click(screen.getByRole('button', { name: 'Upgrade' }));
 
+    const dialog = await screen.findByRole('dialog');
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Upgrade' }));
+
     // The absence is the confirmation — no toast, no navigation.
     await waitFor(() => expect(container).toBeEmptyDOMElement());
   });
 
-  it('says so when it fails, and stays pressable', async () => {
+  it('leaves the account alone when the question is declined', async () => {
     await settle(user('free'));
-    vi.spyOn(authService, 'setPlan').mockRejectedValue(new Error('offline'));
+    const setPlan = vi.spyOn(authService, 'setPlan').mockResolvedValue(user('pro'));
 
     render(<UpgradeCard />);
     await userEvent.click(screen.getByRole('button', { name: 'Upgrade' }));
 
-    expect(await screen.findByRole('alert')).toHaveTextContent(/did not go through/i);
-    expect(screen.getByRole('button', { name: 'Upgrade' })).toBeEnabled();
+    const dialog = await screen.findByRole('dialog');
+    await userEvent.click(within(dialog).getByRole('button', { name: /not now/i }));
+
+    expect(setPlan).not.toHaveBeenCalled();
+    // Still on offer, not dismissed for the session.
+    expect(screen.getByRole('button', { name: 'Upgrade' })).toBeInTheDocument();
   });
 });

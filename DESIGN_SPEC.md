@@ -1186,10 +1186,16 @@ without making the free one feel broken.
 - **The sidebar card disappears for a Pro account**, and so does the composer
   line. A permanent advertisement to somebody who has already bought is the
   cheapest way to make a paid product feel unpaid.
-- **The upgrade confirms itself by disappearing.** No toast, no redirect, no
-  celebration screen. The card is gone, the line is gone, and the next reply is
-  written by Claude. Anything more would be ceremony around a state change the
-  reader can already see.
+- **Upgrading asks first; going back to free does not.** One dialog serves both
+  ways in, so the sentence somebody agrees to is written once — what changes,
+  what does not, and that there is nothing to pay. The asymmetry is the point:
+  upgrading is the direction that will one day cost money, and the dialog is
+  where a payment provider lands. Leaving costs nothing and undoes itself, so
+  asking twice would be ceremony.
+- **The upgrade confirms itself by disappearing.** Once the dialog closes there
+  is no toast, no redirect and no celebration screen. The card is gone, the
+  line is gone, and the next reply is written by Claude. Anything more would be
+  ceremony around a state change the reader can already see.
 - **The profile carries the tier**, with a crown, the date it started, and the
   way back to free — the half an upgrade flow usually forgets. A row beside the
   connected accounts rather than a page of its own: it is a fact about the

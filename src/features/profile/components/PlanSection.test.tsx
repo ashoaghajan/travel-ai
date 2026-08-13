@@ -3,7 +3,7 @@
  */
 import type { ApiUser } from '@ai-travel/shared';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { authService } from '../../../services/auth.service';
 import { authStore } from '../../../store/auth.store';
@@ -37,8 +37,19 @@ async function signedInAs(plan: 'free' | 'pro') {
   await authStore.bootstrap();
 }
 
+// jsdom does not implement the native dialog methods.
+function installDialogApi() {
+  HTMLDialogElement.prototype.showModal = vi.fn(function showModal(this: HTMLDialogElement) {
+    this.open = true;
+  });
+  HTMLDialogElement.prototype.close = vi.fn(function close(this: HTMLDialogElement) {
+    this.open = false;
+  });
+}
+
 beforeEach(() => {
   localStorage.clear();
+  installDialogApi();
 });
 
 afterEach(() => {
@@ -64,27 +75,30 @@ describe('on a free account', () => {
     expect(screen.getByText(/no payment yet/i)).toBeInTheDocument();
   });
 
-  it('upgrades through the store, so everything watching it updates', async () => {
+  it('asks before upgrading', async () => {
     await signedInAs('free');
     const setPlan = vi.spyOn(authService, 'setPlan').mockResolvedValue(user('pro'));
 
     render(<PlanSection />);
     await userEvent.click(screen.getByRole('button', { name: /upgrade to pro/i }));
 
-    await waitFor(() => expect(setPlan).toHaveBeenCalledWith('pro'));
-    // The row re-reads the store rather than keeping its own copy.
-    expect(await screen.findByText('Pro')).toBeInTheDocument();
+    expect(await screen.findByRole('dialog')).toBeInTheDocument();
+    expect(setPlan).not.toHaveBeenCalled();
   });
 
-  it('says so when the upgrade fails, and stays on free', async () => {
+  it('upgrades through the store once confirmed, so everything watching it updates', async () => {
     await signedInAs('free');
-    vi.spyOn(authService, 'setPlan').mockRejectedValue(new Error('offline'));
+    const setPlan = vi.spyOn(authService, 'setPlan').mockResolvedValue(user('pro'));
 
     render(<PlanSection />);
     await userEvent.click(screen.getByRole('button', { name: /upgrade to pro/i }));
 
-    expect(await screen.findByRole('alert')).toHaveTextContent(/did not go through/i);
-    expect(screen.getByText('Free')).toBeInTheDocument();
+    const dialog = await screen.findByRole('dialog');
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Upgrade' }));
+
+    await waitFor(() => expect(setPlan).toHaveBeenCalledWith('pro'));
+    // The row re-reads the store rather than keeping its own copy.
+    expect(await screen.findByText('Pro')).toBeInTheDocument();
   });
 });
 
