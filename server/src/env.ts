@@ -159,6 +159,24 @@ const schema = z.object({
   ANTHROPIC_API_KEY: z.string().min(1).optional(),
 
   /**
+   * Groq — transcription for the phones the browser cannot serve.
+   *
+   * Desktop browsers transcribe on their own, for nothing, with the words
+   * arriving as they are spoken; the mobile engines repeat themselves in ways
+   * three attempts failed to tame. So a phone records instead, uploads the
+   * audio here, and this key pays for one pass of Whisper over it.
+   *
+   * A real secret, and the reason the audio comes through this server at all:
+   * a key in the browser is a key anybody can spend. Nothing is stored — the
+   * recording is held in memory for the length of one request and forwarded.
+   *
+   * Optional, like every other provider here. Without it the phone falls back
+   * to the browser's own engine where there is one, and says dictation is
+   * unavailable where there is not.
+   */
+  GROQ_API_KEY: z.string().min(1).optional(),
+
+  /**
    * Turns off the credential throttles.
    *
    * Only ever set by the test suite, which deliberately fails login over and

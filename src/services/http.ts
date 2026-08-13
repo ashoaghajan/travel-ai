@@ -95,17 +95,37 @@ function buildUrl(path: string, query: RequestOptions['query']): string {
   return search ? `${url}?${search}` : url;
 }
 
+/**
+ * A body the browser should send as it is.
+ *
+ * Everything this app sends is JSON except one thing: a recording, which is
+ * bytes and whose type is its own. Serialising a `Blob` produces `{}` — a
+ * silent, baffling failure — so it is named here rather than discovered there.
+ */
+function isBinary(body: unknown): body is Blob {
+  return typeof Blob !== 'undefined' && body instanceof Blob;
+}
+
 async function send(path: string, options: RequestOptions): Promise<Response> {
   const headers: Record<string, string> = {};
+  const binary = isBinary(options.body);
 
-  if (options.body !== undefined) headers['Content-Type'] = 'application/json';
+  // A blob carries its own type; anything else here is JSON.
+  if (options.body !== undefined) {
+    headers['Content-Type'] = binary ? (options.body as Blob).type || 'application/octet-stream' : 'application/json';
+  }
   if (accessToken && !options.skipAuth) headers.Authorization = `Bearer ${accessToken}`;
 
   try {
     return await fetch(buildUrl(path, options.query), {
       method: options.method ?? 'GET',
       headers,
-      body: options.body === undefined ? undefined : JSON.stringify(options.body),
+      body:
+        options.body === undefined
+          ? undefined
+          : binary
+            ? (options.body as Blob)
+            : JSON.stringify(options.body),
       // Sends the refresh cookie. Same-origin in development via the Vite
       // proxy, so this costs nothing and no CORS negotiation is involved.
       credentials: 'include',

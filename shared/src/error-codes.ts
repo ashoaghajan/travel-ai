@@ -41,6 +41,14 @@ export const ERROR_CODES = {
   LAST_SIGN_IN_METHOD: 'LAST_SIGN_IN_METHOD',
   /** The server has no client id for this provider. */
   PROVIDER_NOT_CONFIGURED: 'PROVIDER_NOT_CONFIGURED',
+  /**
+   * A provider this server depends on answered badly.
+   *
+   * Distinct from `INTERNAL`: nothing here is broken, and the reader's own
+   * request was fine. Trying again is reasonable advice, which it is not for a
+   * fault of ours.
+   */
+  PROVIDER_ERROR: 'PROVIDER_ERROR',
 
   /* generic */
   VALIDATION_FAILED: 'VALIDATION_FAILED',

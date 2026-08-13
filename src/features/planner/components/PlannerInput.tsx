@@ -2,7 +2,7 @@ import { useId, useState } from 'react';
 import type { FormEvent } from 'react';
 import { ArrowUpIcon, MicIcon, StopIcon } from '../../../components/common/icons';
 import { cx } from '../../../utils/cx';
-import { useSpeech } from '../useSpeech';
+import { useDictation } from '../useDictation';
 import styles from './PlannerInput.module.css';
 
 export type PlannerInputProps = {
@@ -50,7 +50,7 @@ export function PlannerInput({
    * sentence before reaching for the microphone, and the words they said are
    * the continuation of it rather than a correction to it.
    */
-  const speech = useSpeech({
+  const speech = useDictation({
     onText: (text) =>
       setMessage((current) => (current ? `${current.trimEnd()} ${text}` : text)),
   });
@@ -89,7 +89,13 @@ export function PlannerInput({
         autoComplete="off"
         /* While listening, the placeholder is the better place for the words
            being revised: the field itself holds only what has been settled. */
-        placeholder={speech.isListening ? speech.interim || 'Listening…' : placeholder}
+        placeholder={
+          speech.isTranscribing
+            ? 'Transcribing…'
+            : speech.isActive
+              ? speech.interim || 'Listening…'
+              : placeholder
+        }
         value={message}
         onChange={(event) => setMessage(event.target.value)}
       />
@@ -99,9 +105,11 @@ export function PlannerInput({
       {speech.isSupported ? (
         <button
           type="button"
-          className={cx(styles.mic, speech.isListening && styles.listening)}
-          aria-label={speech.isListening ? 'Stop dictating' : 'Dictate a message'}
-          aria-pressed={speech.isListening}
+          className={cx(styles.mic, speech.isActive && styles.listening)}
+          aria-label={speech.isActive ? 'Stop dictating' : 'Dictate a message'}
+          aria-pressed={speech.isActive}
+          // Nothing to press while the words are on their way back.
+          disabled={speech.isTranscribing}
           onClick={() => speech.toggle()}
         >
           <MicIcon size={18} />

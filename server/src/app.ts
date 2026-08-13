@@ -9,6 +9,7 @@ import { libraryRouter } from './modules/library/library.routes';
 import { friendsRouter } from './modules/friends/friends.routes';
 import { messagesRouter } from './modules/messages/messages.routes';
 import { sharesRouter } from './modules/shares/shares.routes';
+import { speechRouter } from './modules/speech/speech.routes';
 import { imagesRouter } from './modules/places/images.routes';
 import { placesRouter } from './modules/places/places.routes';
 import { referenceRouter } from './modules/places/reference.routes';
@@ -62,6 +63,7 @@ export function createApp(): Express {
   app.use('/api', friendsRouter);
   app.use('/api', messagesRouter);
   app.use('/api', sharesRouter);
+  app.use('/api', speechRouter);
   // Unauthenticated, and mounted at the root of /api because its paths are
   // domain-shaped (`/flights/search`) rather than grouped under one noun.
   app.use('/api', travelRouter);
