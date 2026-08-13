@@ -40,7 +40,7 @@ export function PlannerPage() {
   } = usePlanner();
   const navigate = useNavigate();
   const { exportTrip, error: exportError } = useTripExport();
-  const conversationEndRef = useRef<HTMLDivElement>(null);
+  const pageEndRef = useRef<HTMLDivElement>(null);
 
   /**
    * Take a suggestion into the trip screen, where it can be edited.
@@ -56,10 +56,28 @@ export function PlannerPage() {
     navigate(tripPath(trip.id));
   }
 
-  // Keep the newest turn in view as the conversation grows.
+  /**
+   * Keep the newest turn in view as the conversation grows — including the
+   * "thinking" indicator, which is the whole point of scrolling the moment a
+   * turn starts rather than only when its words arrive.
+   *
+   * **The anchor sits after the composer, not after the conversation**, which
+   * looks wrong and is the only thing that works. The composer is
+   * `position: sticky; bottom: 0`, so while there is anything left to scroll it
+   * is painted over the bottom of the scrollport. An anchor at the end of the
+   * conversation is therefore aligned to a strip of viewport the composer is
+   * covering, and the indicator directly above it stays hidden — which read as
+   * the page simply not scrolling. Anchoring past the composer scrolls to the
+   * true bottom, where the composer drops to its natural place at the end of
+   * the flow and stops covering anything.
+   *
+   * This is why the fix is not a `scroll-margin`: the composer's height is not
+   * a constant. It grows by a line for an error and by several for the speech
+   * debug log.
+   */
   useEffect(() => {
     const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    conversationEndRef.current?.scrollIntoView({
+    pageEndRef.current?.scrollIntoView({
       behavior: prefersReducedMotion ? 'auto' : 'smooth',
       block: 'end',
     });
@@ -142,8 +160,6 @@ export function PlannerPage() {
         ))}
 
         {isGenerating ? <TypingIndicator /> : null}
-
-        <div ref={conversationEndRef} />
       </div>
 
       <div className={styles.composer}>
@@ -160,6 +176,9 @@ export function PlannerPage() {
           />
         </div>
       </div>
+
+      {/* Past the composer on purpose — see the scrolling effect above. */}
+      <div ref={pageEndRef} aria-hidden="true" />
     </div>
   );
 }
