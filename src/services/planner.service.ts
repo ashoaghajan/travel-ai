@@ -40,6 +40,20 @@ const NO_PLACE =
 const CANNOT_ANSWER =
   "I can't answer that one yet — I can look up the weather and where a place is, and I can plan a trip. Try one of those, or tell me where you'd like to go.";
 
+/**
+ * One sentence, appended wherever the rule engine has just admitted a limit.
+ *
+ * There are two such moments, not one. `unknown` is the obvious one — but
+ * `intent.ts` is eager, and a question like "what should I pack for a cold
+ * climate?" is read as a place lookup and dies as "I could not find a place
+ * called 'a cold climate'". That dead end is the ceiling being felt just as
+ * much as `unknown` is, and it is reached far more often.
+ *
+ * Empty for everyone else. `chat`'s no-key fallback reaches the same code on
+ * a Pro account, and selling Pro to somebody who has it would be nonsense.
+ */
+const PRO_HINT = 'Pro plans with Claude, and can answer questions like this one.';
+
 const OFFER_TRIP = 'Want me to plan a trip there?';
 
 function weatherUnavailable(place: string): string {
@@ -55,7 +69,7 @@ function placeLabel(facts: { name: string; region?: string; country?: string }):
   return parts.join(', ');
 }
 
-async function answerWeather(place: string | null): Promise<GeneratedItinerary> {
+async function answerWeather(place: string | null, proHint = ''): Promise<GeneratedItinerary> {
   if (!place) return { reply: NO_PLACE };
 
   try {
@@ -67,13 +81,13 @@ async function answerWeather(place: string | null): Promise<GeneratedItinerary> 
     };
   } catch (error) {
     if (error instanceof PlaceNotFoundError) {
-      return { reply: `I could not find a place called “${place}”. ${OFFER_TRIP}` };
+      return { reply: [`I could not find a place called “${place}”.`, OFFER_TRIP, proHint].filter(Boolean).join(' ') };
     }
     return { reply: weatherUnavailable(place) };
   }
 }
 
-async function answerLocation(place: string | null): Promise<GeneratedItinerary> {
+async function answerLocation(place: string | null, proHint = ''): Promise<GeneratedItinerary> {
   if (!place) return { reply: NO_PLACE };
 
   try {
@@ -86,7 +100,7 @@ async function answerLocation(place: string | null): Promise<GeneratedItinerary>
     };
   } catch (error) {
     if (error instanceof PlaceNotFoundError) {
-      return { reply: `I could not find a place called “${place}”. ${OFFER_TRIP}` };
+      return { reply: [`I could not find a place called “${place}”.`, OFFER_TRIP, proHint].filter(Boolean).join(' ') };
     }
     return { reply: weatherUnavailable(place) };
   }
@@ -205,16 +219,19 @@ export class PlannerError extends Error {
  * implementation — every answer it gives is a real lookup — and it is what runs
  * on any deployment without a key.
  */
-async function answerOffline(prompt: string): Promise<GeneratedItinerary> {
+async function answerOffline(
+  prompt: string,
+  { proHint = '' }: { proHint?: string } = {},
+): Promise<GeneratedItinerary> {
   const intent = classifyPrompt(prompt);
 
   switch (intent.kind) {
     case 'weather':
-      return answerWeather(intent.place);
+      return answerWeather(intent.place, proHint);
     case 'location':
-      return answerLocation(intent.place);
+      return answerLocation(intent.place, proHint);
     case 'unknown':
-      return { reply: CANNOT_ANSWER };
+      return { reply: [CANNOT_ANSWER, proHint].filter(Boolean).join(' ') };
     case 'trip':
     default:
       return mockAiService.generateItinerary(prompt);
@@ -313,7 +330,7 @@ export const plannerService = {
     handlers: PlannerHandlers,
     { signal }: { signal?: AbortSignal } = {},
   ): Promise<void> {
-    const { reply, trip } = await answerOffline(prompt);
+    const { reply, trip } = await answerOffline(prompt, { proHint: PRO_HINT });
 
     if (signal?.aborted) return;
 

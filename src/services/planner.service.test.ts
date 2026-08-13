@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { GeneratedItinerary } from '../types/planner.types';
 import type { TripDraft } from '../types/trip.types';
 import { plannerService } from './planner.service';
+import { PlaceNotFoundError, weatherService } from './weather.service';
 
 /**
  * Generation is deliberately delayed so the UI exercises its loading state;
@@ -298,5 +299,69 @@ describe('answerLocally', () => {
     // just pressed Stop should not be handed the reply anyway.
     expect(spy.onText).not.toHaveBeenCalled();
     expect(spy.onTrip).not.toHaveBeenCalled();
+  });
+});
+
+describe('the ceiling a free account hits', () => {
+  async function replyTo(prompt: string, via: 'local' | 'offline') {
+    const onText = vi.fn();
+    const pending =
+      via === 'local'
+        ? plannerService.answerLocally(prompt, { onText, onTrip: vi.fn() })
+        : plannerService.generateItinerary(prompt).then((result) => onText(result.reply));
+
+    await vi.advanceTimersByTimeAsync(2000);
+    await pending;
+
+    return onText.mock.calls[0][0] as string;
+  }
+
+  const UNANSWERABLE = 'what is the airspeed velocity of an unladen swallow';
+
+  it('offers Pro on a prompt the rule engine cannot answer', async () => {
+    const reply = await replyTo(UNANSWERABLE, 'local');
+
+    expect(reply).toMatch(/pro/i);
+  });
+
+  it('offers Pro on the dead end that is actually reached', async () => {
+    // `intent.ts` is eager: this is read as a place lookup, not as `unknown`,
+    // and dies as "I could not find a place called ...". Found by trying it in
+    // a browser rather than by reading the classifier.
+    // "climate" reads as a weather question, so this is the weather lookup's
+    // dead end rather than the location one. Both carry the hint.
+    vi.spyOn(weatherService, 'getWeather').mockRejectedValue(
+      new PlaceNotFoundError('a cold climate'),
+    );
+
+    const reply = await replyTo('what should I pack for a cold climate?', 'local');
+
+    expect(reply).toMatch(/could not find a place/i);
+    expect(reply).toMatch(/pro/i);
+  });
+
+  it('says nothing about Pro when the weather service is merely down', async () => {
+    vi.spyOn(weatherService, 'findPlace').mockRejectedValue(new Error('network'));
+    vi.spyOn(weatherService, 'getWeather').mockRejectedValue(new Error('network'));
+
+    const reply = await replyTo('where is Lisbon?', 'local');
+
+    // An outage is not a ceiling. Selling an upgrade on somebody else's
+    // downtime would be both wrong and useless — Pro would not fix it.
+    expect(reply).not.toMatch(/\bpro\b/i);
+  });
+
+  it('says nothing about Pro on a prompt it can answer', async () => {
+    const reply = await replyTo('7 days in Bali', 'local');
+
+    expect(reply).not.toMatch(/\bpro\b/i);
+  });
+
+  it('does not offer Pro on the no-key fallback path', async () => {
+    const reply = await replyTo(UNANSWERABLE, 'offline');
+
+    // The same rule engine answers a Pro account on a server with no key.
+    // Selling Pro to somebody who already has it would be nonsense.
+    expect(reply).not.toMatch(/\bpro\b/i);
   });
 });

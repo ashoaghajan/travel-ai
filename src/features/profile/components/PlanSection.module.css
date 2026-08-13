@@ -1,0 +1,110 @@
+/* Mirrors ConnectedAccounts: these two sit next to each other on the profile,
+   and two rows describing the account should not be two different shapes. */
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+.title {
+  margin: 0;
+  font-size: var(--font-md);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-main);
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-md);
+  flex-wrap: wrap;
+}
+
+.plan {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.name {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  font-size: var(--font-sm);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-main);
+}
+
+.icon {
+  color: var(--color-primary);
+}
+
+.detail {
+  font-size: var(--font-xs);
+  color: var(--color-text-muted);
+}
+
+.since {
+  font-size: var(--font-xs);
+  color: var(--color-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* The offer is a filled button; the way back is a quiet one. Both are real
+   controls — leaving is not hidden, it just does not compete with staying. */
+.upgrade {
+  flex: none;
+  padding: var(--space-sm) var(--space-lg);
+  border: 0;
+  border-radius: var(--radius-pill);
+  background-color: var(--color-primary);
+  color: var(--color-text-light);
+  font-size: var(--font-xs);
+  font-weight: var(--font-weight-semibold);
+  cursor: pointer;
+}
+
+.upgrade:hover:not(:disabled) {
+  background-color: var(--color-primary-hover);
+}
+
+.downgrade {
+  flex: none;
+  padding: var(--space-sm) var(--space-lg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+  background-color: transparent;
+  color: var(--color-text-muted);
+  font-size: var(--font-xs);
+  font-weight: var(--font-weight-semibold);
+  cursor: pointer;
+}
+
+.downgrade:hover:not(:disabled) {
+  color: var(--color-text-main);
+  border-color: var(--color-text-muted);
+}
+
+.upgrade:disabled,
+.downgrade:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.note {
+  font-size: var(--font-xs);
+  color: var(--color-text-muted);
+}
+
+.error {
+  font-size: var(--font-xs);
+  color: var(--color-danger);
+}

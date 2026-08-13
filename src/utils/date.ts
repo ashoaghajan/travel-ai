@@ -73,6 +73,30 @@ export function formatDateRange(startIso: string, endIso: string): string {
   return `${formatShortDate(startIso)} - ${formatShortDate(endIso)}`;
 }
 
+/**
+ * "20 May 2026", from a full ISO **timestamp**.
+ *
+ * The other formatters here take a `YYYY-MM-DD` calendar date, because that is
+ * what a trip is made of. This one takes an instant — the moment something
+ * happened, as the server records it — which `fromIsoDate` cannot parse: it
+ * splits on `-` and would read the day as `13T00:00:00.000Z`.
+ *
+ * Returns an empty string for anything unparseable rather than "Invalid Date",
+ * so a caller can render it without a guard and get nothing instead of noise.
+ */
+export function formatLongDate(isoTimestamp: string): string {
+  const date = new Date(isoTimestamp);
+
+  if (Number.isNaN(date.getTime())) return '';
+
+  // `MONTHS_LONG` is lower case because `findMonthStart` matches against it;
+  // capitalising here keeps that working rather than making parsing
+  // case-insensitive to suit one label.
+  const month = MONTHS_LONG[date.getMonth()];
+
+  return `${date.getDate()} ${month[0].toUpperCase()}${month.slice(1)} ${date.getFullYear()}`;
+}
+
 const WEEKDAYS_SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as const;
 
 /** "May 20, Tue" — DESIGN_SPEC Screen 4 date fields. */

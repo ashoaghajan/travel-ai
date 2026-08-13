@@ -3,6 +3,7 @@ import {
   addDays,
   findMonthStart,
   formatDateRange,
+  formatLongDate,
   formatShortDate,
   formatWeekdayDate,
   fromIsoDate,
@@ -157,5 +158,23 @@ describe('unusable input', () => {
     // `Number('')` is 0, and `new Date(0, ...)` means 1900.
     expect(toIsoDate(fromIsoDate(''))).toBe('1970-01-01');
     expect(toIsoDate(fromIsoDate('not-a-date'))).toBe('1970-01-01');
+  });
+});
+
+describe('formatLongDate', () => {
+  it('reads a full timestamp, which the calendar-date parsers cannot', () => {
+    // `fromIsoDate` splits on "-" and would read the day as "13T10:00:00.000Z".
+    expect(formatLongDate('2026-08-13T10:00:00.000Z')).toBe('13 August 2026');
+  });
+
+  it('capitalises the month without breaking the parser it borrows', () => {
+    // `MONTHS_LONG` is lower case because `findMonthStart` matches against it.
+    expect(formatLongDate('2026-01-01T00:00:00.000Z')).toBe('1 January 2026');
+  });
+
+  it('gives nothing back for something unparseable', () => {
+    // So a caller can render it bare and get nothing rather than "Invalid Date".
+    expect(formatLongDate('not a date')).toBe('');
+    expect(formatLongDate('')).toBe('');
   });
 });

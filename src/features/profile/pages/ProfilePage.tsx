@@ -14,6 +14,7 @@ import { authStore } from '../../../store/auth.store';
 import { useTrips } from '../../../store/trip.store';
 import { useBookingsByTrip } from '../../../store/booking.store';
 import { ConnectedAccounts } from '../components/ConnectedAccounts';
+import { PlanSection } from '../components/PlanSection';
 import styles from './ProfilePage.module.css';
 
 const RECENT_TRIPS_LIMIT = 3;
@@ -115,6 +116,10 @@ export function ProfilePage() {
         <p className={styles.status} role="status">
           {notice}
         </p>
+
+        {/* Above the providers: which planner you get is a bigger fact about
+            the account than which button you signed in with. */}
+        <PlanSection />
 
         <ConnectedAccounts />
 

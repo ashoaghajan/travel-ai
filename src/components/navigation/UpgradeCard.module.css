@@ -30,3 +30,13 @@
   line-height: var(--line-height-snug);
   color: var(--color-text-muted);
 }
+
+/* Only ever seen if the upgrade request failed, which with no payment provider
+   behind it means the network or the server rather than anything the reader
+   did. Sits inside the card so it cannot be missed. */
+.error {
+  margin-top: var(--space-xs);
+  font-size: var(--font-xs);
+  line-height: var(--line-height-snug);
+  color: var(--color-danger);
+}
