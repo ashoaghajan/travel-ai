@@ -1181,6 +1181,15 @@ microphone's tracks are released the moment it does — on a phone the recording
 indicator stays lit until they are, and a light that outlives the recording is
 alarming in a way a leak is not.
 
+**Two query parameters, for the developer rather than the reader.**
+`?dictate=record` forces the recorded route on a desktop and `?dictate=live`
+forces the live one on a phone; an unknown value is ignored and the device
+decides as usual. Neither can conjure an API the browser lacks. They exist
+because the recorded route otherwise only ever runs on a phone, which is the
+worst possible place to read a stack trace or watch a network panel — and for
+the same reason `?speechdebug` puts the engine's own event log on the screen,
+where it can be photographed.
+
 `GROQ_API_KEY` is optional and the degradation is deliberate: a desktop is
 unaffected, and a phone's first recording comes back "Dictation is not switched
 on for this server", after which the microphone withdraws rather than inviting a

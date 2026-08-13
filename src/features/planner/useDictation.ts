@@ -39,6 +39,25 @@ function isTouchDevice(): boolean {
   return window.matchMedia('(pointer: coarse)').matches;
 }
 
+/**
+ * Which route the URL demands, if it demands one.
+ *
+ * `?dictate=record` forces the recorded route and `?dictate=live` forces the
+ * live one. Neither is for a reader — this is the same admission `?speechdebug`
+ * makes: the recorded route only ever runs on a phone, which is the hardest
+ * place to watch a network panel or read a stack trace. Being able to exercise
+ * it from a desktop, where the developer tools are, is worth a query parameter.
+ *
+ * Absent, which is the normal case, the device decides as it always has.
+ */
+function forcedRoute(): 'record' | 'live' | null {
+  if (typeof window === 'undefined') return null;
+
+  const asked = new URLSearchParams(window.location.search).get('dictate');
+
+  return asked === 'record' || asked === 'live' ? asked : null;
+}
+
 export function useDictation({ onText }: { onText: (text: string) => void }): Dictation {
   const speech = useSpeech({ onText });
   const recorder = useRecorder({ onText });
@@ -46,8 +65,14 @@ export function useDictation({ onText }: { onText: (text: string) => void }): Di
   /*
    * Recorded on a touch device, live everywhere else — and live as a fallback
    * where a phone has no recorder, rather than nothing at all.
+   *
+   * The URL overrides the device, but cannot conjure an API the browser does
+   * not have: forcing the recorded route where nothing can record still yields
+   * no button, because the alternative is a button that lies.
    */
-  const useRecording = isTouchDevice() && recorder.isSupported;
+  const forced = forcedRoute();
+  const wantsRecording = forced === 'record' || (forced === null && isTouchDevice());
+  const useRecording = wantsRecording && recorder.isSupported;
 
   if (useRecording) {
     return {
