@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { AccountMenu } from '../navigation/AccountMenu';
+import { FriendRequestsToggle } from '../../features/friends/components/FriendRequestsToggle';
 import { MessagesToggle } from '../../features/messages/components/MessagesToggle';
 import { cx } from '../../utils/cx';
 import styles from './PageHeader.module.css';
@@ -34,6 +35,10 @@ export function PageHeader({ title, subtitle, leading, actions, className }: Pag
 
       <div className={styles.actions}>
         {actions}
+        {/* Only appears when somebody is waiting on an answer — see the
+            component. Before the messages toggle because a request is a
+            question about whether there will be any messages at all. */}
+        <FriendRequestsToggle />
         <MessagesToggle />
         <AccountMenu />
       </div>

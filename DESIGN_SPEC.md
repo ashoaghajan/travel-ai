@@ -1085,8 +1085,12 @@ One page at `/friends`, three sections, and a count in the sidebar.
 - **Every row says where the reader stands, in words** — "Wants to be friends",
   "Waiting for an answer", "Friends since 2 August". A verb on a button says
   what pressing does, not where you already are.
-- **People already on a list are dropped from the search results.** Showing
-  somebody a third time is noise.
+- **The directory lists everybody**, whatever the reader has already done about
+  them, each row saying where things stand and offering the one thing left to
+  do: add, cancel, accept and decline — and nothing at all for an existing
+  friend, because removing one belongs beside the friend rather than in a list
+  somebody is scanning to add people. Hiding the people already dealt with made
+  "who else is here?" unanswerable from the screen that exists to answer it.
 - **Removing a friend confirms, inline.** It is quiet, it is not urgent, and it
   takes a conversation off two screens — the shape of action that should not
   happen on a slipped click. A modal for one sentence would be heavier than the
@@ -1097,6 +1101,15 @@ One page at `/friends`, three sections, and a count in the sidebar.
 - **The messages panel's empty state points here.** Its list is friends now, so
   "there is nobody else signed up yet" would be wrong and a dead end in one
   sentence.
+- **Friends is in the bottom navigation too** — six items rather than the five
+  §7 named. On a phone there is no sidebar, and a destination reachable only
+  from a sidebar is unreachable on half the app. Measured rather than assumed:
+  the widest label is 54px against a 58.7px cell at 360px.
+- **Requests can be answered from any screen.** A mark in the page header, in
+  the same corner as the messages toggle and making the same claim, opening a
+  popover with Accept and Decline. It appears only when something is waiting: a
+  permanent third icon would be clutter on every screen for the state most
+  accounts are in most of the time.
 
 ---
 

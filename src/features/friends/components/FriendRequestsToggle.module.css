@@ -1,0 +1,100 @@
+.root {
+  position: relative;
+  display: flex;
+}
+
+/*
+ * The count, on the corner of the trigger.
+ *
+ * The same pill the messages toggle wears, because it is the same claim from
+ * the same corner: something here is waiting for you. `pointer-events: none`
+ * so it never swallows a press meant for the button underneath it.
+ */
+.badge {
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  min-width: 16px;
+  padding: 0 4px;
+  border-radius: var(--radius-pill);
+  background-color: var(--color-primary);
+  color: var(--color-text-light);
+  font-size: 10px;
+  font-weight: var(--font-weight-semibold);
+  line-height: 16px;
+  text-align: center;
+  pointer-events: none;
+}
+
+/*
+ * Hangs below the header, pinned to the right so it never leaves the screen on
+ * a phone — the trigger is within a few pixels of the right edge there.
+ */
+.popover {
+  position: absolute;
+  top: calc(100% + var(--space-xs));
+  right: 0;
+  z-index: 20;
+  width: max-content;
+  max-width: min(20rem, calc(100vw - 2 * var(--space-md)));
+  padding: var(--space-sm);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background-color: var(--color-surface);
+  box-shadow: var(--shadow-lg);
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  list-style: none;
+}
+
+.request {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.text {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+}
+
+.name {
+  overflow: hidden;
+  font-size: var(--font-sm);
+  font-weight: var(--font-weight-medium);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.standing {
+  font-size: var(--font-xs);
+  color: var(--color-text-muted);
+}
+
+.actions {
+  display: flex;
+  flex-shrink: 0;
+  gap: var(--space-xs);
+}
+
+.error {
+  margin-top: var(--space-xs);
+  font-size: var(--font-xs);
+  color: var(--color-danger);
+}
+
+.all {
+  display: block;
+  margin-top: var(--space-sm);
+  padding-top: var(--space-sm);
+  border-top: 1px solid var(--color-border);
+  font-size: var(--font-xs);
+  color: var(--color-primary);
+  text-align: center;
+}

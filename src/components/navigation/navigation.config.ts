@@ -36,6 +36,13 @@ const PROFILE_ITEM: NavItem = {
   icon: UserIcon,
 };
 
+const FRIENDS_ITEM: NavItem = {
+  id: 'friends',
+  label: 'Friends',
+  path: ROUTES.friends,
+  icon: UsersIcon,
+};
+
 export const ACCOUNT_NAV: NavItem[] = [
   PROFILE_ITEM,
   /*
@@ -43,13 +50,20 @@ export const ACCOUNT_NAV: NavItem[] = [
    * account rather than about a trip — and because the main four are the
    * journey the app is for.
    */
-  { id: 'friends', label: 'Friends', path: ROUTES.friends, icon: UsersIcon },
+  FRIENDS_ITEM,
   { id: 'settings', label: 'Settings', path: ROUTES.settings, icon: SettingsIcon },
 ];
 
 /**
  * Mobile bottom navigation (DESIGN_SPEC §7): Home, Trips, Explore, Bookings,
- * Profile. Built from the same items as the sidebar so labels, paths and icons
- * can never drift between the two.
+ * Friends, Profile. Built from the same items as the sidebar so labels, paths
+ * and icons can never drift between the two.
+ *
+ * Six rather than the five the spec named, because friends became a
+ * destination: on a phone there is no sidebar, and a page reachable only from
+ * a sidebar is a page a phone cannot reach at all. Six fits — the bar divides
+ * evenly and the icon pill is 46px against a 60px cell at the narrowest common
+ * width — and the alternative was leaving the feature unreachable on the half
+ * of the app that has no sidebar.
  */
-export const BOTTOM_NAV: NavItem[] = [...MAIN_NAV, PROFILE_ITEM];
+export const BOTTOM_NAV: NavItem[] = [...MAIN_NAV, FRIENDS_ITEM, PROFILE_ITEM];

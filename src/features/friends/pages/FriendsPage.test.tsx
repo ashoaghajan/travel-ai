@@ -43,6 +43,8 @@ beforeEach(() => {
   vi.spyOn(friendService, 'searchPeople').mockResolvedValue([
     { id: 'u_cai', name: 'Cai', status: 'none' },
     { id: 'u_ada', name: 'Ada', status: 'friends' },
+    { id: 'u_bo', name: 'Bo', status: 'outgoing' },
+    { id: 'u_grace', name: 'Grace', status: 'incoming' },
   ]);
 });
 
@@ -67,17 +69,45 @@ describe('the three lists', () => {
     expect(screen.getByText(/^Friends since .*August/)).toBeInTheDocument();
   });
 
-  it('leaves people already on a list out of the search results', async () => {
+  /** The directory section, once its debounced search has answered. */
+  async function directorySection(): Promise<HTMLElement> {
+    // Waits for a row rather than the heading: the heading is painted on the
+    // first frame and the search is a quarter of a second behind it.
+    const row = await screen.findByRole('button', { name: 'Add friend' });
+
+    return row.closest('section') as HTMLElement;
+  }
+
+  it('lists everybody, whatever the reader has already done about them', async () => {
     renderPage();
 
-    // Ada comes back from the search as a friend, and is already listed above:
-    // one row offers to add somebody, and it is Cai's.
-    const add = await screen.findAllByRole('button', { name: 'Add friend' });
-    expect(add).toHaveLength(1);
+    const directory = await directorySection();
 
-    // `toHaveTextContent` rather than `getByText`: `Avatar` renders the name a
-    // second time as a hidden label, so the row holds two of them.
-    expect(add[0].closest('li')).toHaveTextContent('Cai');
+    // The question "who else is here?" should be answerable from the one
+    // screen that exists to answer it — including the people already dealt
+    // with, or the reader cannot tell missing from handled.
+    for (const name of ['Cai', 'Ada', 'Bo', 'Grace']) {
+      expect(directory).toHaveTextContent(name);
+    }
+  });
+
+  it('offers the one thing left to do about each of them', async () => {
+    renderPage();
+
+    const directory = await directorySection();
+    const rowFor = (name: string) =>
+      [...within(directory).getAllByRole('listitem')].find((row) =>
+        row.textContent?.includes(name),
+      ) as HTMLElement;
+
+    expect(within(rowFor('Cai')).getByRole('button', { name: 'Add friend' })).toBeInTheDocument();
+    expect(within(rowFor('Bo')).getByRole('button', { name: 'Cancel' })).toBeInTheDocument();
+    expect(within(rowFor('Grace')).getByRole('button', { name: 'Accept' })).toBeInTheDocument();
+
+    // Nothing to do about a friend from here: removing one belongs beside the
+    // friend, not in a directory somebody is scanning to add people.
+    expect(within(rowFor('Ada')).queryAllByRole('button')).toHaveLength(0);
+    expect(rowFor('Ada')).toHaveTextContent('Friends');
   });
 });
 

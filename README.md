@@ -1135,6 +1135,11 @@ refetches. A friendship has no fields worth putting on a wire, and there is one
 socket per tab — a second connection for one event a day would be a second thing
 to keep alive.
 
+**Requests find the reader rather than the other way round.** They are
+answerable from a mark in the page header on any screen — it appears only when
+something is waiting — as well as on the friends page. Requests that live in one
+place mean somebody has to go and look, and nobody goes and looks.
+
 **Recorded consequence: nobody can stop being asked.** Declining leaves no
 record, so a person who will not take no for an answer can ask again.
 Proportionate for a small trusted group, and written down rather than discovered:

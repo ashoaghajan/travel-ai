@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState } from 'react';
-import type { ApiPerson } from '@ai-travel/shared';
+import type { ApiPerson, FriendStatus } from '@ai-travel/shared';
 import { Button } from '../../../components/common/Button';
 import { Card } from '../../../components/common/Card';
 import { PageHeader } from '../../../components/layout/PageHeader';
@@ -13,10 +13,19 @@ import {
 } from '../../../store/friend.store';
 import { PersonRow } from '../components/PersonRow';
 import { useFriendActions } from '../useFriendActions';
+import type { FriendActions } from '../useFriendActions';
 import styles from './FriendsPage.module.css';
 
 /** Long enough that typing a name is one query rather than five. */
 const SEARCH_DEBOUNCE_MS = 250;
+
+/** Where the reader stands with somebody, said in words rather than by a verb. */
+const STANDING: Record<FriendStatus, string | undefined> = {
+  none: undefined,
+  outgoing: 'Waiting for an answer',
+  incoming: 'Wants to be friends',
+  friends: 'Friends',
+};
 
 /** "Friends since 2 August" — the day, not the minute. */
 function sinceLabel(iso: string): string {
@@ -94,9 +103,6 @@ export function FriendsPage() {
       clearTimeout(timer);
     };
   }, [query, actions.changedAt]);
-
-  /* Already on one of the lists above; showing them a third time is noise. */
-  const strangers = (people ?? []).filter((person) => person.status === 'none');
 
   return (
     <div className={styles.page}>
@@ -199,8 +205,22 @@ export function FriendsPage() {
         </Card>
 
         <Card padding="lg" elevation="soft" as="section">
-          <h2 className={styles.heading}>Find people</h2>
+          <h2 className={styles.heading}>
+            Everybody on AI Travel
+            {people && people.length > 0 ? (
+              <span className={styles.count}>{people.length}</span>
+            ) : null}
+          </h2>
 
+          {/*
+            Everybody, not only the strangers.
+            
+            It used to hide anyone already on a list above, which made the
+            question "who else is here?" unanswerable from the one screen that
+            should answer it — and left the reader wondering whether somebody
+            was missing or merely already dealt with. Each row says where things
+            stand and offers the one thing left to do about it.
+          */}
           <div className={styles.search}>
             <label className="visually-hidden" htmlFor={searchId}>
               Search for someone by name
@@ -215,29 +235,22 @@ export function FriendsPage() {
             />
           </div>
 
-          {people === null || (isSearching && strangers.length === 0) ? (
+          {people === null || (isSearching && people.length === 0) ? (
             <div className={styles.loading} aria-busy="true">
               <span className="visually-hidden">Searching…</span>
               <Skeleton height="44px" radius="lg" />
             </div>
-          ) : strangers.length === 0 ? (
+          ) : people.length === 0 ? (
             <p className={styles.empty}>
               {query
                 ? `Nobody here is called “${query}”.`
-                : 'You are friends with everybody who has signed up.'}
+                : 'Nobody else has signed up yet.'}
             </p>
           ) : (
             <ul className={styles.list}>
-              {strangers.map((person) => (
-                <PersonRow key={person.id} name={person.name}>
-                  <Button
-                    variant="primary"
-                    size="md"
-                    disabled={actions.busyId === person.id}
-                    onClick={() => void actions.add(person.id)}
-                  >
-                    Add friend
-                  </Button>
+              {people.map((person) => (
+                <PersonRow key={person.id} name={person.name} standing={STANDING[person.status]}>
+                  <PersonAction person={person} actions={actions} />
                 </PersonRow>
               ))}
             </ul>
@@ -245,6 +258,67 @@ export function FriendsPage() {
         </Card>
       </div>
     </div>
+  );
+}
+
+/**
+ * The one thing left to do about somebody, given where things stand.
+ *
+ * Four states and four answers: ask, take the asking back, answer theirs, or —
+ * for an existing friend — nothing at all. Removing a friend is deliberately
+ * absent here: it belongs beside the friend, in the list above, rather than in
+ * a directory somebody is scanning to *add* people.
+ */
+function PersonAction({ person, actions }: { person: ApiPerson; actions: FriendActions }) {
+  const isBusy = actions.busyId === person.id;
+
+  if (person.status === 'friends') return null;
+
+  if (person.status === 'incoming') {
+    return (
+      <>
+        <Button
+          variant="primary"
+          size="md"
+          disabled={isBusy}
+          onClick={() => void actions.accept(person.id)}
+        >
+          Accept
+        </Button>
+        <Button
+          variant="secondary"
+          size="md"
+          disabled={isBusy}
+          onClick={() => void actions.remove(person.id)}
+        >
+          Decline
+        </Button>
+      </>
+    );
+  }
+
+  if (person.status === 'outgoing') {
+    return (
+      <Button
+        variant="secondary"
+        size="md"
+        disabled={isBusy}
+        onClick={() => void actions.remove(person.id)}
+      >
+        Cancel
+      </Button>
+    );
+  }
+
+  return (
+    <Button
+      variant="primary"
+      size="md"
+      disabled={isBusy}
+      onClick={() => void actions.add(person.id)}
+    >
+      Add friend
+    </Button>
   );
 }
 
