@@ -1,4 +1,6 @@
 .form {
+  /* The positioning context for `.speechError`, which floats above the pill. */
+  position: relative;
   display: flex;
   align-items: center;
   gap: var(--space-sm);
@@ -63,4 +65,77 @@
   .input {
     font-size: var(--font-md);
   }
+}
+
+/*
+ * The microphone, left of the send button.
+ *
+ * Quiet by default: dictation is an alternative to typing rather than the
+ * point of the row, and two filled circles side by side would make the reader
+ * choose between them before reading either.
+ */
+.mic {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  transition:
+    background-color var(--transition-fast),
+    color var(--transition-fast);
+}
+
+.mic:hover {
+  background-color: var(--color-surface-muted);
+  color: var(--color-text-main);
+}
+
+.mic:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: 2px;
+}
+
+/*
+ * Listening: filled, and pulsing slowly so it is obvious at a glance that a
+ * microphone is open. The one place in this app where a pulse earns itself —
+ * an open microphone the reader has forgotten about is a privacy problem, not
+ * a decoration.
+ */
+.listening {
+  background-color: var(--color-danger-soft);
+  color: var(--color-danger);
+  animation: mic-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes mic-pulse {
+  50% {
+    opacity: 0.55;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .listening {
+    animation: none;
+  }
+}
+
+/*
+ * Sits under the pill rather than in it: the row is already full, and an error
+ * that pushed the field sideways as it appeared would move the thing somebody
+ * is typing into.
+ */
+.speechError {
+  position: absolute;
+  bottom: calc(100% + var(--space-xs));
+  left: 0;
+  right: 0;
+  font-size: var(--font-xs);
+  color: var(--color-danger);
+  text-align: center;
 }

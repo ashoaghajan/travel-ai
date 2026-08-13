@@ -1113,6 +1113,28 @@ One page at `/friends`, three sections, and a count in the sidebar.
 
 ---
 
+## Surface 12: Dictating a prompt — **built**
+
+A microphone in the planner's composer, left of the send button.
+
+- **The browser transcribes, not a provider.** `SpeechRecognition` needs no key,
+  no account and no audio leaving through our server. The cost is stated rather
+  than hidden: Firefox has no implementation, and Chrome sends the audio to
+  Google.
+- **The control appears only where the API does.** A button that cannot work is
+  worse than no button.
+- **Quiet until it is listening**, then filled and slowly pulsing — the one
+  pulse in this app that earns itself, because a microphone somebody has
+  forgotten is open is a privacy problem rather than a decoration. Silent under
+  `prefers-reduced-motion`, where the fill carries it.
+- **Settled words go in the field; revised ones go in the placeholder.** The API
+  rewrites what it thinks it heard as somebody speaks, and writing each revision
+  into the field would fight whatever they are typing.
+- **Dictation appends.** Somebody may have typed half a sentence before reaching
+  for the microphone; what they said continues it.
+
+---
+
 # 12. Short Instruction For Coding Agent
 
 ```txt

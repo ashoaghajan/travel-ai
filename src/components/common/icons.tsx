@@ -403,3 +403,14 @@ export function StopIcon(props: IconProps) {
     </Icon>
   );
 }
+
+/** Dictate instead of typing. */
+export function MicIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <rect x="9" y="3" width="6" height="11" rx="3" />
+      <path d="M5.5 11.5a6.5 6.5 0 0 0 13 0" />
+      <path d="M12 18v3" />
+    </Icon>
+  );
+}

@@ -1,6 +1,8 @@
 import { useId, useState } from 'react';
 import type { FormEvent } from 'react';
-import { ArrowUpIcon, StopIcon } from '../../../components/common/icons';
+import { ArrowUpIcon, MicIcon, StopIcon } from '../../../components/common/icons';
+import { cx } from '../../../utils/cx';
+import { useSpeech } from '../useSpeech';
 import styles from './PlannerInput.module.css';
 
 export type PlannerInputProps = {
@@ -43,6 +45,16 @@ export function PlannerInput({
   const fieldId = useId();
   const [message, setMessage] = useState('');
 
+  /*
+   * Dictation appends rather than replaces: somebody may have typed half a
+   * sentence before reaching for the microphone, and the words they said are
+   * the continuation of it rather than a correction to it.
+   */
+  const speech = useSpeech({
+    onText: (text) =>
+      setMessage((current) => (current ? `${current.trimEnd()} ${text}` : text)),
+  });
+
   const canSend = message.trim().length > 0;
   /* Stop only while there is nothing to send: a prompt in the field says what
      the reader wants more clearly than a stop would. */
@@ -50,6 +62,9 @@ export function PlannerInput({
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+
+    // Sending is the end of what was being dictated, whichever way it is sent.
+    speech.stop();
 
     if (isStop) {
       onStop?.();
@@ -72,10 +87,26 @@ export function PlannerInput({
         className={styles.input}
         type="text"
         autoComplete="off"
-        placeholder={placeholder}
+        /* While listening, the placeholder is the better place for the words
+           being revised: the field itself holds only what has been settled. */
+        placeholder={speech.isListening ? speech.interim || 'Listening…' : placeholder}
         value={message}
         onChange={(event) => setMessage(event.target.value)}
       />
+
+      {/* Only where the browser has it — Firefox has no implementation, and a
+          button that cannot work is worse than no button. */}
+      {speech.isSupported ? (
+        <button
+          type="button"
+          className={cx(styles.mic, speech.isListening && styles.listening)}
+          aria-label={speech.isListening ? 'Stop dictating' : 'Dictate a message'}
+          aria-pressed={speech.isListening}
+          onClick={() => speech.toggle()}
+        >
+          <MicIcon size={18} />
+        </button>
+      ) : null}
       <button
         type="submit"
         className={styles.send}
@@ -84,6 +115,14 @@ export function PlannerInput({
       >
         {isStop ? <StopIcon size={18} /> : <ArrowUpIcon size={20} />}
       </button>
+
+      {/* Announced rather than only drawn: somebody who has just spoken at a
+          microphone may not be looking at the screen. */}
+      {speech.error ? (
+        <p className={styles.speechError} role="alert">
+          {speech.error}
+        </p>
+      ) : null}
     </form>
   );
 }
