@@ -186,6 +186,15 @@ describe('what it heard', () => {
 describe('the repetition bug', () => {
   beforeEach(() => installSpeechApi());
 
+  it('keeps no log unless somebody asked for one', () => {
+    const { result } = renderHook(() => useSpeech({ onText: vi.fn() }));
+    act(() => result.current.start());
+    act(() => live?.onresult?.(heard([['create a trip', true]])));
+
+    // `?speechdebug` is absent here, as it is for every reader.
+    expect(result.current.debug).toEqual([]);
+  });
+
   it('commits each phrase once, however the engine numbers the list', () => {
     const onText = vi.fn();
     const { result } = renderHook(() => useSpeech({ onText }));

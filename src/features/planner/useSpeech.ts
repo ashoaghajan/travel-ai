@@ -98,6 +98,24 @@ function messageFor(error: string | undefined): string {
   return 'Dictation stopped working. Try again.';
 }
 
+/**
+ * Whether to keep a record of what the engine actually sent.
+ *
+ * Off unless `?speechdebug` is in the URL. Dictation misbehaves differently on
+ * every engine and the only honest way to fix it is to read what a real device
+ * sent rather than what the specification says it should have — and a phone
+ * cannot easily be attached to a debugger. So the log goes on the screen, where
+ * it can be photographed.
+ */
+function debugEnabled(): boolean {
+  if (typeof window === 'undefined') return false;
+
+  return new URLSearchParams(window.location.search).has('speechdebug');
+}
+
+/** How many lines to keep. Enough for a sentence or two; a phone screen is small. */
+const DEBUG_LINES = 14;
+
 export type SpeechInput = {
   /** False in a browser without the API — Firefox, today. */
   isSupported: boolean;
@@ -105,6 +123,8 @@ export type SpeechInput = {
   /** The words being revised as somebody speaks, shown but never committed. */
   interim: string;
   error: string | null;
+  /** Empty unless `?speechdebug` is in the URL — see `debugEnabled`. */
+  debug: string[];
   start: () => void;
   stop: () => void;
   toggle: () => void;
@@ -114,6 +134,20 @@ export function useSpeech({ onText }: { onText: (text: string) => void }): Speec
   const [isListening, setIsListening] = useState(false);
   const [interim, setInterim] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [debug, setDebug] = useState<string[]>([]);
+
+  const [isDebugging] = useState(debugEnabled);
+  const sessionRef = useRef(0);
+
+  /** Records one line, newest last, when the log is switched on. */
+  const note = useCallback(
+    (line: string) => {
+      if (!isDebugging) return;
+
+      setDebug((lines) => [...lines, line].slice(-DEBUG_LINES));
+    },
+    [isDebugging],
+  );
 
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
 
@@ -170,15 +204,22 @@ export function useSpeech({ onText }: { onText: (text: string) => void }): Speec
    * a different list, numbered from zero. Two identical phrases a moment apart
    * are that; two a few seconds apart are somebody saying a word twice.
    */
-  const commitFinal = useCallback((text: string) => {
-    const now = Date.now();
-    const last = lastFinalRef.current;
+  const commitFinal = useCallback(
+    (text: string) => {
+      const now = Date.now();
+      const last = lastFinalRef.current;
 
-    if (text === last.text && now - last.at < ECHO_WINDOW_MS) return;
+      if (text === last.text && now - last.at < ECHO_WINDOW_MS) {
+        note(`  ✕ echo dropped "${text}"`);
+        return;
+      }
 
-    lastFinalRef.current = { text, at: now };
-    onTextRef.current(text);
-  }, []);
+      note(`  ✓ committed "${text}"`);
+      lastFinalRef.current = { text, at: now };
+      onTextRef.current(text);
+    },
+    [note],
+  );
 
   /** Opens one session. The intent to listen outlives it — see `onend`. */
   const open = useCallback(() => {
@@ -192,6 +233,10 @@ export function useSpeech({ onText }: { onText: (text: string) => void }): Speec
     // A new session numbers its results from zero again.
     committedRef.current = 0;
 
+    sessionRef.current += 1;
+    const session = sessionRef.current;
+    note(`▶ session ${session} opened`);
+
     // The reader's own language, so a French speaker is not transcribed as if
     // they were speaking English.
     recognition.lang = navigator.language || 'en-US';
@@ -203,11 +248,30 @@ export function useSpeech({ onText }: { onText: (text: string) => void }): Speec
     recognition.onresult = (event) => {
       // An old session, still talking after being replaced. Anything it says
       // belongs to a microphone nobody is holding open.
-      if (recognitionRef.current !== recognition) return;
+      if (recognitionRef.current !== recognition) {
+        note(`s${session} result ignored — already replaced`);
+        return;
+      }
 
       // Something was heard, so this is a working session rather than one of a
       // run of empty ones.
       emptyRestartsRef.current = 0;
+
+      /*
+       * The whole event, as it arrived, before anything here interprets it.
+       * What the specification says and what an engine sends are different
+       * documents.
+       */
+      note(
+        `s${session} result idx=${event.resultIndex} len=${event.results.length} taken=${
+          committedRef.current
+        } · ` +
+          Array.from({ length: event.results.length }, (_, index) => {
+            const result = event.results[index];
+
+            return `${result.isFinal ? 'F' : 'i'}"${(result[0]?.transcript ?? '').trim()}"`;
+          }).join(' '),
+      );
 
       let pending = '';
 
@@ -254,8 +318,12 @@ export function useSpeech({ onText }: { onText: (text: string) => void }): Speec
        * transcribing, which is the second half of why a phone repeated
        * everything. Three stale ends made it three.
        */
-      if (recognitionRef.current !== recognition) return;
+      if (recognitionRef.current !== recognition) {
+        note(`s${session} end ignored — already replaced`);
+        return;
+      }
 
+      note(`■ session ${session} ended`);
       recognitionRef.current = null;
       setInterim('');
 
@@ -292,12 +360,13 @@ export function useSpeech({ onText }: { onText: (text: string) => void }): Speec
       wantsToListenRef.current = false;
       setError(messageFor(undefined));
     }
-  }, [commitFinal]);
+  }, [commitFinal, note]);
 
   const start = useCallback(() => {
     wantsToListenRef.current = true;
     emptyRestartsRef.current = 0;
     lastFinalRef.current = { text: '', at: 0 };
+    setDebug([]);
     open();
   }, [open]);
 
@@ -317,5 +386,5 @@ export function useSpeech({ onText }: { onText: (text: string) => void }): Speec
     [],
   );
 
-  return { isSupported, isListening, interim, error, start, stop, toggle };
+  return { isSupported, isListening, interim, error, debug, start, stop, toggle };
 }

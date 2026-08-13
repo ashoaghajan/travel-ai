@@ -139,3 +139,29 @@
   color: var(--color-danger);
   text-align: center;
 }
+
+/*
+ * The dictation log, for `?speechdebug`.
+ *
+ * Above the composer and scrollable, so a long session does not push the field
+ * off a phone screen. Deliberately plain: it exists to be read and
+ * photographed, not to look like part of the product.
+ */
+.speechDebug {
+  position: absolute;
+  bottom: calc(100% + var(--space-xs));
+  left: 0;
+  right: 0;
+  max-height: 40dvh;
+  overflow: auto;
+  margin: 0;
+  padding: var(--space-sm);
+  border-radius: var(--radius-md);
+  background-color: var(--color-text-main);
+  color: var(--color-surface);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 10px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-break: break-word;
+}

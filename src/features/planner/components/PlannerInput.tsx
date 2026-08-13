@@ -116,6 +116,14 @@ export function PlannerInput({
         {isStop ? <StopIcon size={18} /> : <ArrowUpIcon size={20} />}
       </button>
 
+      {/*
+        What the engine actually sent, on screen because a phone cannot easily
+        be attached to a debugger. Only with `?speechdebug` in the URL.
+      */}
+      {speech.debug.length > 0 ? (
+        <pre className={styles.speechDebug}>{speech.debug.join('\n')}</pre>
+      ) : null}
+
       {/* Announced rather than only drawn: somebody who has just spoken at a
           microphone may not be looking at the screen. */}
       {speech.error ? (
