@@ -17,8 +17,10 @@ import { useCurrentUser } from '../../core/hooks/useCurrentUser';
 import { Button } from '../../components/Button';
 import { Card } from '../../components/Card';
 import { Text } from '../../components/Text';
-import { ArrowUpIcon, CrownIcon } from '../../components/icons';
+import { ArrowUpIcon, CrownIcon, StopIcon } from '../../components/icons';
 import { useTheme } from '../../theme/useTheme';
+import { UpgradeToProDialog } from '../pro/UpgradeToProDialog';
+import { TypingIndicator } from './TypingIndicator';
 import { usePlanner } from './usePlanner';
 
 /**
@@ -109,9 +111,10 @@ export function PlannerScreen() {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const { isPro } = useCurrentUser();
-  const { messages, isGenerating, error, savingMessageId, savedTripIdFor, generate, saveTrip } =
+  const { messages, isGenerating, error, savingMessageId, savedTripIdFor, generate, saveTrip, stop } =
     usePlanner();
   const [draft, setDraft] = useState('');
+  const [asking, setAsking] = useState(false);
   const listRef = useRef<FlatList<PlannerMessage>>(null);
 
   // Newest first, because the list is inverted.
@@ -121,10 +124,26 @@ export function PlannerScreen() {
     if (isGenerating) listRef.current?.scrollToOffset({ offset: 0, animated: true });
   }, [isGenerating]);
 
-  function send() {
-    const prompt = draft.trim();
-    if (!prompt || isGenerating) return;
+  const canSend = draft.trim().length > 0;
 
+  /*
+   * One button, two jobs — the web's rule, and worth keeping for the same
+   * reason: while an answer is arriving and nothing has been typed it stops;
+   * the moment there is something to send it sends. Two controls side by side
+   * would be one more thing to read at the only moment somebody is already
+   * reading something else.
+   */
+  const isStop = isGenerating && !canSend;
+
+  function submit() {
+    if (isStop) {
+      stop();
+      return;
+    }
+
+    if (!canSend || isGenerating) return;
+
+    const prompt = draft.trim();
     setDraft('');
     void generate(prompt);
   }
@@ -145,6 +164,16 @@ export function PlannerScreen() {
           paddingHorizontal: theme.space.lg,
         }}
         keyboardShouldPersistTaps="handled"
+        /*
+         * The header of an inverted list is drawn at the visual bottom, which
+         * is where a "still writing" indicator belongs — below the last thing
+         * said, in the direction the answer is about to appear.
+         *
+         * Shown only for Pro. The rule engine answers in milliseconds, so on
+         * the free tier this would flash and vanish, which reads as a glitch
+         * rather than as progress.
+         */
+        ListHeaderComponent={isGenerating && isPro ? <TypingIndicator /> : null}
         renderItem={({ item }) => (
           <Bubble
             message={item}
@@ -182,6 +211,11 @@ export function PlannerScreen() {
             <Text variant="xs" tone="muted" leading="snug" style={{ flex: 1 }}>
               Quick planner — builds trips from templates. Pro writes them with Claude.
             </Text>
+            <TouchableOpacity onPress={() => setAsking(true)} accessibilityRole="button">
+              <Text variant="xs" tone="primary" weight="semibold">
+                Upgrade
+              </Text>
+            </TouchableOpacity>
           </View>
         )}
 
@@ -204,14 +238,13 @@ export function PlannerScreen() {
             value={draft}
             onChangeText={setDraft}
             multiline
-            editable={!isGenerating}
           />
 
           <TouchableOpacity
-            onPress={send}
-            disabled={!draft.trim() || isGenerating}
+            onPress={submit}
+            disabled={!isStop && !canSend}
             accessibilityRole="button"
-            accessibilityLabel="Send"
+            accessibilityLabel={isStop ? 'Stop generating' : 'Send'}
             style={{
               width: 44,
               height: 44,
@@ -219,13 +252,18 @@ export function PlannerScreen() {
               alignItems: 'center',
               justifyContent: 'center',
               backgroundColor: theme.color.primary,
-              opacity: !draft.trim() || isGenerating ? 0.5 : 1,
+              opacity: !isStop && !canSend ? 0.5 : 1,
             }}
           >
-            <ArrowUpIcon size={20} color={theme.color.textLight} />
+            {isStop ? (
+              <StopIcon size={18} color={theme.color.textLight} />
+            ) : (
+              <ArrowUpIcon size={20} color={theme.color.textLight} />
+            )}
           </TouchableOpacity>
         </View>
       </View>
+      <UpgradeToProDialog visible={asking} onClose={() => setAsking(false)} />
     </KeyboardAvoidingView>
   );
 }
