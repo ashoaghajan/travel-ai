@@ -12,9 +12,13 @@
   "dependencies": {
     "@ai-travel/shared": "*",
     "expo": "~57.0.12",
+    "expo-secure-store": "~57.0.1",
     "expo-status-bar": "~57.0.1",
     "react": "19.2.3",
-    "react-native": "0.86.2"
+    "react-native": "0.86.2",
+    "react-native-mmkv": "^4.3.2",
+    "react-native-safe-area-context": "^5.9.0",
+    "react-native-svg": "^15.15.5"
   },
   "devDependencies": {
     "@types/react": "~19.2.2",

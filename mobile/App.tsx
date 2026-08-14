@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { StatusBar } from 'expo-status-bar';
+import { View } from 'react-native';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { fetch as expoFetch } from 'expo/fetch';
 
 /*
@@ -12,43 +12,47 @@ import { fetch as expoFetch } from 'expo/fetch';
  */
 import { ERROR_CODES } from '@ai-travel/shared';
 
+import { ThemeProvider } from './src/theme/ThemeProvider';
+import { useTheme } from './src/theme/useTheme';
+import { Screen } from './src/components/Screen';
+import { Text } from './src/components/Text';
+import { Button } from './src/components/Button';
+import { Card } from './src/components/Card';
+import { CrownIcon, PlaneIcon } from './src/components/icons';
+
 /**
- * M1 — the throwaway spike.
+ * M1's spike, now wearing M2's theme.
  *
- * This screen exists to retire the three infrastructure risks in the port
- * before a single feature is written, and it is deleted at M5:
- *
- *   1. Can Metro resolve `@ai-travel/shared` — TypeScript source, outside this
- *      app's directory, reached through a workspace symlink?
- *   2. Can the phone reach the deployed API at all?
- *   3. Does `expo/fetch` stream a response body on a real device? The whole
- *      Pro planner depends on it, and there is no point porting nine
- *      milestones of UI before finding out.
+ * This screen is a throwaway and is deleted at M5, when expo-router brings
+ * real routes. It carries two jobs at once because they share a build: the
+ * three probes retire the infrastructure risks of the port, and the frame
+ * around them is the first real use of the token system, so the theme is seen
+ * on a device rather than trusted.
  *
  * Nothing runs on mount. Every probe is behind a press, because the streaming
- * one registers an account against the deployed database and that should never
- * be a side effect of opening an app.
+ * one registers an account against the deployed database, and that should
+ * never be a side effect of opening an app.
  */
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL ?? 'https://travel-ai-io1t.onrender.com/api';
 
-type Line = { text: string; tone: 'ok' | 'bad' | 'plain' };
+type Line = { text: string; tone: 'main' | 'muted' | 'success' | 'danger' };
 
-export default function App() {
+function Spike() {
+  const theme = useTheme();
   const [lines, setLines] = useState<Line[]>([]);
   const [busy, setBusy] = useState(false);
 
-  const say = (text: string, tone: Line['tone'] = 'plain') =>
+  const say = (text: string, tone: Line['tone'] = 'muted') =>
     setLines((current) => [...current, { text, tone }]);
 
   /** Risk 1: does the monorepo resolve? Answered without touching the network. */
   function probeShared() {
     setLines([]);
     try {
-      const code = ERROR_CODES.PRO_REQUIRED;
-      say(`shared/ resolved — ERROR_CODES.PRO_REQUIRED = ${code}`, 'ok');
+      say(`shared/ resolved — PRO_REQUIRED = ${ERROR_CODES.PRO_REQUIRED}`, 'success');
     } catch (error) {
-      say(`shared/ failed: ${String(error)}`, 'bad');
+      say(`shared/ failed: ${String(error)}`, 'danger');
     }
   }
 
@@ -61,9 +65,9 @@ export default function App() {
     try {
       const response = await fetch(`${API_URL}/health`);
       const body = await response.text();
-      say(`${response.status} — ${body}`, response.ok ? 'ok' : 'bad');
+      say(`${response.status} — ${body}`, response.ok ? 'success' : 'danger');
     } catch (error) {
-      say(`unreachable: ${String(error)}`, 'bad');
+      say(`unreachable: ${String(error)}`, 'danger');
     } finally {
       setBusy(false);
     }
@@ -73,10 +77,10 @@ export default function App() {
    * Risk 3, the one that could change the design.
    *
    * The streaming endpoint needs an account and a Pro plan, so this registers a
-   * throwaway, upgrades it (self-serve, as the Pro work shipped), and then
-   * reads the reply frame by frame. If the frames arrive one at a time the
-   * port is safe; if they arrive in a single lump at the end, `expo/fetch` is
-   * buffering and the fallbacks come into play.
+   * throwaway, upgrades it (self-serve, as the Pro work shipped), and reads the
+   * reply frame by frame. Many chunks arriving over time means the port is
+   * safe. One chunk at the end means `expo/fetch` is buffering, and the
+   * fallbacks come into play before any UI is built on it.
    */
   async function probeStreaming() {
     setLines([]);
@@ -93,19 +97,19 @@ export default function App() {
       });
 
       if (!registered.ok) {
-        say(`register failed: ${registered.status} ${await registered.text()}`, 'bad');
+        say(`register failed: ${registered.status} ${await registered.text()}`, 'danger');
         return;
       }
 
       const { accessToken } = (await registered.json()) as { accessToken: string };
-      say('registered, bearer token in hand', 'ok');
+      say('registered, bearer token in hand', 'success');
 
       const upgraded = await fetch(`${API_URL}/me/plan`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
         body: JSON.stringify({ plan: 'pro' }),
       });
-      say(`upgrade to Pro: ${upgraded.status}`, upgraded.ok ? 'ok' : 'bad');
+      say(`upgrade to Pro: ${upgraded.status}`, upgraded.ok ? 'success' : 'danger');
       if (!upgraded.ok) return;
 
       say('opening the stream with expo/fetch…');
@@ -120,12 +124,12 @@ export default function App() {
       });
 
       if (!response.ok) {
-        say(`stream refused: ${response.status} ${await response.text()}`, 'bad');
+        say(`stream refused: ${response.status} ${await response.text()}`, 'danger');
         return;
       }
 
       if (!response.body) {
-        say('response.body is undefined — expo/fetch did NOT stream', 'bad');
+        say('response.body is undefined — expo/fetch did NOT stream', 'danger');
         return;
       }
 
@@ -153,74 +157,61 @@ export default function App() {
       }
 
       const total = Date.now() - started;
-      say(`done — ${chunks} chunks, first at ${firstChunkAt}ms, total ${total}ms`, 'ok');
+      say(`done — ${chunks} chunks, first at ${firstChunkAt}ms, total ${total}ms`);
       say(
-        chunks > 1
-          ? 'STREAMING CONFIRMED — many chunks over time'
-          : 'BUFFERED — one chunk only, fallbacks needed',
-        chunks > 1 ? 'ok' : 'bad',
+        chunks > 1 ? 'STREAMING CONFIRMED' : 'BUFFERED — fallback needed',
+        chunks > 1 ? 'success' : 'danger',
       );
     } catch (error) {
-      say(`threw: ${String(error)}`, 'bad');
+      say(`threw: ${String(error)}`, 'danger');
     } finally {
       setBusy(false);
     }
   }
 
   return (
-    <View style={styles.screen}>
-      <StatusBar style="auto" />
-      <ScrollView contentContainerStyle={styles.content}>
-        <Text style={styles.title}>M1 · infrastructure spike</Text>
-        <Text style={styles.api}>{API_URL}</Text>
+    <Screen>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.space.sm }}>
+        <PlaneIcon size={22} color={theme.color.primary} />
+        <Text variant="lg" weight="semibold" leading="tight">
+          AI Travel
+        </Text>
+        <CrownIcon size={18} color={theme.color.warning} />
+      </View>
 
-        <Probe label="1 · resolve @ai-travel/shared" onPress={probeShared} disabled={busy} />
-        <Probe label="2 · reach the API" onPress={() => void probeApi()} disabled={busy} />
-        <Probe label="3 · stream with expo/fetch" onPress={() => void probeStreaming()} disabled={busy} />
+      <Text variant="xs" tone="muted">
+        M1 spike · M2 theme · {theme.scheme}
+      </Text>
 
-        <View style={styles.log}>
+      <Button onPress={probeShared} disabled={busy} fullWidth>
+        1 · resolve @ai-travel/shared
+      </Button>
+      <Button onPress={() => void probeApi()} disabled={busy} loading={busy} fullWidth>
+        2 · reach the API
+      </Button>
+      <Button onPress={() => void probeStreaming()} disabled={busy} variant="secondary" fullWidth>
+        3 · stream with expo/fetch
+      </Button>
+
+      {lines.length > 0 ? (
+        <Card padding="md" elevation="soft">
           {lines.map((line, index) => (
-            <Text key={index} style={[styles.line, styles[line.tone]]}>
+            <Text key={index} variant="xs" tone={line.tone} leading="snug">
               {line.text}
             </Text>
           ))}
-        </View>
-      </ScrollView>
-    </View>
+        </Card>
+      ) : null}
+    </Screen>
   );
 }
 
-function Probe({
-  label,
-  onPress,
-  disabled,
-}: {
-  label: string;
-  onPress: () => void;
-  disabled: boolean;
-}) {
+export default function App() {
   return (
-    <TouchableOpacity
-      style={[styles.button, disabled && styles.buttonDisabled]}
-      onPress={onPress}
-      disabled={disabled}
-    >
-      <Text style={styles.buttonText}>{label}</Text>
-    </TouchableOpacity>
+    <SafeAreaProvider>
+      <ThemeProvider>
+        <Spike />
+      </ThemeProvider>
+    </SafeAreaProvider>
   );
 }
-
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: '#faf9fc' },
-  content: { padding: 20, paddingTop: 64, gap: 10 },
-  title: { fontSize: 20, fontWeight: '600', color: '#1a1a2e' },
-  api: { fontSize: 11, color: '#6b7280', marginBottom: 8 },
-  button: { backgroundColor: '#6d3fef', borderRadius: 999, paddingVertical: 13 },
-  buttonDisabled: { opacity: 0.5 },
-  buttonText: { color: '#fff', textAlign: 'center', fontWeight: '600', fontSize: 14 },
-  log: { marginTop: 18, gap: 5 },
-  line: { fontSize: 12, fontFamily: 'Courier' },
-  ok: { color: '#15803d' },
-  bad: { color: '#b91c1c' },
-  plain: { color: '#374151' },
-});
