@@ -22,8 +22,20 @@ export function isConfigured(): boolean {
   return Boolean(env().GROQ_API_KEY);
 }
 
-/** A name for the upload, since the format is only in the content type. */
-function filenameFor(contentType: string): string {
+/**
+ * A name for the upload, since the format is only in the content type.
+ *
+ * The extension is not cosmetic — Whisper reads it to decide how to decode the
+ * bytes, so a wrong one fails a recording that was perfectly good.
+ */
+export function filenameFor(contentType: string): string {
+  /*
+   * The native app's format, and the reason this line exists: `expo-audio`
+   * records AAC in an MP4 container and calls it `.m4a`. That string does not
+   * contain "mp4", so before this it fell through to the WebM default below and
+   * every phone recording was offered to Whisper as something it is not.
+   */
+  if (contentType.includes('m4a') || contentType.includes('aac')) return 'audio.m4a';
   if (contentType.includes('mp4')) return 'audio.mp4';
   if (contentType.includes('ogg')) return 'audio.ogg';
   if (contentType.includes('wav')) return 'audio.wav';

@@ -1,6 +1,6 @@
 import { ERROR_CODES } from '@ai-travel/shared';
 /*
- * DIFFERS FROM WEB (2/7): a fetch that can stream.
+ * DIFFERS FROM WEB (2/8): a fetch that can stream.
  *
  * React Native's built-in fetch is XHR-backed and leaves `response.body`
  * undefined, which would make `stream()` below throw "the server sent an empty
@@ -35,12 +35,12 @@ import type { AccessTokenResponse, ApiErrorBody, ErrorCode } from '@ai-travel/sh
  * this file has to do two things the web's version never had to: present it,
  * and store the replacement the server rotates to.
  *
- * Seven differences from `src/services/http.ts`, each marked DIFFERS FROM WEB
+ * Eight differences from `src/services/http.ts`, each marked DIFFERS FROM WEB
  * where it happens. `core-copies.test.ts` asserts they are still there.
  */
 
 /*
- * DIFFERS FROM WEB (1/7): where the API is.
+ * DIFFERS FROM WEB (1/8): where the API is.
  *
  * The web defaults to the relative `/api`, which is what makes it same-origin
  * and is why it needs no CORS. A phone has no origin to be the same as, so the
@@ -78,6 +78,8 @@ export type RequestOptions = {
   isRetry?: boolean;
   /** Refresh and logout carry the cookie instead, and must not recurse. */
   skipAuth?: boolean;
+  /** Only for a binary body, whose type cannot be read off an ArrayBuffer. */
+  contentType?: string;
 };
 
 /* --------------------------------------------------------------- the token */
@@ -130,28 +132,45 @@ function buildUrl(path: string, query: RequestOptions['query']): string {
 }
 
 /**
- * A body the browser should send as it is.
+ * A body to send as it is.
  *
  * Everything this app sends is JSON except one thing: a recording, which is
- * bytes and whose type is its own. Serialising a `Blob` produces `{}` — a
- * silent, baffling failure — so it is named here rather than discovered there.
+ * bytes. Serialising those produces `{}` — a silent, baffling failure — so the
+ * case is named here rather than discovered there.
  */
-function isBinary(body: unknown): body is Blob {
-  return typeof Blob !== 'undefined' && body instanceof Blob;
+function isBinary(body: unknown): body is ArrayBuffer {
+  /*
+   * DIFFERS FROM WEB (8/8): what bytes look like.
+   *
+   * The web hands `MediaRecorder`'s `Blob` straight to `fetch`, and reads the
+   * content type off it. There is no such blob here — a recording is a file on
+   * disk, and it arrives as an `ArrayBuffer` read out of it.
+   *
+   * The blob-shaped alternative was tried and rejected: `expo/fetch` duck-types
+   * blobs and would accept the file object itself, but it then *overrides*
+   * Content-Type with the object's own `type`. That hands the decision to a
+   * MIME guess made from a file extension, and `express.raw({ type: 'audio/*' })`
+   * silently declines to parse anything it does not recognise — leaving the
+   * server to answer 422 for a recording that was fine. An ArrayBuffer takes
+   * the header as given, so `contentType` below is the whole truth.
+   */
+  return body instanceof ArrayBuffer;
 }
 
 async function send(path: string, options: RequestOptions): Promise<Response> {
   const headers: Record<string, string> = {};
   const binary = isBinary(options.body);
 
-  // A blob carries its own type; anything else here is JSON.
+  // Bytes are described by the caller; anything else here is JSON.
   if (options.body !== undefined) {
-    headers['Content-Type'] = binary ? (options.body as Blob).type || 'application/octet-stream' : 'application/json';
+    headers['Content-Type'] = binary
+      ? (options.contentType ?? 'application/octet-stream')
+      : 'application/json';
   }
   if (accessToken && !options.skipAuth) headers.Authorization = `Bearer ${accessToken}`;
 
   /*
-   * DIFFERS FROM WEB (3/7): the transport this client can hold.
+   * DIFFERS FROM WEB (3/8): the transport this client can hold.
    *
    * Tells the server to answer with the refresh token in the body rather than
    * setting a cookie. Sent on every request rather than only on `/api/auth`,
@@ -170,11 +189,11 @@ async function send(path: string, options: RequestOptions): Promise<Response> {
       body:
         options.body === undefined
           ? undefined
-          : binary
-            ? (options.body as Blob)
+          : isBinary(options.body)
+            ? options.body
             : JSON.stringify(options.body),
       /*
-       * DIFFERS FROM WEB (4/7): no cookie to include.
+       * DIFFERS FROM WEB (4/8): no cookie to include.
        *
        * The web's session rides an httpOnly refresh cookie. A native client
        * cannot be trusted to persist one across a cold start, so the refresh
@@ -187,7 +206,7 @@ async function send(path: string, options: RequestOptions): Promise<Response> {
     // `fetch` rejects only for a dead network, DNS failure or an abort —
     // every HTTP status, including 500, resolves.
     /*
-     * DIFFERS FROM WEB (5/7): how an abort is recognised.
+     * DIFFERS FROM WEB (5/8): how an abort is recognised.
      *
      * There is no `DOMException` in Hermes, so the web's check is always false
      * here and a cancelled request falls through to the network error below —
@@ -240,7 +259,7 @@ let refreshing: Promise<boolean> | null = null;
 async function refreshAccessToken(): Promise<boolean> {
   try {
     /*
-     * DIFFERS FROM WEB (6/7): the token is presented, not implied.
+     * DIFFERS FROM WEB (6/8): the token is presented, not implied.
      *
      * The browser sends nothing here — the cookie rides along by itself. This
      * client has to read the token out of the keychain and put it in the body,
@@ -411,7 +430,7 @@ export async function* stream<T>(
   }
 
   /*
-   * DIFFERS FROM WEB (7/7): decoding.
+   * DIFFERS FROM WEB (7/8): decoding.
    *
    * Hermes has `TextDecoder` but not `TextDecoderStream`, so the web's
    * `pipeThrough` has nothing to pipe through. Decoding each chunk with

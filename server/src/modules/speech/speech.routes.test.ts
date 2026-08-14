@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ERROR_CODES } from '@ai-travel/shared';
 import { resetEnvCache } from '../../env';
 import { api, errorCode, signUp } from '../../test/harness';
+import { filenameFor } from './groq';
 import { resetSpeechRateLimit } from './speech.routes';
 
 /**
@@ -119,5 +120,25 @@ describe('transcribing', () => {
     // A quota and a model name are for the log; the reader can act on neither.
     expect(errorCode(response)).toBe(ERROR_CODES.PROVIDER_ERROR);
     expect(JSON.stringify(response.body)).not.toContain('acct_123');
+  });
+});
+
+describe('the format Whisper is told about', () => {
+  /**
+   * Whisper decides how to decode by the filename's extension, so the name is
+   * load-bearing. Getting it wrong fails a recording that was perfectly good,
+   * and fails it as "we could not make out that recording" — which sends
+   * somebody off to blame their microphone.
+   */
+  it.each([
+    // The native app's own format. It used to be called WebM here, because
+    // 'audio/m4a' does not contain the substring 'mp4'.
+    ['audio/m4a', 'audio.m4a'],
+    ['audio/mp4', 'audio.mp4'],
+    ['audio/webm;codecs=opus', 'audio.webm'],
+    ['audio/ogg', 'audio.ogg'],
+    ['audio/wav', 'audio.wav'],
+  ])('sends %s as %s', (contentType, expected) => {
+    expect(filenameFor(contentType)).toBe(expected);
   });
 });

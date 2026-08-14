@@ -78,6 +78,11 @@ const ADAPTED: [string, string, string][] = [
     'mobile/src/core/services/auth.service.ts',
     'persists the refresh token the cookie would have held',
   ],
+  [
+    'src/services/speech.service.ts',
+    'mobile/src/core/services/speech.service.ts',
+    'takes a file URI, since a recording here is written to disk rather than held as a Blob',
+  ],
   /*
    * The image files. Metro resolves an asset import to a module number rather
    * than a URL, and these values are stored and PUT to the API — so on this

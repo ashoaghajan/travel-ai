@@ -27,7 +27,13 @@
     "plugins": [
       "expo-router",
       "expo-secure-store",
-      "@maplibre/maplibre-react-native"
+      "@maplibre/maplibre-react-native",
+      [
+        "expo-audio",
+        {
+          "microphonePermission": "AI Travel uses the microphone so you can speak a trip instead of typing it. Recordings are transcribed and never stored."
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true

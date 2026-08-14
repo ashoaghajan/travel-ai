@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import {
+  ActivityIndicator,
   FlatList,
   Image,
   KeyboardAvoidingView,
@@ -17,10 +18,11 @@ import { useCurrentUser } from '../../core/hooks/useCurrentUser';
 import { Button } from '../../components/Button';
 import { Card } from '../../components/Card';
 import { Text } from '../../components/Text';
-import { ArrowUpIcon, CrownIcon, StopIcon } from '../../components/icons';
+import { ArrowUpIcon, CrownIcon, MicIcon, StopIcon } from '../../components/icons';
 import { useTheme } from '../../theme/useTheme';
 import { UpgradeToProDialog } from '../pro/UpgradeToProDialog';
 import { TypingIndicator } from './TypingIndicator';
+import { useDictation } from './useDictation';
 import { usePlanner } from './usePlanner';
 
 /**
@@ -117,6 +119,15 @@ export function PlannerScreen() {
   const [asking, setAsking] = useState(false);
   const listRef = useRef<FlatList<PlannerMessage>>(null);
 
+  /*
+   * Dictation appends rather than replaces: somebody may have typed half a
+   * sentence before reaching for the microphone, and the words they said are
+   * the continuation of it rather than a correction to it.
+   */
+  const dictation = useDictation({
+    onText: (text) => setDraft((current) => (current ? `${current.trimEnd()} ${text}` : text)),
+  });
+
   // Newest first, because the list is inverted.
   const ordered = [...messages].reverse();
 
@@ -195,9 +206,9 @@ export function PlannerScreen() {
           gap: theme.space.sm,
         }}
       >
-        {error ? (
+        {error ?? dictation.error ? (
           <Text variant="xs" tone="danger">
-            {error}
+            {error ?? dictation.error}
           </Text>
         ) : null}
 
@@ -220,6 +231,40 @@ export function PlannerScreen() {
         )}
 
         <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: theme.space.sm }}>
+          {/*
+            Gone once the server has said it has no key, rather than left to be
+            pressed a second time for the same answer. It is not hidden while a
+            recording is in flight — that is what its own busy state is for.
+          */}
+          {dictation.isUnavailable ? null : (
+            <TouchableOpacity
+              onPress={dictation.toggle}
+              disabled={dictation.isTranscribing}
+              accessibilityRole="button"
+              accessibilityLabel={dictation.isRecording ? 'Stop recording' : 'Dictate'}
+              accessibilityState={{ busy: dictation.isTranscribing }}
+              style={{
+                width: 44,
+                height: 44,
+                borderRadius: 22,
+                alignItems: 'center',
+                justifyContent: 'center',
+                backgroundColor: dictation.isRecording ? theme.color.danger : theme.color.background,
+                borderWidth: dictation.isRecording ? 0 : 1,
+                borderColor: theme.color.border,
+                opacity: dictation.isTranscribing ? 0.5 : 1,
+              }}
+            >
+              {dictation.isTranscribing ? (
+                <ActivityIndicator size="small" color={theme.color.textMuted} />
+              ) : dictation.isRecording ? (
+                <StopIcon size={16} color={theme.color.textLight} />
+              ) : (
+                <MicIcon size={20} color={theme.color.textMuted} />
+              )}
+            </TouchableOpacity>
+          )}
+
           <TextInput
             style={{
               flex: 1,
