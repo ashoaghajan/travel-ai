@@ -109,6 +109,20 @@ export function resolveBundledSrc(src: string | undefined): string | undefined {
   // Already this build's. The common case, and it costs one lookup.
   if (bundledImageId(src) !== undefined) return src;
 
+  /*
+   * A stable id rather than a URL, which is what the mobile app stores.
+   *
+   * React Native resolves an asset import to an opaque module reference, not a
+   * string, so a phone cannot store "this build's URL" — there is no such
+   * thing. It stores the id instead, and this is where the web reads one.
+   *
+   * Ahead of the stem matching below because it is exact: `generic/coast` has
+   * no `.jpg`, so the file-name rules would not match it and the picture would
+   * come back broken on every trip planned on a phone.
+   */
+  const byId = bundledImageSrc(src);
+  if (byId !== undefined) return byId;
+
   // Only ever our own paths — an absolute URL belongs to somebody else.
   if (/^[a-z][a-z\d+.-]*:/i.test(src)) return src;
 

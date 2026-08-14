@@ -37,6 +37,18 @@ const read = (path: string) => readFileSync(fileURLToPath(new URL(path, root)), 
 
 /** Copied verbatim: web path → mobile path. */
 const IDENTICAL: [string, string][] = [
+  ...['mockAi', 'weather', 'chat', 'trip', 'planner', 'booking'].map(
+    (name): [string, string] => [
+      `src/services/${name}.service.ts`,
+      `mobile/src/core/services/${name}.service.ts`,
+    ],
+  ),
+  ['src/services/booking.migration.ts', 'mobile/src/core/services/booking.migration.ts'],
+  ...['createResource', 'broadcast', 'trip.store', 'booking.store'].map(
+    (name): [string, string] => [`src/store/${name}.ts`, `mobile/src/core/store/${name}.ts`],
+  ),
+  ['src/mock/planner.ts', 'mobile/src/core/mock/planner.ts'],
+  ['src/hooks/useCurrentUser.ts', 'mobile/src/core/hooks/useCurrentUser.ts'],
   ...['booking', 'bytes', 'currency', 'cx', 'date', 'duration', 'flag', 'intent', 'map', 'trip'].map(
     (name): [string, string] => [`src/utils/${name}.ts`, `mobile/src/core/utils/${name}.ts`],
   ),
@@ -65,6 +77,27 @@ const ADAPTED: [string, string, string][] = [
     'src/services/auth.service.ts',
     'mobile/src/core/services/auth.service.ts',
     'persists the refresh token the cookie would have held',
+  ],
+  /*
+   * The image files. Metro resolves an asset import to a module number rather
+   * than a URL, and these values are stored and PUT to the API — so on this
+   * side they deal in stable ids, and `imageSource` turns one into something
+   * drawable at the moment it is drawn.
+   */
+  [
+    'src/utils/itineraryImages.ts',
+    'mobile/src/core/utils/itineraryImages.ts',
+    'returns bundled-image ids rather than build URLs',
+  ],
+  [
+    'src/mock/destinations.ts',
+    'mobile/src/core/mock/destinations.ts',
+    'templates carry image ids rather than imported jpgs',
+  ],
+  [
+    'src/assets/category-images.ts',
+    'mobile/src/core/assets/category-images.ts',
+    'fallback photos by id rather than imported jpgs',
   ],
 ];
 

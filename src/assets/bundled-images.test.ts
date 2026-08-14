@@ -106,3 +106,19 @@ describe('the id table', () => {
     expect(new Set(stems).size).toBe(stems.length);
   });
 });
+
+describe('reading an id stored by the mobile app', () => {
+  it('resolves a bare id to this build’s URL', () => {
+    // React Native has no build-hashed URL to store, so a phone stores the id.
+    expect(resolveBundledSrc('generic/coast')).toBe(BUNDLED_IMAGES['generic/coast']);
+    expect(resolveBundledSrc('itinerary/day-1-ubud')).toBe(BUNDLED_IMAGES['itinerary/day-1-ubud']);
+  });
+
+  it('still leaves anything it does not recognise alone', () => {
+    // The guarantee the whole function rests on: it only ever repairs its own.
+    expect(resolveBundledSrc('generic/not-a-picture')).toBe('generic/not-a-picture');
+    expect(resolveBundledSrc('https://example.com/photo.jpg')).toBe(
+      'https://example.com/photo.jpg',
+    );
+  });
+});
