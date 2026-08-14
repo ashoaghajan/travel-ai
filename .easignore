@@ -1,0 +1,35 @@
+# What EAS does not need to build the phone app.
+#
+# Without this file EAS uploads whatever git tracks, which here is a whole
+# monorepo: a React web client, an Express server and their suites. None of it
+# reaches the APK — Metro only follows what `mobile/` imports — so it is upload
+# time and build time spent on nothing.
+#
+# `.easignore` replaces `.gitignore` for the upload rather than adding to it, so
+# the usual exclusions are repeated at the bottom. Leaving them out would ship
+# node_modules and any local .env to the builder.
+
+# The web client. `mobile/` imports from `shared/`, never from here.
+src/
+public/
+index.html
+vite.config.ts
+vitest.config.ts
+
+# The server. Its package.json stays: it is a workspace, and npm wants to
+# resolve every workspace named in the root package.json before it installs
+# anything. Only the code it would otherwise carry is dropped.
+server/src/
+server/dist/
+
+# Plans and notes.
+*.md
+docs/
+
+# The usual.
+node_modules/
+dist/
+coverage/
+.env
+.env.*
+!.env.example
