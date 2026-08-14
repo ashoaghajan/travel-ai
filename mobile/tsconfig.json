@@ -3,9 +3,19 @@
   "compilerOptions": {
     "strict": true,
     "paths": {
-      "@ai-travel/shared": ["../shared/src/index.ts"],
-      "@ai-travel/shared/schemas": ["../shared/src/schemas/index.ts"]
+      "@ai-travel/shared": [
+        "../shared/src/index.ts"
+      ],
+      "@ai-travel/shared/schemas": [
+        "../shared/src/schemas/index.ts"
+      ]
     }
   },
-  "include": ["App.tsx", "index.ts", "src", "app", "*.ts", "expo-env.d.ts"]
+  "include": [
+    "app",
+    "src",
+    "*.ts",
+    ".expo/types/**/*.ts",
+    "expo-env.d.ts"
+  ]
 }

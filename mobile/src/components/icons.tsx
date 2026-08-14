@@ -1,4 +1,5 @@
 import Svg, { Circle, Path, Rect } from 'react-native-svg';
+import type { ColorValue } from 'react-native';
 import { useTheme } from '../theme/useTheme';
 
 /**
@@ -19,8 +20,15 @@ import { useTheme } from '../theme/useTheme';
 export type IconProps = {
   /** Width and height in pixels. */
   size?: number;
-  /** Defaults to the current text colour, which is what `currentColor` did. */
-  color?: string;
+  /**
+   * Defaults to the current text colour, which is what `currentColor` did.
+   *
+   * `ColorValue` rather than `string`: React Native's own callbacks — the tab
+   * bar's `tabBarIcon` among them — hand back platform colour objects as well
+   * as strings, and narrowing here would make every one of those call sites
+   * cast.
+   */
+  color?: ColorValue;
 };
 
 function useIcon({ size = 24, color }: IconProps) {

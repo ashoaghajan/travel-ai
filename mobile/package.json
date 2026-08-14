@@ -2,7 +2,7 @@
   "name": "@ai-travel/mobile",
   "version": "0.1.0",
   "private": true,
-  "main": "index.ts",
+  "main": "expo-router/entry",
   "scripts": {
     "start": "expo start",
     "android": "expo start --android",
@@ -12,13 +12,17 @@
   "dependencies": {
     "@ai-travel/shared": "*",
     "expo": "~57.0.12",
+    "expo-constants": "~57.0.10",
     "expo-crypto": "~57.0.1",
+    "expo-linking": "~57.0.5",
+    "expo-router": "~57.0.12",
     "expo-secure-store": "~57.0.1",
     "expo-status-bar": "~57.0.1",
     "react": "19.2.3",
     "react-native": "0.86.2",
     "react-native-mmkv": "^4.3.2",
     "react-native-safe-area-context": "^5.9.0",
+    "react-native-screens": "~4.27.0",
     "react-native-svg": "^15.15.5"
   },
   "devDependencies": {
