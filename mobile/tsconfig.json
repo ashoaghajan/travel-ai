@@ -1,0 +1,11 @@
+{
+  "extends": "expo/tsconfig.base",
+  "compilerOptions": {
+    "strict": true,
+    "paths": {
+      "@ai-travel/shared": ["../shared/src/index.ts"],
+      "@ai-travel/shared/schemas": ["../shared/src/schemas/index.ts"]
+    }
+  },
+  "include": ["App.tsx", "index.ts", "src", "app", "*.ts", "expo-env.d.ts"]
+}
