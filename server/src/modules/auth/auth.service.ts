@@ -46,6 +46,16 @@ const ROTATION_GRACE_MS = 5_000;
 export type SessionContext = {
   userAgent?: string;
   ip?: string;
+  /**
+   * How long this sign-in may last, when the caller knows better than the
+   * default. Set for a native client, which gets a much longer cap — see
+   * `NATIVE_SESSION_TTL_HOURS`.
+   *
+   * Ignored by `rotateRefreshToken`, which passes the family's own deadline
+   * explicitly. That is deliberate: a refresh must never be able to extend a
+   * session, whatever the client claims to be.
+   */
+  ttlHours?: number;
 };
 
 export type IssuedSession = {
@@ -126,7 +136,7 @@ export async function issueSession(
   user: User,
   familyId: string = newFamilyId(),
   context: SessionContext = {},
-  expiresAt: Date = sessionExpiry(),
+  expiresAt: Date = sessionExpiry(new Date(), context.ttlHours),
 ): Promise<IssuedSession> {
   const { raw, hash: tokenHash } = createRefreshToken();
 

@@ -355,3 +355,156 @@ describe('POST /api/auth/logout', () => {
     expect(other.status).toBe(200);
   });
 });
+
+/**
+ * Body transport, for a client that cannot hold a cookie.
+ *
+ * The rotation, reuse detection and family revocation underneath are the same
+ * code either way — what these pin is which door the token comes out of, and
+ * the one rule that makes the difference safe.
+ */
+describe('native refresh transport', () => {
+  const NATIVE = ['x-refresh-transport', 'body'] as const;
+
+  it('returns the refresh token in the body when a native client asks', async () => {
+    const response = await api()
+      .post('/api/auth/register')
+      .set(...NATIVE)
+      .send(credentials());
+
+    expect(response.status).toBe(201);
+    expect(typeof response.body.refreshToken).toBe('string');
+    expect(response.body.refreshToken.length).toBeGreaterThan(20);
+    expect(Date.parse(response.body.refreshExpiresAt)).not.toBeNaN();
+
+    // The token went to the body *instead of* the cookie, not as well as.
+    // Read from the raw header: the harness's helper throws when absent, and
+    // absence is exactly what this asserts.
+    const cookies = response.headers['set-cookie'] ?? [];
+    expect(cookies.some((cookie: string) => cookie.startsWith(`${REFRESH_COOKIE}=`))).toBe(false);
+  });
+
+  it('still answers the web exactly as before', async () => {
+    const response = await api().post('/api/auth/register').send(credentials());
+
+    expect(response.status).toBe(201);
+    expect(response.body).not.toHaveProperty('refreshToken');
+    expect(response.body).not.toHaveProperty('refreshExpiresAt');
+    expect(refreshCookie(response)).toContain(`${REFRESH_COOKIE}=`);
+  });
+
+  it('refreshes from the body and rotates as usual', async () => {
+    const registered = await api()
+      .post('/api/auth/register')
+      .set(...NATIVE)
+      .send(credentials());
+
+    const first = registered.body.refreshToken as string;
+
+    const refreshed = await api()
+      .post('/api/auth/refresh')
+      .set(...NATIVE)
+      .send({ refreshToken: first });
+
+    expect(refreshed.status).toBe(200);
+    expect(typeof refreshed.body.accessToken).toBe('string');
+    // Rotation is rotation whichever door the token came through.
+    expect(refreshed.body.refreshToken).not.toBe(first);
+  });
+
+  it('detects reuse of a rotated body token, and kills the family', async () => {
+    const registered = await api()
+      .post('/api/auth/register')
+      .set(...NATIVE)
+      .send(credentials());
+
+    const first = registered.body.refreshToken as string;
+
+    await api()
+      .post('/api/auth/refresh')
+      .set(...NATIVE)
+      .send({ refreshToken: first })
+      .expect(200);
+
+    // Past the five-second grace window this is a stolen token being replayed.
+    await new Promise((resolve) => setTimeout(resolve, 5_100));
+
+    const replayed = await api()
+      .post('/api/auth/refresh')
+      .set(...NATIVE)
+      .send({ refreshToken: first });
+
+    expect(replayed.status).toBe(401);
+    expect(errorCode(replayed)).toBe(ERROR_CODES.REFRESH_REUSED);
+  }, 20_000);
+
+  it('logs out from a body token', async () => {
+    const registered = await api()
+      .post('/api/auth/register')
+      .set(...NATIVE)
+      .send(credentials());
+
+    const token = registered.body.refreshToken as string;
+
+    await api()
+      .post('/api/auth/logout')
+      .set(...NATIVE)
+      .send({ refreshToken: token })
+      .expect(204);
+
+    await api()
+      .post('/api/auth/refresh')
+      .set(...NATIVE)
+      .send({ refreshToken: token })
+      .expect(401);
+  });
+
+  it('gives a native sign-in the longer session cap', async () => {
+    const native = await api()
+      .post('/api/auth/register')
+      .set(...NATIVE)
+      .send(credentials({ email: 'native@example.com' }));
+
+    const web = await api()
+      .post('/api/auth/register')
+      .send(credentials({ email: 'web@example.com' }));
+
+    const nativeRow = await prisma.refreshToken.findFirstOrThrow({
+      where: { user: { emailKey: 'native@example.com' } },
+    });
+    const webRow = await prisma.refreshToken.findFirstOrThrow({
+      where: { user: { emailKey: 'web@example.com' } },
+    });
+
+    expect(native.status).toBe(201);
+    expect(web.status).toBe(201);
+    // Six hours on a browser tab is right; on a home screen it asks for a
+    // password twice a day.
+    expect(nativeRow.expiresAt.getTime()).toBeGreaterThan(webRow.expiresAt.getTime());
+  });
+
+  /**
+   * The rule the whole design rests on.
+   *
+   * A script injected into the web app can set any header it likes. What it
+   * cannot do is stop the browser attaching the httpOnly cookie — so the
+   * presence of that cookie is proof the caller is a browser, and proof that
+   * handing it the refresh token would be handing it to whatever is running in
+   * the page.
+   */
+  it('refuses body transport to anything already holding the cookie', async () => {
+    const registered = await api().post('/api/auth/register').send(credentials());
+    const cookie = refreshCookie(registered);
+
+    const escalated = await api()
+      .post('/api/auth/refresh')
+      .set(...NATIVE)
+      .set('Cookie', cookie as string)
+      .send();
+
+    expect(escalated.status).toBe(200);
+    // An XSS that asks nicely still gets fifteen minutes, not thirty days.
+    expect(escalated.body).not.toHaveProperty('refreshToken');
+    expect(refreshCookie(escalated)).toContain(`${REFRESH_COOKIE}=`);
+  });
+});

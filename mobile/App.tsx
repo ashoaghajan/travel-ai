@@ -1,22 +1,14 @@
-import { useState } from 'react';
-import { View } from 'react-native';
+import { useEffect, useState } from 'react';
+import { ActivityIndicator, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
-/*
- * A runtime import, deliberately.
- *
- * `ERROR_CODES` is a const object rather than a type, so it survives to the
- * bundle and actually exercises Metro's resolution of a source-only workspace
- * package. Importing a type here would compile, erase, and prove nothing.
- */
-import { ERROR_CODES } from '@ai-travel/shared';
-
-import { http, setAccessToken, stream } from './src/core/services/http';
+import { http, stream } from './src/core/services/http';
+import { authStore, useAuth } from './src/core/store/auth.store';
 import { STORAGE_KEYS, storageService } from './src/core/services/localStorage.service';
 import { createId } from './src/core/utils/id';
-import { formatDateRange } from './src/core/utils/date';
 import { usdFormatter } from './src/core/utils/currency';
 
+import { SignInScreen } from './src/features/auth/SignInScreen';
 import { ThemeProvider } from './src/theme/ThemeProvider';
 import { useTheme } from './src/theme/useTheme';
 import { Screen } from './src/components/Screen';
@@ -26,46 +18,26 @@ import { Card } from './src/components/Card';
 import { CrownIcon, PlaneIcon } from './src/components/icons';
 
 /**
- * The spike, now exercising the ported plumbing rather than standing in for it.
+ * The root, until expo-router replaces it at M5.
  *
- * Deleted at M5, when expo-router brings real routes. Until then it is the
- * only way to run any of this on a device, and it carries three jobs: the
- * infrastructure risks from M1, the theme from M2, and — the point of M3 —
- * proof that the copied services actually execute on Hermes.
- *
- * **The streaming probe deliberately goes through `stream()` from the ported
- * client**, not through a hand-written fetch. A spike that proves `expo/fetch`
- * works while the real code path stays untested would be answering an easier
- * question than the one that matters.
- *
- * Nothing runs on mount. Every probe is behind a press, because two of them
- * write to the deployed database, and that should never be a side effect of
- * opening an app.
+ * Three states, and the middle one is the reason there are three: on a cold
+ * start the app holds a refresh token in the keychain and does not yet know
+ * whether it is still good. Treating that as "signed out" would flash the
+ * sign-in form at somebody who is signed in, every launch.
  */
 
 type Line = { text: string; tone: 'main' | 'muted' | 'success' | 'danger' };
 
-function Spike() {
+function SignedIn() {
   const theme = useTheme();
+  const { user } = useAuth();
   const [lines, setLines] = useState<Line[]>([]);
   const [busy, setBusy] = useState(false);
 
   const say = (text: string, tone: Line['tone'] = 'muted') =>
     setLines((current) => [...current, { text, tone }]);
 
-  /** Risk 1: does the monorepo resolve? Answered without touching the network. */
-  function probeShared() {
-    setLines([]);
-    say(`shared/ resolved — PRO_REQUIRED = ${ERROR_CODES.PRO_REQUIRED}`, 'success');
-  }
-
-  /**
-   * M3: do the copied services run on Hermes?
-   *
-   * Three of the four platform seams at once — MMKV behind the synchronous
-   * storage facade, `expo-crypto` behind `createId`, and two pure utils that
-   * were copied verbatim and should behave exactly as they do on the web.
-   */
+  /** The copied services, running on Hermes. */
   function probeCore() {
     setLines([]);
 
@@ -74,108 +46,61 @@ function Spike() {
       say(`createId → ${id}`, id.startsWith('trip_') && id.length > 20 ? 'success' : 'danger');
 
       let notified = 0;
-      const unsubscribe = storageService.subscribe(STORAGE_KEYS.settings, () => {
+      const stop = storageService.subscribe(STORAGE_KEYS.settings, () => {
         notified += 1;
       });
-
-      const written = { theme: 'dark' as const, currency: 'USD', probe: id };
+      const written = { probe: id };
       storageService.set(STORAGE_KEYS.settings, written);
-      const readBack = storageService.get(STORAGE_KEYS.settings, null as typeof written | null);
-      unsubscribe();
-
-      const round = readBack?.probe === id;
-      say(`MMKV round trip → ${round ? 'value survived' : 'MISMATCH'}`, round ? 'success' : 'danger');
-      say(`subscribe fired ${notified}×`, notified === 1 ? 'success' : 'danger');
-
-      // Copied verbatim, so these must read exactly as they do in the browser.
-      say(`formatDateRange → ${formatDateRange('2027-04-02', '2027-04-08')}`);
-      /*
-       * `Intl.NumberFormat` under the hood. Worth a probe of its own: Hermes
-       * ships without full ICU on some builds, and a missing Intl would break
-       * every price in the app rather than just this line.
-       */
-      say(`usdFormatter → ${usdFormatter.format(1234.5)}`);
-
+      const back = storageService.get(STORAGE_KEYS.settings, null as typeof written | null);
+      stop();
       storageService.remove(STORAGE_KEYS.settings);
-      say('core plumbing OK', 'success');
+
+      say(`MMKV round trip → ${back?.probe === id ? 'ok' : 'MISMATCH'}`,
+        back?.probe === id ? 'success' : 'danger');
+      say(`subscribe fired ${notified}×`, notified === 1 ? 'success' : 'danger');
+      // Intl under the hood — some Hermes builds ship without full ICU.
+      say(`usdFormatter → ${usdFormatter.format(1234.5)}`);
     } catch (error) {
       say(`core threw: ${String(error)}`, 'danger');
     }
   }
 
-  /** Risk 2: can this device reach the API, through the ported client? */
-  async function probeApi() {
-    setLines([]);
-    setBusy(true);
-
-    try {
-      const body = await http.get<{ status: string }>('/health', { skipAuth: true });
-      say(`GET /health → ${JSON.stringify(body)}`, 'success');
-    } catch (error) {
-      say(`unreachable: ${String(error)}`, 'danger');
-    } finally {
-      setBusy(false);
-    }
-  }
-
   /**
-   * Risk 3, the one that could still change the design.
+   * The last unverified risk in the port: does `expo/fetch` actually stream on
+   * a device, through the ported client rather than a hand-written fetch?
    *
-   * Registers a throwaway, upgrades it (self-serve, as the Pro work shipped),
-   * and reads the planner reply through the ported `stream()`. Frames arriving
-   * one at a time means the port is safe. Everything at once means
-   * `expo/fetch` is buffering, and the fallbacks come into play before any UI
-   * is built on it.
+   * Needs Pro, which is self-serve, so this upgrades the account first.
    */
   async function probeStreaming() {
     setLines([]);
     setBusy(true);
 
-    const email = `spike-${Date.now()}@example.com`;
-
     try {
-      say('registering a throwaway account…');
-      const session = await http.post<{ accessToken: string }>('/auth/register', {
-        name: 'M3 Spike',
-        email,
-        password: 'spike-password-123',
-      });
-
-      // What the auth store will do for real at M4.
-      setAccessToken(session.accessToken);
-      say('registered — bearer token held by the ported client', 'success');
-
       await http.post('/me/plan', { plan: 'pro' });
       say('upgraded to Pro', 'success');
 
-      say('streaming through core/services/http…');
       const started = Date.now();
       let frames = 0;
       let firstAt = 0;
       let text = '';
 
       for await (const event of stream<{ type: string; text?: string }>('/planner/chat', {
-        body: {
-          messages: [{ author: 'user', content: 'Three days in Kyoto, two people, April.' }],
-        },
+        body: { messages: [{ author: 'user', content: 'Three days in Kyoto for two, April.' }] },
       })) {
         frames += 1;
         if (frames === 1) firstAt = Date.now() - started;
         if (event.type === 'delta' && event.text) text += event.text;
-        if (frames <= 3) say(`frame ${frames}: ${event.type}`);
       }
 
       const total = Date.now() - started;
-      say(`${frames} frames, first at ${firstAt}ms, total ${total}ms`);
-      say(text.slice(0, 120) || '(no text)', 'main');
-      say(
-        frames > 2 && firstAt < total * 0.8 ? 'STREAMING CONFIRMED' : 'CHECK: looks buffered',
-        frames > 2 && firstAt < total * 0.8 ? 'success' : 'danger',
-      );
+      const streamed = frames > 2 && firstAt < total * 0.8;
+
+      say(`${frames} frames · first at ${firstAt}ms · total ${total}ms`);
+      say(text.slice(0, 140) || '(no text)', 'main');
+      say(streamed ? 'STREAMING CONFIRMED' : 'CHECK: looks buffered', streamed ? 'success' : 'danger');
     } catch (error) {
       say(`threw: ${String(error)}`, 'danger');
     } finally {
-      setAccessToken(null);
       setBusy(false);
     }
   }
@@ -185,26 +110,30 @@ function Spike() {
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.space.sm }}>
         <PlaneIcon size={22} color={theme.color.primary} />
         <Text variant="lg" weight="semibold" leading="tight">
-          AI Travel
+          {user?.name}
         </Text>
-        <CrownIcon size={18} color={theme.color.warning} />
+        {user?.plan === 'pro' ? <CrownIcon size={18} color={theme.color.warning} /> : null}
       </View>
 
       <Text variant="xs" tone="muted">
-        spike · {theme.scheme} theme
+        {user?.email} · {user?.plan} · {theme.scheme}
       </Text>
 
-      <Button onPress={probeShared} disabled={busy} variant="secondary" fullWidth>
-        1 · resolve @ai-travel/shared
-      </Button>
+      <Card padding="md" elevation="soft">
+        <Text variant="xs" tone="muted" leading="snug">
+          Kill the app from the task switcher and open it again. Staying signed in is the
+          whole of this milestone — the token is in the keychain, not in memory.
+        </Text>
+      </Card>
+
       <Button onPress={probeCore} disabled={busy} variant="secondary" fullWidth>
-        2 · core plumbing (MMKV, crypto, utils)
-      </Button>
-      <Button onPress={() => void probeApi()} disabled={busy} fullWidth>
-        3 · reach the API
+        Core plumbing
       </Button>
       <Button onPress={() => void probeStreaming()} disabled={busy} loading={busy} fullWidth>
-        4 · stream the planner
+        Stream the planner
+      </Button>
+      <Button onPress={() => void authStore.signOut()} disabled={busy} variant="secondary" fullWidth>
+        Sign out
       </Button>
 
       {lines.length > 0 ? (
@@ -220,11 +149,36 @@ function Spike() {
   );
 }
 
+function Splash() {
+  const theme = useTheme();
+
+  return (
+    <Screen scroll={false}>
+      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+        <ActivityIndicator color={theme.color.primary} />
+      </View>
+    </Screen>
+  );
+}
+
+function Root() {
+  const { status } = useAuth();
+
+  // Once, at launch. The store owns the outcome; this only starts it.
+  useEffect(() => {
+    void authStore.bootstrap();
+  }, []);
+
+  if (status === 'unknown') return <Splash />;
+
+  return status === 'authenticated' ? <SignedIn /> : <SignInScreen />;
+}
+
 export default function App() {
   return (
     <SafeAreaProvider>
       <ThemeProvider>
-        <Spike />
+        <Root />
       </ThemeProvider>
     </SafeAreaProvider>
   );

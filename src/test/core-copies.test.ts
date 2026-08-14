@@ -61,6 +61,11 @@ const ADAPTED: [string, string, string][] = [
     'mobile/src/core/services/localStorage.service.ts',
     'MMKV backing store, and no cross-tab listener',
   ],
+  [
+    'src/services/auth.service.ts',
+    'mobile/src/core/services/auth.service.ts',
+    'persists the refresh token the cookie would have held',
+  ],
 ];
 
 describe('the mobile copies have not drifted', () => {

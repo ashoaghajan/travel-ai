@@ -115,6 +115,20 @@ export type GoogleCredentialRequest = {
 export type AccessTokenResponse = {
   accessToken: string;
   expiresIn: number;
+  /**
+   * The refresh token, for a client that cannot hold an httpOnly cookie.
+   *
+   * **Absent for the browser, and that is the point.** The web's session lives
+   * in a cookie JavaScript cannot read; sending this to it would put the one
+   * long-lived credential in reach of any injected script. It appears only
+   * when a request both asks for it (`x-refresh-transport: body`) and presents
+   * no cookie — see `wantsBodyToken` in `auth.routes.ts`.
+   *
+   * Optional, so the web client compiles and behaves exactly as before.
+   */
+  refreshToken?: string;
+  /** ISO timestamp. When the whole sign-in ends, not when this token rotates. */
+  refreshExpiresAt?: string;
 };
 
 /** Register and login both answer with the session and the person. */

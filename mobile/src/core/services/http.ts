@@ -1,6 +1,6 @@
 import { ERROR_CODES } from '@ai-travel/shared';
 /*
- * DIFFERS FROM WEB (2/5): a fetch that can stream.
+ * DIFFERS FROM WEB (2/7): a fetch that can stream.
  *
  * React Native's built-in fetch is XHR-backed and leaves `response.body`
  * undefined, which would make `stream()` below throw "the server sent an empty
@@ -13,10 +13,11 @@ import { ERROR_CODES } from '@ai-travel/shared';
  * they do.
  */
 import { fetch as streamingFetch } from 'expo/fetch';
+import { clearRefreshToken, readRefreshToken, writeRefreshToken } from './session';
 import type { AccessTokenResponse, ApiErrorBody, ErrorCode } from '@ai-travel/shared';
 
 /**
- * The one place the SPA talks to the API.
+ * The one place the app talks to the API.
  *
  * No React component may import this file — services call it, components call
  * services.
@@ -24,15 +25,22 @@ import type { AccessTokenResponse, ApiErrorBody, ErrorCode } from '@ai-travel/sh
  * It owns two things beyond `fetch`: the access token, and what to do when the
  * server says that token has expired.
  *
- * The access token lives in a module variable rather than storage. An XSS that
- * sweeps `localStorage` finds nothing, and because the token is attached by
- * hand rather than by the browser, there is no CSRF surface to defend. The
- * cost is that a page reload starts with no token — which is why `AuthBootstrap`
- * exists, and why the refresh cookie is `httpOnly` and outlives the tab.
+ * The access token lives in a module variable rather than storage, exactly as
+ * on the web: it lasts fifteen minutes, so writing it to the device would add
+ * a durable secret to save one request on a cold start.
+ *
+ * **What replaces the cookie is `session.ts`.** The web's refresh token rides
+ * an httpOnly cookie the browser attaches by itself and no script can read.
+ * Here it is read out of the keychain and put in the body by hand, which means
+ * this file has to do two things the web's version never had to: present it,
+ * and store the replacement the server rotates to.
+ *
+ * Seven differences from `src/services/http.ts`, each marked DIFFERS FROM WEB
+ * where it happens. `core-copies.test.ts` asserts they are still there.
  */
 
 /*
- * DIFFERS FROM WEB (1/5): where the API is.
+ * DIFFERS FROM WEB (1/7): where the API is.
  *
  * The web defaults to the relative `/api`, which is what makes it same-origin
  * and is why it needs no CORS. A phone has no origin to be the same as, so the
@@ -142,6 +150,19 @@ async function send(path: string, options: RequestOptions): Promise<Response> {
   }
   if (accessToken && !options.skipAuth) headers.Authorization = `Bearer ${accessToken}`;
 
+  /*
+   * DIFFERS FROM WEB (3/7): the transport this client can hold.
+   *
+   * Tells the server to answer with the refresh token in the body rather than
+   * setting a cookie. Sent on every request rather than only on `/api/auth`,
+   * because it costs one header and the alternative is a rule about which
+   * paths are special that has to stay true as routes are added.
+   *
+   * The server ignores it outright when a refresh cookie is present, which is
+   * what stops a browser being talked into the same thing.
+   */
+  headers['x-refresh-transport'] = 'body';
+
   try {
     return await streamingFetch(buildUrl(path, options.query), {
       method: options.method ?? 'GET',
@@ -152,10 +173,8 @@ async function send(path: string, options: RequestOptions): Promise<Response> {
           : binary
             ? (options.body as Blob)
             : JSON.stringify(options.body),
-      // Sends the refresh cookie. Same-origin in development via the Vite
-      // proxy, so this costs nothing and no CORS negotiation is involved.
       /*
-       * DIFFERS FROM WEB (3/5): no cookie to include.
+       * DIFFERS FROM WEB (4/7): no cookie to include.
        *
        * The web's session rides an httpOnly refresh cookie. A native client
        * cannot be trusted to persist one across a cold start, so the refresh
@@ -168,7 +187,7 @@ async function send(path: string, options: RequestOptions): Promise<Response> {
     // `fetch` rejects only for a dead network, DNS failure or an abort —
     // every HTTP status, including 500, resolves.
     /*
-     * DIFFERS FROM WEB (4/5): how an abort is recognised.
+     * DIFFERS FROM WEB (5/7): how an abort is recognised.
      *
      * There is no `DOMException` in Hermes, so the web's check is always false
      * here and a cancelled request falls through to the network error below —
@@ -220,11 +239,40 @@ let refreshing: Promise<boolean> | null = null;
 
 async function refreshAccessToken(): Promise<boolean> {
   try {
-    const response = await send('/auth/refresh', { method: 'POST', skipAuth: true });
-    if (!response.ok) return false;
+    /*
+     * DIFFERS FROM WEB (6/7): the token is presented, not implied.
+     *
+     * The browser sends nothing here — the cookie rides along by itself. This
+     * client has to read the token out of the keychain and put it in the body,
+     * and then store whatever comes back, because the server rotates on every
+     * refresh and the old one is dead the moment it answers.
+     */
+    const stored = await readRefreshToken();
+    if (!stored) return false;
 
-    const { accessToken: token } = await parse<AccessTokenResponse>(response);
-    accessToken = token;
+    const response = await send('/auth/refresh', {
+      method: 'POST',
+      skipAuth: true,
+      body: { refreshToken: stored },
+    });
+
+    if (!response.ok) {
+      /*
+       * A refusal here is terminal, not transient: the token was rejected,
+       * reused, or the session expired. Keeping it would mean presenting a
+       * dead credential on every future attempt, and a *rotated* one is read
+       * by the server as theft — which would revoke the whole family and sign
+       * this account out of its other devices too.
+       */
+      await clearRefreshToken();
+      return false;
+    }
+
+    const body = await parse<AccessTokenResponse>(response);
+    accessToken = body.accessToken;
+
+    if (body.refreshToken) await writeRefreshToken(body.refreshToken);
+
     return true;
   } catch {
     return false;
@@ -363,7 +411,7 @@ export async function* stream<T>(
   }
 
   /*
-   * DIFFERS FROM WEB (5/5): decoding.
+   * DIFFERS FROM WEB (7/7): decoding.
    *
    * Hermes has `TextDecoder` but not `TextDecoderStream`, so the web's
    * `pipeThrough` has nothing to pipe through. Decoding each chunk with

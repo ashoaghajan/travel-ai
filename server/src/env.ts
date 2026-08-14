@@ -36,6 +36,21 @@ const schema = z.object({
   SESSION_TTL_HOURS: z.coerce.number().positive().default(6),
 
   /**
+   * The same cap, for a client that is an installed app rather than a tab.
+   *
+   * Six hours is right for a browser and hostile on a phone: it asks for a
+   * password twice a day, which is the behaviour people uninstall over. The
+   * difference is not about trusting the device more — it is that a tab is one
+   * visit and an app is a thing somebody put on their home screen.
+   *
+   * Still absolute, and still inherited by rotation. Thirty days is long, and
+   * the reason it is safe to be long is that the token is revocable: signing
+   * out kills the whole family server-side, so this is a cap on a session
+   * nobody has ended rather than a window in which one cannot be.
+   */
+  NATIVE_SESSION_TTL_HOURS: z.coerce.number().positive().default(24 * 30),
+
+  /**
    * The Google OAuth web client id, used as the audience when verifying an ID
    * token. Public — it is compiled into the SPA as well — and no client secret
    * is involved: verification only checks Google's signature and the audience.

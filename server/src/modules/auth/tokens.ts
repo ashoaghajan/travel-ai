@@ -73,6 +73,6 @@ export function newFamilyId(): string {
  * carries the deadline of the token it replaced, which is what makes the cap
  * absolute rather than sliding.
  */
-export function sessionExpiry(now: Date = new Date()): Date {
-  return new Date(now.getTime() + env().SESSION_TTL_HOURS * 60 * 60 * 1000);
+export function sessionExpiry(now: Date = new Date(), hours?: number): Date {
+  return new Date(now.getTime() + (hours ?? env().SESSION_TTL_HOURS) * 60 * 60 * 1000);
 }
