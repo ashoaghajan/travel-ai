@@ -97,6 +97,11 @@ export function useDictation({ onText }: { onText: (text: string) => void }): Di
 
   const stopTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Mirrors `isRecording` for the unmount cleanup, which cannot read state: it
+  // is declared with `[recorder]` deps and would close over a stale `false`.
+  // A ref rather than the recorder's own getter, for the reason given there.
+  const isRecordingRef = useRef(false);
+
   // Read through a ref so `stop` does not change identity every time the
   // composer re-renders — it is held by a timer that outlives the render.
   const onTextRef = useRef(onText);
@@ -107,6 +112,7 @@ export function useDictation({ onText }: { onText: (text: string) => void }): Di
     stopTimer.current = null;
 
     await recorder.stop();
+    isRecordingRef.current = false;
     setIsRecording(false);
 
     const uri = recorder.uri;
@@ -166,6 +172,7 @@ export function useDictation({ onText }: { onText: (text: string) => void }): Di
 
     await recorder.prepareToRecordAsync();
     recorder.record();
+    isRecordingRef.current = true;
     setIsRecording(true);
 
     // A recording nobody ended — a phone back in a pocket — should not upload
@@ -177,11 +184,32 @@ export function useDictation({ onText }: { onText: (text: string) => void }): Di
    * A component that unmounts mid-take must not leave the microphone open and
    * the OS's recording indicator lit. Nothing is transcribed on this path —
    * there is no longer anywhere for the words to go.
+   *
+   * **Neither the recorder's getter nor its `stop()` may be trusted here.**
+   * `useAudioRecorder` registers its own unmount cleanup, and it is called
+   * above this effect, so React — which runs cleanups in the order the effects
+   * were declared — has already released the native AudioRecorder by the time
+   * this runs. Touching it then throws ERR_USING_RELEASED_SHARED_OBJECT out of
+   * an effect nobody can catch, which is a native crash on launch rather than
+   * an error on screen: react-freeze unmounts the passive effects of a tab the
+   * navigator freezes, so this fires while the tabs are merely being set up.
+   *
+   * So the flag is read from the ref, and the stop is guarded both ways —
+   * `try` for the synchronous throw, `catch` on the promise for the async one.
+   * Losing the stop costs nothing when expo-audio has already released the
+   * recorder, because releasing it is what ends the recording.
    */
   useEffect(
     () => () => {
       if (stopTimer.current) clearTimeout(stopTimer.current);
-      if (recorder.isRecording) void recorder.stop();
+      if (!isRecordingRef.current) return;
+      isRecordingRef.current = false;
+
+      try {
+        recorder.stop().catch(() => {});
+      } catch {
+        // Already released; the microphone is closed either way.
+      }
     },
     [recorder],
   );
