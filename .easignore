@@ -10,11 +10,17 @@
 # node_modules and any local .env to the builder.
 
 # The web client. `mobile/` imports from `shared/`, never from here.
-src/
-public/
-index.html
-vite.config.ts
-vitest.config.ts
+#
+# Anchored with a leading slash, every one of them. An unanchored `src/` is not
+# "the web client's source" — it matches a directory of that name at any depth,
+# which here means `mobile/src/` and `shared/src/` as well. That uploads
+# `mobile/app/` with nothing underneath it for the router to import, and the
+# build dies in the Bundle JavaScript phase with no hint of the cause.
+/src/
+/public/
+/index.html
+/vite.config.ts
+/vitest.config.ts
 
 # The server. Its package.json stays: it is a workspace, and npm wants to
 # resolve every workspace named in the root package.json before it installs
