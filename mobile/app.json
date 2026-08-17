@@ -39,7 +39,8 @@
         {
           "microphonePermission": "AI Travel uses the microphone so you can speak a trip instead of typing it. Recordings are transcribed and never stored."
         }
-      ]
+      ],
+      "@react-native-google-signin/google-signin"
     ],
     "experiments": {
       "typedRoutes": true
@@ -48,7 +49,8 @@
       "router": {},
       "eas": {
         "projectId": "35cb0738-f8c7-486f-94af-05e4eb4b6ac1"
-      }
+      },
+      "googleWebClientId": "754994188782-16g2rimn8qte78c9h40ql62e19qpgoh1.apps.googleusercontent.com"
     },
     "owner": "ashojano"
   }

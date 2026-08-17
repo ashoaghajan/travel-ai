@@ -12,6 +12,7 @@
   "dependencies": {
     "@ai-travel/shared": "*",
     "@maplibre/maplibre-react-native": "^11.3.6",
+    "@react-native-google-signin/google-signin": "^16.1.4",
     "expo": "~57.0.12",
     "expo-audio": "~57.0.3",
     "expo-constants": "~57.0.10",

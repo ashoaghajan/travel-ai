@@ -5,8 +5,9 @@ import { authStore } from '../../core/store/auth.store';
 import { Button } from '../../components/Button';
 import { Screen } from '../../components/Screen';
 import { Text } from '../../components/Text';
-import { PlaneIcon } from '../../components/icons';
+import { GoogleIcon, PlaneIcon } from '../../components/icons';
 import { useTheme } from '../../theme/useTheme';
+import { googleWebClientId, useGoogleSignIn } from './useGoogleSignIn';
 
 /**
  * Sign in, or create an account.
@@ -23,6 +24,7 @@ import { useTheme } from '../../theme/useTheme';
  */
 export function SignInScreen() {
   const theme = useTheme();
+  const google = useGoogleSignIn();
   const [mode, setMode] = useState<'signIn' | 'register'>('signIn');
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -78,6 +80,37 @@ export function SignInScreen() {
         </Text>
       </View>
 
+      {/*
+        Google, then the "or", then the email form — the web's running order.
+        Both pieces are behind the same condition so a lone "or" can never sit
+        above the form with nothing above it.
+      */}
+      {googleWebClientId() ? (
+        <>
+          <Button
+            variant="secondary"
+            fullWidth
+            size="lg"
+            leadingIcon={<GoogleIcon size={20} />}
+            loading={google.isSubmitting}
+            disabled={busy}
+            onPress={google.signIn}
+          >
+            {registering ? 'Sign up with Google' : 'Sign in with Google'}
+          </Button>
+
+          {google.error ? (
+            <Text variant="xs" tone="danger" leading="snug">
+              {google.error}
+            </Text>
+          ) : null}
+
+          <Text variant="xs" tone="muted" style={{ textAlign: 'center' }}>
+            or
+          </Text>
+        </>
+      ) : null}
+
       {registering ? (
         <TextInput
           style={field}
@@ -126,7 +159,13 @@ export function SignInScreen() {
         </Text>
       ) : null}
 
-      <Button onPress={() => void submit()} disabled={!ready} loading={busy} fullWidth size="lg">
+      <Button
+        onPress={() => void submit()}
+        disabled={!ready || google.isSubmitting}
+        loading={busy}
+        fullWidth
+        size="lg"
+      >
         {registering ? 'Create account' : 'Sign in'}
       </Button>
 

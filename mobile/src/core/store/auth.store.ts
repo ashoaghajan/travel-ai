@@ -85,6 +85,20 @@ export const authStore = {
     return user;
   },
 
+  /**
+   * The same event as `signIn`, arrived at through a different door.
+   *
+   * The credential is a Google ID token; everything the server sends back is
+   * ours, so the state this lands in is indistinguishable from a password
+   * sign-in — which is the point.
+   */
+  async signInWithGoogle(credential: string): Promise<ApiUser> {
+    const user = await authService.signInWithGoogle(credential);
+    setState({ status: 'authenticated', user });
+
+    return user;
+  },
+
   async signOut(): Promise<void> {
     try {
       await authService.logout();
