@@ -110,7 +110,9 @@ function ActivityRow({
         borderTopColor: theme.color.border,
       }}
     >
-      <View style={{ flexDirection: 'row', gap: theme.space.sm }}>
+      {/* `flex-start` so the time keeps its own height when a long title wraps
+          past one line, rather than stretching into a tall empty box. */}
+      <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: theme.space.sm }}>
         {/* Wide enough for "09:30" and no wider — the title is what needs room. */}
         <TextInput
           style={[input, { width: 76, textAlign: 'center' }]}
@@ -123,25 +125,55 @@ function ActivityRow({
           autoCorrect={false}
         />
 
+        {/* Wraps for the same reason the description does: a title that
+            overflows one line opened showing its end, so "Khorovats dinner and
+            Ararat at dusk" read as "…rovats dinner and Ararat at dusk". */}
         <TextInput
-          style={[input, { flex: 1 }]}
+          style={[
+            input,
+            {
+              flex: 1,
+              paddingTop: theme.space.md,
+              paddingBottom: theme.space.md,
+              textAlignVertical: 'top',
+            },
+          ]}
           value={activity.title}
           onChangeText={(title) => onEdit({ title })}
           placeholder="What are you doing?"
           placeholderTextColor={theme.color.textMuted}
           accessibilityLabel="Activity title"
           autoCapitalize="sentences"
+          multiline
         />
       </View>
 
+      {/*
+        Multiline, where the time and title are not.
+
+        A single-line input scrolls to the end of its value, so a description
+        long enough to overflow opened showing its last few words — "…gonal
+        basalt columns formed by cooling lava" — and the reader had to drag
+        backwards to find out which activity they were looking at. Wrapping
+        shows it from the beginning, which is the part that identifies it.
+      */}
       <TextInput
-        style={[input, { minHeight: 44 }]}
+        style={[
+          input,
+          {
+            minHeight: 66,
+            paddingTop: theme.space.md,
+            paddingBottom: theme.space.md,
+            textAlignVertical: 'top',
+          },
+        ]}
         value={activity.description}
         onChangeText={(description) => onEdit({ description })}
         placeholder="Notes (optional)"
         placeholderTextColor={theme.color.textMuted}
         accessibilityLabel="Activity description"
         autoCapitalize="sentences"
+        multiline
       />
 
       {error ? (
