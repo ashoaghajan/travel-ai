@@ -57,6 +57,38 @@ function isDismissal(caught: unknown): boolean {
   );
 }
 
+/**
+ * Google Play's DEVELOPER_ERROR, which `statusCodes` does not name.
+ *
+ * The library enumerates the codes a *user* can act on, and this is not one of
+ * them, so it arrives as the raw GMS status integer instead. Compared as a
+ * string because the native layer hands the code across as one.
+ */
+const DEVELOPER_ERROR = '10';
+
+/**
+ * What the SDK's own failures mean, when they mean something specific.
+ *
+ * DEVELOPER_ERROR earns its own sentence for the reason `useDictation` gives
+ * about a provider that was never switched on: it means Google has no OAuth
+ * client for this package name and signing fingerprint, so every retry fails
+ * identically, and "try again" sends somebody to press a button that cannot
+ * work. It is also the one failure here that no user can do anything about.
+ */
+function describeSdkError(caught: unknown): string | null {
+  if (!isErrorWithCode(caught)) return null;
+
+  if (String(caught.code) === DEVELOPER_ERROR) {
+    return 'Google sign-in is not configured for this build. Use your email and password.';
+  }
+
+  if (caught.code === statusCodes.PLAY_SERVICES_NOT_AVAILABLE) {
+    return 'This device has no Google Play Services, so Google sign-in cannot run here.';
+  }
+
+  return null;
+}
+
 export function useGoogleSignIn(): GoogleSignInState {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -120,7 +152,8 @@ export function useGoogleSignIn(): GoogleSignInState {
         setError(
           caught instanceof ApiError
             ? caught.message
-            : 'We could not sign you in with Google. Please try again.',
+            : (describeSdkError(caught) ??
+              'We could not sign you in with Google. Please try again.'),
         );
         setIsSubmitting(false);
       }
