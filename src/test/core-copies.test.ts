@@ -52,7 +52,8 @@ const IDENTICAL: [string, string][] = [
     'activity',
     'explore',
     'search',
-    'airport',
+    'flight',
+    'hotel',
   ].map(
     (name): [string, string] => [
       `src/services/${name}.service.ts`,
@@ -63,7 +64,7 @@ const IDENTICAL: [string, string][] = [
   ...['createResource', 'broadcast', 'trip.store', 'booking.store', 'friend.store'].map(
     (name): [string, string] => [`src/store/${name}.ts`, `mobile/src/core/store/${name}.ts`],
   ),
-  ...['planner', 'partners', 'airports'].map(
+  ...['planner', 'partners', 'airports', 'flights'].map(
     (name): [string, string] => [`src/mock/${name}.ts`, `mobile/src/core/mock/${name}.ts`],
   ),
   ['src/hooks/useCurrentUser.ts', 'mobile/src/core/hooks/useCurrentUser.ts'],
@@ -80,6 +81,21 @@ const IDENTICAL: [string, string][] = [
 
 /** Deliberately different, and why. */
 const ADAPTED: [string, string, string][] = [
+  [
+    'src/services/airport.service.ts',
+    'mobile/src/core/services/airport.service.ts',
+    'Hermes has no DOMException, so an abort is matched by name',
+  ],
+  [
+    'src/mock/hotels.ts',
+    'mobile/src/core/mock/hotels.ts',
+    'bundled image ids rather than imported images',
+  ],
+  [
+    'src/assets/lodging-images.ts',
+    'mobile/src/core/assets/lodging-images.ts',
+    'bundled image ids rather than imported images',
+  ],
   ['src/utils/id.ts', 'mobile/src/core/utils/id.ts', 'Hermes has no crypto.randomUUID'],
   [
     'src/services/http.ts',

@@ -14,6 +14,8 @@ import { Screen } from '../../components/Screen';
 import { Text } from '../../components/Text';
 import { TicketIcon } from '../../components/icons';
 import { useTheme } from '../../theme/useTheme';
+import { DealCardsList } from './DealCardsList';
+import { useDestinationAirport } from './useDestinationAirport';
 import { PartnerCard } from './PartnerCard';
 import { NO_TRIP, resolveBookingContext } from './booking.context';
 import { BOOKING_TABS, DEFAULT_BOOKING_TAB, filterPartnersByCategory } from './partner.filters';
@@ -26,14 +28,18 @@ import { buildPartnerUrl, describeBookingContext } from './partner.links';
  * partner leaves the app for their site, which is where a booking still ends —
  * see `partner.links.ts`.
  *
- * **The web's priced results are not here yet.** `BookingsPage` searches fares
- * and rates in place so the reader can see what things cost before leaving;
- * that rests on `flightService`, `hotelService` and a search form this side
- * has none of. What it falls back to when there is nothing to price is exactly
- * this screen — the web's own words: the partner list "is the only thing that
- * works when there is nothing to price" — so this is a real subset of that
- * screen rather than a sketch of one, and the prices slot in above the
- * partners when those services are ported.
+ * **Prices first, partners underneath.** `useBookingDeals` runs the same
+ * searches the web's flights and hotels screens run, so the reader sees what
+ * things cost on the screen where they choose. The partner list stays below
+ * it, because it is the only thing that works when there is nothing to price:
+ * no trip chosen, no provider configured, or a route nobody quotes.
+ *
+ * **One field, not the web's search form.** `/bookings` carries a whole
+ * `FlightSearchForm` because it can be reached with no trip at all. Here the
+ * trip supplies the destination, the dates and the party size, and
+ * `useDestinationAirport` turns its city into an arrival code without being
+ * asked. The single thing left over is where the reader flies *from*, which no
+ * trip records — so that is the only thing `OriginPicker` asks for.
  *
  * **The trip is chosen in a sheet, and the tab is local state.** The web keeps
  * both in the URL so a filtered view can be linked; nobody links to a tab, and
@@ -55,6 +61,14 @@ export function BookingsScreen() {
    */
   const [requestedTripId, setRequestedTripId] = useState<string | null>(null);
   const [isPickingTrip, setIsPickingTrip] = useState(false);
+  /*
+   * Seeded from the last flight search so a second trip opens on the airport
+   * the first one used, and `OriginPicker` writes back through
+   * `airportService.remember` — the same store, so the two agree.
+   */
+  const [originCode, setOriginCode] = useState<string | null>(
+    () => searchService.getLastFlightSearch()?.from ?? null,
+  );
 
   const resolved = useMemo(
     () =>
@@ -67,7 +81,31 @@ export function BookingsScreen() {
     [trips, activeTripId, requestedTripId],
   );
 
-  const summary = describeBookingContext(resolved.context);
+  /*
+   * The arrival airport a trip implies, when nothing has named one. Returns
+   * null the moment `destinationCode` is already set, so it never overrides a
+   * code that came from the trip's own city.
+   */
+  const resolvedDestination = useDestinationAirport(resolved.context);
+
+  /*
+   * What the price searches actually run on: the trip, plus the two airports
+   * neither the trip nor the last search could supply on its own.
+   *
+   * Rebuilt from fields rather than spread wholesale so `useBookingDeals` —
+   * which depends on the individual fields for exactly this reason — is not
+   * handed a new object identity on every render.
+   */
+  const searchContext = useMemo(
+    () => ({
+      ...resolved.context,
+      originCode: originCode ?? resolved.context.originCode,
+      destinationCode: resolved.context.destinationCode ?? resolvedDestination,
+    }),
+    [resolved.context, originCode, resolvedDestination],
+  );
+
+  const summary = describeBookingContext(searchContext);
 
   const partners = useMemo(
     () => filterPartnersByCategory(MOCK_PARTNERS, activeTab),
@@ -179,6 +217,17 @@ export function BookingsScreen() {
           );
         })}
       </View>
+
+      <DealCardsList
+        context={searchContext}
+        tab={activeTab}
+        originCode={originCode}
+        onSelectOrigin={(airport) => setOriginCode(airport.code)}
+      />
+
+      <Text variant="md" weight="semibold" leading="tight">
+        Or search our partners directly
+      </Text>
     </View>
   );
 
@@ -190,7 +239,7 @@ export function BookingsScreen() {
         contentContainerStyle={{ gap: theme.space.md, paddingBottom: theme.space.xl }}
         ListHeaderComponent={header}
         renderItem={({ item }) => (
-          <PartnerCard partner={item} href={buildPartnerUrl(item, activeTab, resolved.context)} />
+          <PartnerCard partner={item} href={buildPartnerUrl(item, activeTab, searchContext)} />
         )}
         ListEmptyComponent={
           <Card>

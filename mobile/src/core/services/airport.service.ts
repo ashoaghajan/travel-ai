@@ -40,7 +40,16 @@ export const airportService = {
     } catch (error) {
       // An abort is the caller replacing this search with a newer one, not a
       // failure — let it through so the component can ignore it.
-      if (error instanceof DOMException && error.name === 'AbortError') throw error;
+      /*
+       * DIFFERS FROM WEB: matched by name, not by `instanceof DOMException`.
+       *
+       * There is no `DOMException` in Hermes, so the web's check never matches
+       * here and a superseded search would fall through to `searchOffline` —
+       * quietly answering a cancelled request with the built-in eight airports
+       * and letting the component render them over the newer result. `http.ts`
+       * makes the same substitution for the same reason.
+       */
+      if ((error as Error | undefined)?.name === 'AbortError') throw error;
 
       return this.searchOffline(trimmed);
     }
@@ -84,7 +93,8 @@ export const airportService = {
         signal,
       });
     } catch (error) {
-      if (error instanceof DOMException && error.name === 'AbortError') throw error;
+      // DIFFERS FROM WEB: by name rather than `instanceof DOMException` — see above.
+      if ((error as Error | undefined)?.name === 'AbortError') throw error;
 
       return [];
     }

@@ -27,6 +27,17 @@ const BUNDLED: Record<string, ImageSourcePropType> = {
   'itinerary/day-2-ubud': require('./day-2-ubud.jpg'),
   'itinerary/day-3-nusa-penida': require('./day-3-nusa-penida.jpg'),
   'itinerary/day-4-uluwatu': require('./day-4-uluwatu.jpg'),
+  /*
+   * The four real properties in `mock/hotels.ts`, which are the sample stays
+   * the app falls back to when no rate provider answers. They keep their own
+   * photographs rather than borrowing the scenery above: these are named
+   * hotels, and a landscape captioned "Komaneka at Bisma" claims something we
+   * would not know. `lodging-images.ts` is the opposite case and says so.
+   */
+  'hotels/komaneka': require('./komaneka.jpg'),
+  'hotels/alaya': require('./alaya.jpg'),
+  'hotels/ubud-village': require('./ubud-village.jpg'),
+  'hotels/element': require('./element.jpg'),
 };
 
 /**
