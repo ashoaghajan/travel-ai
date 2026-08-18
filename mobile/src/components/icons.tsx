@@ -94,6 +94,38 @@ export function UserIcon(props: IconProps) {
   );
 }
 
+/** Tab bar: Explore. */
+export function CompassIcon(props: IconProps) {
+  return (
+    <Svg {...useIcon(props)}>
+      <Circle cx="12" cy="12" r="8.6" />
+      <Path d="m15.6 8.4-2.3 5-5 2.2 2.3-5 5-2.2Z" />
+    </Svg>
+  );
+}
+
+/** Tab bar: Bookings. */
+export function TicketIcon(props: IconProps) {
+  return (
+    <Svg {...useIcon(props)}>
+      <Path d="M3.6 9.4V7.6a1.4 1.4 0 0 1 1.4-1.4h14a1.4 1.4 0 0 1 1.4 1.4v1.8a2.6 2.6 0 0 0 0 5.2v1.8a1.4 1.4 0 0 1-1.4 1.4H5a1.4 1.4 0 0 1-1.4-1.4v-1.8a2.6 2.6 0 0 0 0-5.2Z" />
+      <Path d="M14.4 7v2M14.4 11v2M14.4 15v2" />
+    </Svg>
+  );
+}
+
+/** Tab bar: Friends. */
+export function UsersIcon(props: IconProps) {
+  return (
+    <Svg {...useIcon(props)}>
+      <Circle cx="9.6" cy="8.4" r="3.2" />
+      <Path d="M3.6 19.6c0-3.1 2.7-4.8 6-4.8s6 1.7 6 4.8" />
+      <Path d="M16.2 5.6a3.2 3.2 0 0 1 0 6.2" />
+      <Path d="M17.6 15.2c1.8.5 2.8 1.7 2.8 3.4" />
+    </Svg>
+  );
+}
+
 /** The planner's send button. */
 export function ArrowUpIcon(props: IconProps) {
   return (

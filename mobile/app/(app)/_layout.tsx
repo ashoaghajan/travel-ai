@@ -1,5 +1,12 @@
 import { Tabs } from 'expo-router';
-import { HomeIcon, SuitcaseIcon, UserIcon } from '../../src/components/icons';
+import {
+  CompassIcon,
+  HomeIcon,
+  SuitcaseIcon,
+  TicketIcon,
+  UserIcon,
+  UsersIcon,
+} from '../../src/components/icons';
 import { useTheme } from '../../src/theme/useTheme';
 
 /**
@@ -7,14 +14,19 @@ import { useTheme } from '../../src/theme/useTheme';
  *
  * The web builds its bottom bar from the same array as its sidebar
  * (`navigation.config.ts`) precisely so the two cannot drift. Here the file
- * tree *is* the route table, so the equivalent discipline is that these three
- * keep the web's labels, icons and order: Home is the planner, then Trips,
- * then Profile.
+ * tree *is* the route table, so the equivalent discipline is that the screens
+ * below keep the web's labels, icons and order. Home is the planner, as it is
+ * on the web where "Home" is the planner dashboard.
  *
- * **Three of the web's six.** Explore, Bookings and Friends are Phase 2, and a
- * tab that opens an empty screen is worse than a tab that is not there yet —
- * it advertises a feature and then apologises. They slot in beside these when
- * their screens exist, in the web's order.
+ * **All six, matching `BOTTOM_NAV`.** Explore, Bookings and Friends were held
+ * back while they had no screens, on the rule that a tab which opens an empty
+ * screen is worse than a tab that is not there yet — it advertises a feature
+ * and then apologises. They now have screens, so they are here, in the web's
+ * order and under the web's labels and icons.
+ *
+ * Six fits, for the reason `navigation.config.ts` worked out for the web's own
+ * bottom bar: the bar divides evenly and the cells stay wide enough to tap at
+ * the narrowest common width.
  */
 export default function AppLayout() {
   const theme = useTheme();
@@ -51,6 +63,27 @@ export default function AppLayout() {
         options={{
           title: 'Trips',
           tabBarIcon: ({ color, size }) => <SuitcaseIcon size={size} color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="explore"
+        options={{
+          title: 'Explore',
+          tabBarIcon: ({ color, size }) => <CompassIcon size={size} color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="bookings"
+        options={{
+          title: 'Bookings',
+          tabBarIcon: ({ color, size }) => <TicketIcon size={size} color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="friends"
+        options={{
+          title: 'Friends',
+          tabBarIcon: ({ color, size }) => <UsersIcon size={size} color={color} />,
         }}
       />
       <Tabs.Screen

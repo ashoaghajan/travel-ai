@@ -2,6 +2,9 @@ import { useSyncExternalStore } from 'react';
 import type { ApiUser, LoginRequest, RegisterRequest, UserPlan } from '@ai-travel/shared';
 import { authService } from '../services/auth.service';
 import { signedOut } from '../services/http';
+import { bookingStore } from './booking.store';
+import { friendStore } from './friend.store';
+import { tripStore } from './trip.store';
 
 /**
  * Who is signed in.
@@ -14,9 +17,9 @@ import { signedOut } from '../services/http';
  * this milestone does not build.
  *
  * So this is the same shape with the same three states, and it grows a line
- * per store as the stores arrive. `core-copies.test.ts` does not guard it,
- * because it is not a copy and pretending otherwise would make that guard
- * lie.
+ * per store as the stores arrive — `forgetAccount` below is where they land.
+ * `core-copies.test.ts` does not guard it, because it is not a copy and
+ * pretending otherwise would make that guard lie.
  *
  * The three states matter: `unknown` is not `anonymous`. On a cold start the
  * app has a token in the keychain and no idea yet whether it is still good, and
@@ -48,12 +51,33 @@ function subscribe(listener: () => void): () => void {
 
 const getSnapshot = (): AuthState => state;
 
+/**
+ * Puts every store back to how it looks with nobody signed in.
+ *
+ * One function rather than a list repeated at each of the two doors out of a
+ * session, which is the mistake `src/store/auth.store.ts` describes having
+ * made: they were maintained by hand, and the failure mode of adding a store
+ * to only one of them is the last account's data still on the screen the next
+ * person sees.
+ *
+ * A phone makes that worse than a browser tab does. A signed-out tab is
+ * usually closed; a phone is handed to somebody, and the app is still running
+ * when it is.
+ */
+function forgetAccount(): void {
+  tripStore.reset();
+  bookingStore.reset();
+  // Nor who the last account was friends with.
+  friendStore.reset();
+  setState(ANONYMOUS);
+}
+
 /*
  * A refresh that failed, or a token the server read as replayed. By the time
  * this fires the request that triggered it is already lost, so there is
  * nothing to recover — only state to clear.
  */
-signedOut.subscribe(() => setState(ANONYMOUS));
+signedOut.subscribe(forgetAccount);
 
 export const authStore = {
   subscribe,
@@ -104,7 +128,7 @@ export const authStore = {
       await authService.logout();
     } finally {
       // Even if the server never heard about it, this device is signed out.
-      setState(ANONYMOUS);
+      forgetAccount();
     }
   },
 

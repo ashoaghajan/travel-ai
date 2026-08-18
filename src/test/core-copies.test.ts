@@ -37,17 +37,35 @@ const read = (path: string) => readFileSync(fileURLToPath(new URL(path, root)), 
 
 /** Copied verbatim: web path → mobile path. */
 const IDENTICAL: [string, string][] = [
-  ...['mockAi', 'weather', 'chat', 'trip', 'planner', 'booking'].map(
+  ...[
+    'mockAi',
+    'weather',
+    'chat',
+    'trip',
+    'planner',
+    'booking',
+    'friend',
+    'country',
+    'city',
+    'opentripmap',
+    'wikimedia',
+    'activity',
+    'explore',
+    'search',
+    'airport',
+  ].map(
     (name): [string, string] => [
       `src/services/${name}.service.ts`,
       `mobile/src/core/services/${name}.service.ts`,
     ],
   ),
   ['src/services/booking.migration.ts', 'mobile/src/core/services/booking.migration.ts'],
-  ...['createResource', 'broadcast', 'trip.store', 'booking.store'].map(
+  ...['createResource', 'broadcast', 'trip.store', 'booking.store', 'friend.store'].map(
     (name): [string, string] => [`src/store/${name}.ts`, `mobile/src/core/store/${name}.ts`],
   ),
-  ['src/mock/planner.ts', 'mobile/src/core/mock/planner.ts'],
+  ...['planner', 'partners', 'airports'].map(
+    (name): [string, string] => [`src/mock/${name}.ts`, `mobile/src/core/mock/${name}.ts`],
+  ),
   ['src/hooks/useCurrentUser.ts', 'mobile/src/core/hooks/useCurrentUser.ts'],
   ...['booking', 'bytes', 'currency', 'cx', 'date', 'duration', 'flag', 'intent', 'map', 'trip'].map(
     (name): [string, string] => [`src/utils/${name}.ts`, `mobile/src/core/utils/${name}.ts`],
