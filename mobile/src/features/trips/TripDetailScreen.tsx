@@ -1,15 +1,20 @@
-import { Image, View } from 'react-native';
+import { useState } from 'react';
+import { Alert, Image, View } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
-import type { ItineraryActivity, ItineraryDay } from '../../core/types/trip.types';
+import type { ItineraryActivity, ItineraryDay, Trip } from '../../core/types/trip.types';
 import { imageSource } from '../../assets/bundled-images';
 import { useTrips } from '../../core/store/trip.store';
 import { formatDateRange, formatWeekdayDate } from '../../core/utils/date';
 import { usdFormatter } from '../../core/utils/currency';
+import { Button } from '../../components/Button';
 import { Card } from '../../components/Card';
 import { Screen } from '../../components/Screen';
 import { Text } from '../../components/Text';
 import { useTheme } from '../../theme/useTheme';
+import { EditableDay } from './EditableDay';
+import { TripEditFields } from './TripEditFields';
 import { TripRouteMap } from './TripRouteMap';
+import { useEditTrip } from './useEditTrip';
 
 /**
  * One trip: the header, the route, and the days.
@@ -21,6 +26,14 @@ import { TripRouteMap } from './TripRouteMap';
  * going, then what am I doing.
  *
  * Bookings and notes are Phase 2 and deliberately absent rather than stubbed.
+ *
+ * **Editing is a mode on this screen, not a dialog over it.** The web keeps a
+ * trip's metadata in `EditTripModal` and edits the itinerary in place behind
+ * it, which works because the timeline and map stay visible around the box.
+ * At this width a modal covers everything it is meant to sit beside, so the
+ * screen switches instead: one `useEditTrip` draft, one Save, one Cancel, and
+ * the map stays at the top where it doubles as confirmation that the days
+ * still describe the trip you meant.
  */
 
 function Activity({ activity }: { activity: ItineraryActivity }) {
@@ -113,7 +126,6 @@ function Day({ day }: { day: ItineraryDay }) {
 }
 
 export function TripDetailScreen() {
-  const theme = useTheme();
   const { tripId } = useLocalSearchParams<{ tripId: string }>();
   const trips = useTrips();
   const trip = trips.find((candidate) => candidate.id === tripId);
@@ -130,24 +142,117 @@ export function TripDetailScreen() {
     );
   }
 
+  /*
+   * Keyed on the trip so a different one gets a fresh draft rather than
+   * inheriting the last trip's unsaved edits — and split into its own
+   * component because `useEditTrip` needs a trip, which the lookup above
+   * cannot promise before it has run.
+   */
+  return <TripView key={trip.id} trip={trip} />;
+}
+
+function TripView({ trip }: { trip: Trip }) {
+  const theme = useTheme();
+  const [isEditing, setIsEditing] = useState(false);
+  const edit = useEditTrip(trip);
+
+  function leaveEditing() {
+    edit.cancel();
+    setIsEditing(false);
+  }
+
+  function discard() {
+    if (!edit.isDirty) {
+      leaveEditing();
+      return;
+    }
+
+    // The one way this screen can lose work quietly: a tap on Cancel with a
+    // half-written day behind it.
+    Alert.alert('Discard changes?', 'Your edits to this trip will be lost.', [
+      { text: 'Keep editing', style: 'cancel' },
+      { text: 'Discard', style: 'destructive', onPress: leaveEditing },
+    ]);
+  }
+
+  async function save() {
+    if (await edit.save()) setIsEditing(false);
+  }
+
   return (
     <Screen>
-      <Text variant="xl" weight="bold" leading="tight">
-        {trip.title}
-      </Text>
-      <Text variant="xs" tone="muted">
-        {formatDateRange(trip.startDate, trip.endDate)} · {trip.travellers} travellers
-      </Text>
+      <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: theme.space.md }}>
+        <View style={{ flex: 1, gap: 2 }}>
+          <Text variant="xl" weight="bold" leading="tight">
+            {trip.title}
+          </Text>
+          <Text variant="xs" tone="muted">
+            {formatDateRange(trip.startDate, trip.endDate)} · {trip.travellers} travellers
+          </Text>
+        </View>
 
+        {isEditing ? null : (
+          <Button variant="secondary" onPress={() => setIsEditing(true)}>
+            Edit
+          </Button>
+        )}
+      </View>
+
+      {/*
+        The map is drawn from the *saved* trip in both modes. Repointing it at
+        the draft would redraw the route on every keystroke in a date field,
+        and a half-typed date has no coordinates to draw.
+      */}
       <TripRouteMap trip={trip} />
+
+      {isEditing ? (
+        <TripEditFields
+          draft={edit.draft}
+          errors={edit.errors}
+          showErrors={edit.hasAttemptedSave}
+          onChange={edit.setField}
+        />
+      ) : null}
 
       <Text variant="md" weight="semibold" leading="tight" style={{ marginTop: theme.space.sm }}>
         Day by day
       </Text>
 
-      {trip.itinerary.map((day) => (
-        <Day key={day.id} day={day} />
-      ))}
+      {isEditing
+        ? edit.draft.itinerary.map((day) => (
+            <EditableDay
+              key={day.id}
+              day={day}
+              errors={edit.errors}
+              showErrors={edit.hasAttemptedSave}
+              onEditActivity={(activityId, patch) => edit.editActivity(day.id, activityId, patch)}
+              onRemoveActivity={(activityId) => edit.deleteActivity(day.id, activityId)}
+              onAddActivity={() => edit.appendActivity(day.id)}
+            />
+          ))
+        : trip.itinerary.map((day) => <Day key={day.id} day={day} />)}
+
+      {isEditing ? (
+        <View style={{ gap: theme.space.sm, marginTop: theme.space.sm }}>
+          {edit.saveError ? (
+            <Text variant="sm" tone="danger" leading="snug" accessibilityRole="alert">
+              {edit.saveError}
+            </Text>
+          ) : null}
+
+          <Button fullWidth loading={edit.isSaving} onPress={() => void save()}>
+            Save changes
+          </Button>
+          <Button
+            variant="secondary"
+            fullWidth
+            disabled={edit.isSaving}
+            onPress={discard}
+          >
+            Cancel
+          </Button>
+        </View>
+      ) : null}
     </Screen>
   );
 }
