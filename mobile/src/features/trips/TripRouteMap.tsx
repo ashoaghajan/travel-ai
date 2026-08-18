@@ -4,6 +4,7 @@ import {
   GeoJSONSource,
   Layer,
   Map,
+  ViewAnnotation,
   type LngLatBounds,
   type StyleSpecification,
 } from '@maplibre/maplibre-react-native';
@@ -30,6 +31,16 @@ import { useTheme } from '../../theme/useTheme';
  * `groupItineraryStops` collapses consecutive days at one destination into a
  * single stop, so a week with four days in Ubud draws one pin rather than four
  * stacked on the same coordinates.
+ *
+ * **The numbered pins are `ViewAnnotation`s, not a symbol layer.** Drawing a
+ * number with `text-field` makes MapLibre fetch a glyph set, and a style with
+ * no `glyphs` URL sends it after an empty one — which is the native error
+ * `[Mbgl-HttpRequest] [HTTP] Unable to parse resourceUrl` that used to appear
+ * over this screen. The obvious patch is to point `glyphs` at a font server,
+ * but every public one is a third party, which is the dependency the inline
+ * style exists to avoid. An annotation is a real React Native view positioned
+ * at a coordinate, so the number is drawn by the same `Text` as the rest of
+ * the app and needs nothing from the network at all.
  */
 
 /** OSM raster tiles, declared inline — no style server, no key, no account. */
@@ -99,18 +110,6 @@ export function TripRouteMap({ trip }: { trip: Trip }) {
     },
   };
 
-  const pins = {
-    type: 'FeatureCollection' as const,
-    features: placed.map((stop, index) => ({
-      type: 'Feature' as const,
-      properties: { label: String(index + 1) },
-      geometry: {
-        type: 'Point' as const,
-        coordinates: [stop.coordinates!.lng, stop.coordinates!.lat],
-      },
-    })),
-  };
-
   return (
     <Card padding="none" elevation="soft" style={{ overflow: 'hidden' }}>
       <View style={{ height: 220 }}>
@@ -168,24 +167,30 @@ export function TripRouteMap({ trip }: { trip: Trip }) {
             </GeoJSONSource>
           ) : null}
 
-          <GeoJSONSource id="stops" data={pins}>
-            <Layer
-              id="stop-dots"
-              type="circle"
-              paint={{
-                'circle-radius': 13,
-                'circle-color': theme.color.mapRoute,
-                'circle-stroke-width': 2,
-                'circle-stroke-color': theme.color.textLight,
-              }}
-            />
-            <Layer
-              id="stop-numbers"
-              type="symbol"
-              layout={{ 'text-field': ['get', 'label'], 'text-size': 12 }}
-              paint={{ 'text-color': theme.color.textLight }}
-            />
-          </GeoJSONSource>
+          {placed.map((stop, index) => (
+            <ViewAnnotation
+              key={`${stop.destination}-${index}`}
+              id={`stop-${index}`}
+              lngLat={[stop.coordinates!.lng, stop.coordinates!.lat]}
+            >
+              <View
+                style={{
+                  width: 26,
+                  height: 26,
+                  borderRadius: 13,
+                  backgroundColor: theme.color.mapRoute,
+                  borderWidth: 2,
+                  borderColor: theme.color.textLight,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <Text variant="xs" weight="bold" tone="light" leading="tight">
+                  {index + 1}
+                </Text>
+              </View>
+            </ViewAnnotation>
+          ))}
         </Map>
       </View>
 
