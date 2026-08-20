@@ -9,36 +9,46 @@ import { useTheme } from '../../theme/useTheme';
 const SEARCH_DEBOUNCE_MS = 300;
 
 /**
- * Where the reader is flying *from*.
+ * One end of the route, type-to-search.
  *
- * The one thing a trip cannot tell us. It records where somebody is going and
- * when, and `useDestinationAirport` turns that into an arrival airport without
- * being asked — but nothing in a trip says which airport they leave from, and
- * a fare search is meaningless without it. The web gets it from the flight
- * search form on `/flights`, which this app has no equivalent of.
+ * The web's `AirportField` as a phone can have it. This replaces `OriginPicker`,
+ * which asked only where the reader was flying *from* — fine while the trip
+ * supplied the other half, and wrong once this screen grew the same editable
+ * search the web has. Both ends are the same question, so both ends are the
+ * same field.
  *
- * So it is one field rather than the web's whole form: the other half of the
- * route, the dates and the party size all come from the trip already, and
- * asking for them again here would be asking the reader to retype what they
- * have on screen.
- *
- * The choice is remembered by `airportService.remember`, so the next trip
- * opens on the airport this one used.
+ * DIFFERS FROM WEB: no combobox roles, no arrow keys, and no outside-click
+ * dismissal — there is no pointer to click outside with, and a phone has no
+ * keyboard to walk a listbox. What replaces them is a list that stays up until
+ * something is chosen, which is also why choosing does not have to race a blur
+ * the way the web's `pointerdown` handler does.
  */
-export function OriginPicker({
+export function AirportField({
+  label,
   value,
-  onSelect,
+  onChange,
 }: {
-  value: string | null;
-  onSelect: (airport: Airport) => void;
+  label: string;
+  /** The selected IATA code. */
+  value: string;
+  onChange: (code: string) => void;
 }) {
   const theme = useTheme();
-  const [query, setQuery] = useState('');
+
+  /*
+   * What has been typed, or null when the field is showing its selection.
+   *
+   * The web splits this into `isOpen` plus `query`; one nullable string says
+   * the same thing here, because on this side the two always change together.
+   */
+  const [draft, setDraft] = useState<string | null>(null);
   const [results, setResults] = useState<Airport[]>([]);
   const [isSearching, setIsSearching] = useState(false);
 
+  const selected = airportService.resolve(value);
+
   useEffect(() => {
-    const wanted = query.trim();
+    const wanted = draft?.trim();
     if (!wanted) {
       setResults([]);
       setIsSearching(false);
@@ -69,12 +79,12 @@ export function OriginPicker({
       controller.abort();
       clearTimeout(timer);
     };
-  }, [query]);
+  }, [draft]);
 
   return (
     <View style={{ gap: theme.space.xs }}>
       <Text variant="xs" weight="semibold" tone="muted" leading="tight">
-        FLYING FROM
+        {label.toUpperCase()}
       </Text>
 
       <TextInput
@@ -88,11 +98,16 @@ export function OriginPicker({
           color: theme.color.textMain,
           fontSize: theme.fontSize.sm,
         }}
-        value={query}
-        onChangeText={setQuery}
-        placeholder={value ? `${value} — change it` : 'Airport or city'}
+        // Idle, the field reads as the airport that is chosen; being edited, it
+        // reads as what is being typed. The web's line for the same rule.
+        value={draft ?? (selected ? airportService.format(selected) : value)}
+        onChangeText={setDraft}
+        // Clearing on focus rather than selecting-all: the reader who taps this
+        // field is replacing the airport, not appending to its name.
+        onFocus={() => setDraft('')}
+        placeholder="City or airport"
         placeholderTextColor={theme.color.textMuted}
-        accessibilityLabel="Departure airport"
+        accessibilityLabel={label}
         autoCapitalize="characters"
         autoCorrect={false}
       />
@@ -119,9 +134,11 @@ export function OriginPicker({
             <Pressable
               key={airport.code}
               onPress={() => {
+                // Remembered so the screen can name this airport's city later
+                // without a round trip. See `airport.service.ts`.
                 airportService.remember(airport);
-                onSelect(airport);
-                setQuery('');
+                onChange(airport.code);
+                setDraft(null);
                 setResults([]);
               }}
               accessibilityRole="button"
@@ -139,6 +156,12 @@ export function OriginPicker({
             </Pressable>
           ))}
         </View>
+      ) : null}
+
+      {draft?.trim() && !isSearching && results.length === 0 ? (
+        <Text variant="xs" tone="muted" leading="snug">
+          No airports match “{draft.trim()}”.
+        </Text>
       ) : null}
     </View>
   );

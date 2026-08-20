@@ -1,8 +1,8 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { FlatList, Modal, Pressable, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import type { PartnerCategory } from '../../core/types/travel.types';
+import type { FlightSearchQuery, PartnerCategory } from '../../core/types/travel.types';
 import { MOCK_PARTNERS } from '../../core/mock/partners';
 import { searchService } from '../../core/services/search.service';
 import { useActiveTripId, useTrips } from '../../core/store/trip.store';
@@ -14,12 +14,14 @@ import { Screen } from '../../components/Screen';
 import { Text } from '../../components/Text';
 import { TicketIcon } from '../../components/icons';
 import { useTheme } from '../../theme/useTheme';
+import { BookingSearchForm } from './BookingSearchForm';
 import { DealCardsList } from './DealCardsList';
 import { useDestinationAirport } from './useDestinationAirport';
 import { PartnerCard } from './PartnerCard';
-import { NO_TRIP, resolveBookingContext } from './booking.context';
+import { NO_TRIP, resolveBookingContext, toFlightQuery } from './booking.context';
+import { initialFlightQuery } from './initialFlightQuery';
 import { BOOKING_TABS, DEFAULT_BOOKING_TAB, filterPartnersByCategory } from './partner.filters';
-import { buildPartnerUrl, describeBookingContext } from './partner.links';
+import { buildPartnerUrl, describeBookingContext, toBookingContext } from './partner.links';
 
 /**
  * Screen 7 — Partner booking.
@@ -34,12 +36,18 @@ import { buildPartnerUrl, describeBookingContext } from './partner.links';
  * it, because it is the only thing that works when there is nothing to price:
  * no trip chosen, no provider configured, or a route nobody quotes.
  *
- * **One field, not the web's search form.** `/bookings` carries a whole
- * `FlightSearchForm` because it can be reached with no trip at all. Here the
- * trip supplies the destination, the dates and the party size, and
- * `useDestinationAirport` turns its city into an arrival code without being
- * asked. The single thing left over is where the reader flies *from*, which no
- * trip records — so that is the only thing `OriginPicker` asks for.
+ * **The web's search form, not one field.** This screen used to ask only where
+ * the reader was flying *from* and take the rest from the trip, on the argument
+ * that asking again for what the trip already knows is asking the reader to
+ * retype what is on screen. The argument was wrong about what a form is for: a
+ * trip is where somebody is going, and a search is what they want priced, and
+ * those come apart the moment anyone wants a fare for one traveller on a trip
+ * booked for four. The web has always let both be edited here;
+ * `BookingSearchForm` is the same fields on this side, so the same trip prices
+ * the same thing in a browser and in the app.
+ *
+ * `useDestinationAirport` survives it, and still only fills a gap — the trip's
+ * city becomes an arrival code when the form has not named one.
  *
  * **The trip is chosen in a sheet, and the tab is local state.** The web keeps
  * both in the URL so a filtered view can be linked; nobody links to a tab, and
@@ -61,14 +69,6 @@ export function BookingsScreen() {
    */
   const [requestedTripId, setRequestedTripId] = useState<string | null>(null);
   const [isPickingTrip, setIsPickingTrip] = useState(false);
-  /*
-   * Seeded from the last flight search so a second trip opens on the airport
-   * the first one used, and `OriginPicker` writes back through
-   * `airportService.remember` — the same store, so the two agree.
-   */
-  const [originCode, setOriginCode] = useState<string | null>(
-    () => searchService.getLastFlightSearch()?.from ?? null,
-  );
 
   const resolved = useMemo(
     () =>
@@ -82,15 +82,45 @@ export function BookingsScreen() {
   );
 
   /*
-   * The arrival airport a trip implies, when nothing has named one. Returns
-   * null the moment `destinationCode` is already set, so it never overrides a
-   * code that came from the trip's own city.
+   * The search this screen prices, and editable here — the web's state, for the
+   * web's reason. It used to be a single `originCode`, everything else coming
+   * from the trip, which left the reader no way to price a different route or
+   * a different party size without editing the trip itself.
+   *
+   * Seeded from the resolved context rather than the bare last search, so a
+   * cold load with a trip already active opens on that trip's route and dates
+   * rather than on the previous trip's.
    */
-  const resolvedDestination = useDestinationAirport(resolved.context);
+  const [query, setQuery] = useState<FlightSearchQuery>(() =>
+    resolved.trip ? toFlightQuery(resolved.context) : initialFlightQuery(),
+  );
+
+  // Re-baselines when the trip being filled for changes, the way `useEditTrip`
+  // re-baselines its draft when the trip underneath it moves.
+  const filledTripId = resolved.trip?.id ?? null;
+  useEffect(() => {
+    if (filledTripId) setQuery(toFlightQuery(resolved.context));
+    // Keyed on the trip, not the context, which is rebuilt every render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filledTripId]);
+
+  const edited = useMemo(() => toBookingContext(query), [query]);
 
   /*
-   * What the price searches actually run on: the trip, plus the two airports
-   * neither the trip nor the last search could supply on its own.
+   * The arrival airport a trip implies, when nothing has named one. Returns
+   * null the moment `destinationCode` is already set, so it never overrides a
+   * code the reader typed into the form.
+   */
+  const resolvedDestination = useDestinationAirport(edited);
+
+  /*
+   * What the price searches actually run on.
+   *
+   * The form outranks the trip: it was seeded from it and the reader has since
+   * had the chance to change it, so treating the trip as authoritative would
+   * silently undo their edit. What the trip still supplies is the two things a
+   * flight query has no field for — the destination's city and country, which
+   * the Hotels and Activities tabs search on.
    *
    * Rebuilt from fields rather than spread wholesale so `useBookingDeals` —
    * which depends on the individual fields for exactly this reason — is not
@@ -98,12 +128,22 @@ export function BookingsScreen() {
    */
   const searchContext = useMemo(
     () => ({
-      ...resolved.context,
-      originCode: originCode ?? resolved.context.originCode,
-      destinationCode: resolved.context.destinationCode ?? resolvedDestination,
+      ...edited,
+      destinationCode: edited.destinationCode ?? resolvedDestination,
+      destinationCity: edited.destinationCity ?? resolved.context.destinationCity,
+      destinationCountry: edited.destinationCountry ?? resolved.context.destinationCountry,
     }),
-    [resolved.context, originCode, resolvedDestination],
+    [edited, resolvedDestination, resolved.context],
   );
+
+  /*
+   * Saved as well as held, so re-opening the screen — or a second trip — starts
+   * from the search that was last run rather than from the spec defaults.
+   */
+  function updateSearch(next: FlightSearchQuery) {
+    searchService.saveFlightSearch(next);
+    setQuery(next);
+  }
 
   const summary = describeBookingContext(searchContext);
 
@@ -182,6 +222,20 @@ export function BookingsScreen() {
           : "We'll take you to our trusted partners to complete your booking."}
       </Text>
 
+      {/*
+        Above the tabs, not inside the Flights one: this is the trip, and the
+        whole screen prices it. The destination and dates chosen here are what
+        the Hotels and Activities tabs search on too.
+
+        Keyed on the trip so the form re-seeds its draft when the trip changes —
+        the state above re-baselines, but the fields hold their own copy of it.
+      */}
+      <BookingSearchForm
+        key={filledTripId ?? 'no-trip'}
+        initialQuery={query}
+        onSearch={updateSearch}
+      />
+
       <View style={{ flexDirection: 'row', gap: theme.space.sm }}>
         {BOOKING_TABS.map((tab) => {
           const isActive = tab.id === activeTab;
@@ -218,12 +272,7 @@ export function BookingsScreen() {
         })}
       </View>
 
-      <DealCardsList
-        context={searchContext}
-        tab={activeTab}
-        originCode={originCode}
-        onSelectOrigin={(airport) => setOriginCode(airport.code)}
-      />
+      <DealCardsList context={searchContext} tab={activeTab} />
 
       <Text variant="md" weight="semibold" leading="tight">
         Or search our partners directly

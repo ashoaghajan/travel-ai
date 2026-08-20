@@ -1,12 +1,11 @@
 import { ActivityIndicator, View } from 'react-native';
-import type { Airport, BookingContext, PartnerCategory } from '../../core/types/travel.types';
+import type { BookingContext, PartnerCategory } from '../../core/types/travel.types';
 import { ActivityCard } from '../explore/ActivityCard';
 import { categoryLabel } from '../explore/activity.filters';
 import { Card } from '../../components/Card';
 import { Text } from '../../components/Text';
 import { useTheme } from '../../theme/useTheme';
 import { FlightCard, HotelCard, PriceProvenance } from './DealCards';
-import { OriginPicker } from './OriginPicker';
 import { useBookingDeals } from './useBookingDeals';
 
 /**
@@ -20,31 +19,15 @@ import { useBookingDeals } from './useBookingDeals';
 export function DealCardsList({
   context,
   tab,
-  originCode,
-  onSelectOrigin,
 }: {
   context: BookingContext;
   tab: PartnerCategory;
-  /** Null until the reader says where they are flying from. */
-  originCode: string | null;
-  onSelectOrigin: (airport: Airport) => void;
 }) {
   const theme = useTheme();
   const deals = useBookingDeals(context, tab);
 
   return (
     <View style={{ gap: theme.space.md }}>
-      {/*
-        Only Flights needs it. A stay and a thing to do are searched by the
-        trip's own city, so asking where somebody departs from would be asking
-        a question that changes nothing on those tabs.
-      */}
-      {tab === 'flights' ? (
-        <Card padding="lg" elevation="soft">
-          <OriginPicker value={originCode} onSelect={onSelectOrigin} />
-        </Card>
-      ) : null}
-
       {deals.isLoading ? (
         <Card>
           <View

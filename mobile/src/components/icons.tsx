@@ -136,6 +136,16 @@ export function ArrowUpIcon(props: IconProps) {
   );
 }
 
+/** The booking search form's swap button. */
+export function ArrowRightIcon(props: IconProps) {
+  return (
+    <Svg {...useIcon(props)}>
+      <Path d="M4.5 12h15" />
+      <Path d="m13 5.5 6.5 6.5-6.5 6.5" />
+    </Svg>
+  );
+}
+
 export function BookmarkIcon(props: IconProps) {
   return (
     <Svg {...useIcon(props)}>
