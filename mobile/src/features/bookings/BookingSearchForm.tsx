@@ -87,6 +87,24 @@ export function BookingSearchForm({
 
   const wantsReturn = tripType === 'round-trip';
 
+  /*
+   * Editing anything takes the message down.
+   *
+   * DIFFERS FROM WEB: there the error survives until the next submit, and it
+   * can afford to — its fields commit on change, so the reader fixes the
+   * field and presses the button in one motion and the stale line is gone
+   * before it is read. Here a correction is a keyboard, a result list and a
+   * scroll, and "Choose where you are flying from and to" stayed on screen
+   * under a filled-in From and To for as long as that took. A message that
+   * describes the form as it was is worse than no message.
+   */
+  function edited<T>(set: (value: T) => void) {
+    return (value: T) => {
+      set(value);
+      setError(null);
+    };
+  }
+
   function swapAirports() {
     setFrom(to);
     setTo(from);
@@ -138,7 +156,7 @@ export function BookingSearchForm({
             return (
               <Pressable
                 key={type.id}
-                onPress={() => setTripType(type.id)}
+                onPress={() => edited(setTripType)(type.id)}
                 accessibilityRole="button"
                 accessibilityState={{ selected: isActive }}
                 style={({ pressed }) => [
@@ -172,7 +190,7 @@ export function BookingSearchForm({
           swap between them. Each is a search field with a result list under it,
           and two of those in a 180pt column would be unusable.
         */}
-        <AirportField label="From" value={from} onChange={setFrom} />
+        <AirportField label="From" value={from} onChange={edited(setFrom)} />
 
         <Pressable
           onPress={swapAirports}
@@ -199,14 +217,14 @@ export function BookingSearchForm({
           <ArrowRightIcon size={18} color={theme.color.textMuted} />
         </Pressable>
 
-        <AirportField label="To" value={to} onChange={setTo} />
+        <AirportField label="To" value={to} onChange={edited(setTo)} />
 
         <View style={{ flexDirection: 'row', gap: theme.space.md }}>
           <View style={{ flex: 1 }}>
             <DateField
               label="DEPART (YYYY-MM-DD)"
               value={departDate}
-              onChangeText={setDepartDate}
+              onChangeText={edited(setDepartDate)}
               placeholder="2026-09-08"
             />
           </View>
@@ -216,7 +234,7 @@ export function BookingSearchForm({
               <DateField
                 label="RETURN (YYYY-MM-DD)"
                 value={returnDate}
-                onChangeText={setReturnDate}
+                onChangeText={edited(setReturnDate)}
                 placeholder="2026-09-13"
               />
             </View>
@@ -233,7 +251,7 @@ export function BookingSearchForm({
               label="One fewer traveller"
               symbol="−"
               disabled={travellers <= 1}
-              onPress={() => setTravellers((count) => Math.max(1, count - 1))}
+              onPress={() => edited(setTravellers)((count) => Math.max(1, count - 1))}
             />
 
             <Text variant="sm" weight="semibold" leading="tight" style={{ flex: 1, textAlign: 'center' }}>
@@ -244,7 +262,7 @@ export function BookingSearchForm({
               label="One more traveller"
               symbol="+"
               disabled={travellers >= MAX_TRAVELLERS}
-              onPress={() => setTravellers((count) => Math.min(MAX_TRAVELLERS, count + 1))}
+              onPress={() => edited(setTravellers)((count) => Math.min(MAX_TRAVELLERS, count + 1))}
             />
           </View>
         </View>
