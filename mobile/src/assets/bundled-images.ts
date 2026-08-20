@@ -41,6 +41,31 @@ const BUNDLED: Record<string, ImageSourcePropType> = {
 };
 
 /**
+ * Who is asking, for the hosts that require an answer.
+ *
+ * Attraction photographs come from `upload.wikimedia.org`, which enforces a
+ * User-Agent policy: a request that identifies no application is answered
+ * `403`. A browser passes it without trying, which is why the web has never
+ * needed this and the phone did — React Native's `<Image>` goes through
+ * Fresco and OkHttp on Android, so every photo was requested as `okhttp/4.x`
+ * and refused. `ActivityCard` did what it is meant to do with a failed load
+ * and drew the category artwork, so the screens looked like a set of stock
+ * photographs rather than like a bug.
+ *
+ * https://foundation.wikimedia.org/wiki/Policy:Wikimedia_Foundation_User-Agent_Policy
+ * asks for an application name and somewhere to look it up, which is what
+ * this is — not a browser string. Spoofing one would work and would be a lie
+ * to a host generous enough to serve the pictures for free.
+ *
+ * Sent to every remote image host, not just Wikimedia: OpenTripMap previews
+ * arrive the same way, and a rule that says "identify yourself except when
+ * you think you can get away with it" is not worth the branch.
+ */
+const REMOTE_IMAGE_HEADERS = {
+  'User-Agent': 'AiTravel/1.0 (+https://travel-ai-io1t.onrender.com)',
+} as const;
+
+/**
  * What to hand `<Image source>` for a stored value.
  *
  * Three kinds arrive here, and they are told apart rather than guessed at:
@@ -60,7 +85,20 @@ export function imageSource(value: string | undefined): ImageSourcePropType | un
   const bundled = BUNDLED[value];
   if (bundled) return bundled;
 
-  if (/^https?:/i.test(value)) return { uri: value };
+  /*
+   * A one-element array, not the bare object it looks like it should be.
+   * `Image.android.js` lifts `headers` out of the source and onto the native
+   * `headers` prop — which is the only place `ReactImageManager` reads them
+   * from — and it does that lifting inside `if (Array.isArray(source))`. A
+   * single object takes the branch below it, which destructures `uri`, `width`
+   * and `height` and silently drops everything else. The header is then in the
+   * props React sees and in no request Fresco makes.
+   *
+   * The array is the same picture either way: RN treats a multi-source array
+   * as candidate resolutions to pick between, and with one candidate there is
+   * nothing to pick.
+   */
+  if (/^https?:/i.test(value)) return [{ uri: value, headers: REMOTE_IMAGE_HEADERS }];
 
   /*
    * A web build's hashed path. The file name still names the picture, so the
