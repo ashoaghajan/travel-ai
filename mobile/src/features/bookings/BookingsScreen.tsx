@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { FlatList, Modal, Pressable, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -91,18 +91,33 @@ export function BookingsScreen() {
    * cold load with a trip already active opens on that trip's route and dates
    * rather than on the previous trip's.
    */
+  const filledTripId = resolved.trip?.id ?? null;
+
   const [query, setQuery] = useState<FlightSearchQuery>(() =>
     resolved.trip ? toFlightQuery(resolved.context) : initialFlightQuery(),
   );
 
-  // Re-baselines when the trip being filled for changes, the way `useEditTrip`
-  // re-baselines its draft when the trip underneath it moves.
-  const filledTripId = resolved.trip?.id ?? null;
-  useEffect(() => {
+  /*
+   * Re-baselines when the trip being filled for changes, the way `useEditTrip`
+   * re-baselines its draft when the trip underneath it moves.
+   *
+   * During render, not in an effect, and the difference is visible on screen.
+   * Trips arrive from the store a beat after this mounts, so `filledTripId`
+   * goes null → id on a later render, and that is the render where the form's
+   * `key` changes and it remounts. An effect runs *after* that commit: the
+   * form would seed its fields from the query as it was before the trip
+   * arrived — the last saved search — and then the effect would move `query`
+   * underneath it, leaving the summary pricing Abu Dhabi in August while the
+   * fields read JFK → DPS in October. Setting state here re-renders before
+   * anything commits, so the new key and the new value land together.
+   */
+  const [seededFor, setSeededFor] = useState(filledTripId);
+  if (filledTripId !== seededFor) {
+    setSeededFor(filledTripId);
+    // Only a trip has anything to re-baseline from; losing one leaves the
+    // reader's own search alone.
     if (filledTripId) setQuery(toFlightQuery(resolved.context));
-    // Keyed on the trip, not the context, which is rebuilt every render.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filledTripId]);
+  }
 
   const edited = useMemo(() => toBookingContext(query), [query]);
 
