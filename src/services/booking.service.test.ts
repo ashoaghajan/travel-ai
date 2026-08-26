@@ -632,6 +632,7 @@ describe('mappers', () => {
       rating: 0,
       reviews: 0,
       image: 'https://example.com/a.jpg',
+      source: 'opentripmap',
     };
     const draft = activityToBookingDraft(activity, CONTEXT, 'trip_1');
 
@@ -650,6 +651,7 @@ describe('mappers', () => {
       rating: 0,
       reviews: 0,
       image: '',
+      source: 'viator',
       sourceUrl: 'https://example.com/a2',
     };
     const draft = activityToBookingDraft(activity, CONTEXT, 'trip_1');

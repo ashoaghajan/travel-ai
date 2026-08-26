@@ -36,7 +36,15 @@ export type ApiIdentity = {
  * record.
  */
 export type ApiSettings = {
-  theme: 'system' | 'light' | 'dark';
+  /**
+   * The chosen appearance — `sharpen`, `atlas` or `console`.
+   *
+   * Still named `theme` because that is the column and the storage key.
+   * Records written before the appearances existed hold `'system'`, `'light'`
+   * or `'dark'`; the server narrows those to `'sharpen'` on read, so nothing
+   * downstream has to know they ever existed.
+   */
+  theme: 'sharpen' | 'atlas' | 'console';
   /**
    * ISO 4217. Display only: prices are quoted and stored in USD and converted
    * at render time.

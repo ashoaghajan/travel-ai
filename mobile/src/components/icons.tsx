@@ -126,6 +126,32 @@ export function UsersIcon(props: IconProps) {
   );
 }
 
+/**
+ * Settings.
+ *
+ * On the web this sits in the sidebar's account group; a phone has no sidebar,
+ * so here it is the header button that stands in for that group — see
+ * `ScreenHeader`.
+ */
+export function SettingsIcon(props: IconProps) {
+  return (
+    <Svg {...useIcon(props)}>
+      <Circle cx="12" cy="12" r="3.1" />
+      <Path d="M19.6 12c0-.5-.1-.9-.2-1.4l1.9-1.4-1.9-3.3-2.2 1a7.4 7.4 0 0 0-2.4-1.4L14.5 3h-3.8l-.3 2.5a7.4 7.4 0 0 0-2.4 1.4l-2.2-1L3.9 9.2l1.9 1.4a7.6 7.6 0 0 0 0 2.8L3.9 14.8l1.9 3.3 2.2-1c.7.6 1.5 1.1 2.4 1.4l.3 2.5h3.8l.3-2.5c.9-.3 1.7-.8 2.4-1.4l2.2 1 1.9-3.3-1.9-1.4c.1-.5.2-.9.2-1.4Z" />
+    </Svg>
+  );
+}
+
+/** Back out of a pushed screen — the settings screen's only chrome. */
+export function ArrowLeftIcon(props: IconProps) {
+  return (
+    <Svg {...useIcon(props)}>
+      <Path d="M19.5 12h-15" />
+      <Path d="m11 5.5-6.5 6.5 6.5 6.5" />
+    </Svg>
+  );
+}
+
 /** The planner's send button. */
 export function ArrowUpIcon(props: IconProps) {
   return (

@@ -122,6 +122,37 @@ Use these colours consistently.
 
 ---
 
+### 4.1 Appearances
+
+The reader chooses one of three looks. **Light and dark are not among the
+choices** — every appearance ships both grounds, and the operating system
+decides which one is painted, exactly as it does for any other app. This
+replaced a `system` / `light` / `dark` preference; the two axes are now
+independent and neither may overrule the other.
+
+| | Character | Ground | Geometry |
+|---|---|---|---|
+| **Sharpen** | The original look, contrast corrected | `#f7f8fc` / `#0f1117` | radii 8–24, shadows |
+| **Atlas** | Photography-led, no borders or shadows | `#fdfcf9` / `#17150f` | radii 2–6, 1.25 type scale |
+| **Console** | Density-led, hairline borders | `#f4f5f8` / `#101318` | radii 4–8, tightened spacing |
+
+`Sharpen` is the default, so an account that never opens Settings — or one
+holding a record written before the appearances existed — sees the app it
+already had.
+
+**Two colour rules hold in all six combinations**, and `tokens.css` is written
+to keep them:
+
+- `--color-primary` is a *fill*; `--color-accent` is the same idea *as text*.
+  They are separate tokens because no single value satisfies both — deepening
+  the fill enough for a white label takes the accent below AA on the page, and
+  lifting it for the page takes the label below AA on the button.
+- `--color-on-primary` is what a label on that fill is painted in. It is never
+  assumed to be white: Atlas and Console fill pale on a dark ground.
+
+Every text pair listed above meets WCAG AA (4.5:1), and every control boundary
+meets 1.4.11 (3:1), in all three looks on both grounds.
+
 ## 5. Typography
 
 Use Inter or a similar modern sans-serif font.

@@ -1,10 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { BookingContext, FlightSearchQuery, Partner } from '../../types/travel.types';
+import type { Activity, BookingContext, FlightSearchQuery, Partner } from '../../types/travel.types';
 import { MOCK_PARTNERS } from '../../mock/partners';
 import {
   buildActivityUrl,
   buildPartnerUrl,
   describeBookingContext,
+  isDirectlyBookable,
   toBookingContext,
 } from './partner.links';
 
@@ -241,21 +242,90 @@ describe('buildPartnerUrl — GetYourGuide activities', () => {
 });
 
 describe('buildActivityUrl', () => {
-  it('searches for the attraction by name, narrowed by its city', () => {
-    const url = buildActivityUrl('Cascade Complex', 'Yerevan');
+  /** A listing, as the activity service hands it over. */
+  function activity(overrides: Partial<Activity> = {}): Activity {
+    return {
+      id: 'xid_cascade',
+      title: 'Cascade Complex',
+      category: 'culture',
+      description: 'Monuments · 0.8 km from centre',
+      price: 0,
+      rating: 0,
+      reviews: 0,
+      image: 'https://example.com/cascade.jpg',
+      source: 'opentripmap',
+      ...overrides,
+    };
+  }
 
-    expect(url.startsWith('https://www.getyourguide.com/s/?')).toBe(true);
-    // The city matters: "Cascade" alone finds the wrong ones.
-    expect(params(url)).toEqual({ q: 'Cascade Complex Yerevan' });
+  /** A place nobody sells: the best available link is a search. */
+  describe('an OpenTripMap place', () => {
+    it('searches for the attraction by name, narrowed by its city', () => {
+      const url = buildActivityUrl(activity(), 'Yerevan');
+
+      expect(url.startsWith('https://www.getyourguide.com/s/?')).toBe(true);
+      // The city matters: "Cascade" alone finds the wrong ones.
+      expect(params(url)).toEqual({ q: 'Cascade Complex Yerevan' });
+    });
+
+    it('searches by name alone when the city is unknown', () => {
+      expect(params(buildActivityUrl(activity(), null))).toEqual({ q: 'Cascade Complex' });
+    });
+
+    it('trims what it is given', () => {
+      expect(params(buildActivityUrl(activity({ title: '  Cascade  ' }), '  Yerevan  '))).toEqual({
+        q: 'Cascade Yerevan',
+      });
+    });
+
+    it('searches even when it carries a source URL, which is attribution', () => {
+      // The regression this whole pair of functions exists for: an
+      // OpenTripMap card is not a checkout, and following it as though it
+      // were is how a reader ended up somewhere that never listed the place
+      // they tapped.
+      const url = buildActivityUrl(
+        activity({ sourceUrl: 'https://opentripmap.com/en/card/xid_cascade' }),
+        'Yerevan',
+      );
+
+      expect(url.startsWith('https://www.getyourguide.com/s/?')).toBe(true);
+    });
   });
 
-  it('searches by name alone when the city is unknown', () => {
-    expect(params(buildActivityUrl('Cascade Complex', null))).toEqual({ q: 'Cascade Complex' });
+  /** A product somebody sells: hand the reader straight to the page selling it. */
+  describe('a Viator product', () => {
+    const product = activity({
+      id: 'v-1',
+      title: 'Yerevan food tour',
+      source: 'viator',
+      sourceUrl: 'https://www.viator.com/tours/Yerevan/food-tour/d1-p1',
+    });
+
+    it('links to the product page itself rather than searching for its name', () => {
+      expect(buildActivityUrl(product, 'Yerevan')).toBe(
+        'https://www.viator.com/tours/Yerevan/food-tour/d1-p1',
+      );
+    });
+
+    it('does not bolt a GetYourGuide affiliate id onto another seller URL', () => {
+      expect(buildActivityUrl(product, 'Yerevan')).not.toContain('partner_id');
+    });
+
+    it('falls back to a search when the product carries no URL', () => {
+      const url = buildActivityUrl(activity({ source: 'viator', sourceUrl: '  ' }), 'Yerevan');
+
+      expect(url.startsWith('https://www.getyourguide.com/s/?')).toBe(true);
+    });
   });
 
-  it('trims what it is given', () => {
-    expect(params(buildActivityUrl('  Cascade  ', '  Yerevan  '))).toEqual({
-      q: 'Cascade Yerevan',
+  describe('isDirectlyBookable', () => {
+    it('is true only for a Viator product with a URL', () => {
+      expect(isDirectlyBookable(activity({ source: 'viator', sourceUrl: 'https://v/1' }))).toBe(
+        true,
+      );
+      expect(isDirectlyBookable(activity({ source: 'viator' }))).toBe(false);
+      expect(isDirectlyBookable(activity({ sourceUrl: 'https://otm/1' }))).toBe(false);
+      expect(isDirectlyBookable(activity())).toBe(false);
     });
   });
 });

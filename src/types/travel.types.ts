@@ -46,6 +46,15 @@ export type ImageCredit = {
   sourceUrl: string;
 };
 
+/**
+ * Which catalogue a listing came from.
+ *
+ * The two are not interchangeable, and the difference decides what can be done
+ * with the row: Viator sells a product and hands back a page that takes money
+ * for it, OpenTripMap describes a place and sells nothing at all.
+ */
+export type ActivitySource = 'viator' | 'opentripmap';
+
 export type Activity = {
   id: string;
   title: string;
@@ -73,7 +82,21 @@ export type Activity = {
     lat: number;
     lng: number;
   };
-  /** Link back to the source record, for attribution. */
+  /**
+   * Which catalogue this row came from. Required rather than optional, so that
+   * every place building an `Activity` has to answer the question — the two
+   * sources are far enough apart that a default would be a guess.
+   */
+  source: ActivitySource;
+  /**
+   * Link back to the source record.
+   *
+   * What this *is* depends on `source`, and nothing may link to it without
+   * checking: for `viator` it is the product's own booking page, for
+   * `opentripmap` an attribution card that sells nothing. Treating the second
+   * as bookable is what sent readers to a page that did not list the place
+   * they tapped.
+   */
   sourceUrl?: string;
 };
 

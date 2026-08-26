@@ -306,6 +306,7 @@ describe('addPickedActivity', () => {
       rating: 4,
       reviews: 0,
       image: '/cascade.jpg',
+      source: 'opentripmap',
       coordinates: { lat: 40.19, lng: 44.51 },
       ...overrides,
     };

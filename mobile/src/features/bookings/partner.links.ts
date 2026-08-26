@@ -1,4 +1,5 @@
 import type {
+  Activity,
   BookingContext,
   FlightSearchQuery,
   Partner,
@@ -247,19 +248,41 @@ function getYourGuideActivities(context: BookingContext): string | null {
 }
 
 /**
- * Where to book one named attraction, rather than the whole city.
+ * Whether this row can be handed straight to something that sells it.
  *
- * The activity listings come from OpenTripMap, which knows where places are
- * but sells nothing — there is no per-place booking URL to carry, the way a
- * fare or a stay has one. So the link is a search for that place by name at
- * the partner who does sell tours, which is as specific as this can honestly
- * get. The city goes in the query too: "Cascade" alone finds the wrong ones.
+ * Only a Viator product can: it is a thing on sale, and it carries the page
+ * that sells it. An OpenTripMap place is a monument or a park — nobody sells
+ * it, so there is no page to go to and the caller must fall back to a search.
+ *
+ * Exported because the label depends on it as much as the link does. A button
+ * that says "Book" and lands on a list of somebody else's tours is the bug
+ * this pair of functions exists to stop.
+ */
+export function isDirectlyBookable(activity: Activity): boolean {
+  return activity.source === 'viator' && Boolean(activity.sourceUrl?.trim());
+}
+
+/**
+ * Where to book one listing, rather than the whole city.
+ *
+ * Two cases, and they are genuinely different rather than two shapes of the
+ * same link:
+ *
+ * - A **Viator product** is sold by Viator, and `sourceUrl` is its own page.
+ *   That link goes out untouched — no affiliate parameter is bolted on,
+ *   because the id belongs to GetYourGuide and the URL does not.
+ * - An **OpenTripMap place** is sold by nobody. The best that can honestly be
+ *   done is search a partner who sells tours for that name, and the city goes
+ *   into the query too: "Cascade" alone finds the wrong ones. The caller must
+ *   not call the result "Book" — see `isDirectlyBookable`.
  *
  * Exported for the Activities tab; `buildPartnerUrl` still answers for the
  * partner cards underneath it.
  */
-export function buildActivityUrl(title: string, city: string | null): string {
-  const query = [title.trim(), city?.trim()].filter(Boolean).join(' ');
+export function buildActivityUrl(activity: Activity, city: string | null): string {
+  if (isDirectlyBookable(activity)) return activity.sourceUrl!.trim();
+
+  const query = [activity.title.trim(), city?.trim()].filter(Boolean).join(' ');
   const url = `https://www.getyourguide.com/s/?${new URLSearchParams({ q: query })}`;
 
   return withAffiliate(url, 'getyourguide');

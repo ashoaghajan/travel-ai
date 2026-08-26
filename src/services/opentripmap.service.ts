@@ -101,6 +101,27 @@ export type OpenTripMapPlaceDetails = {
   info?: { descr?: string };
   wikidata?: string;
   image?: string;
+  /**
+   * The place's own website, when OpenStreetMap records one.
+   *
+   * **Semicolon-separated when there is more than one** — OSM stores the raw
+   * tag, so this arrives as `http://a.example;http://www.a.example` rather
+   * than as a list. Anything using it has to split before treating it as a
+   * URL.
+   */
+  url?: string;
+  /** The English Wikipedia article, as a full URL. */
+  wikipedia?: string;
+  /** The OpenStreetMap object, e.g. `node/1957114625`. */
+  osm?: string;
+  /**
+   * A card on OpenTripMap's own website.
+   *
+   * **Dead — every one of these 404s** (checked 2026-08-26; the API host is
+   * healthy, the consumer site stopped serving `/en/card/*`). The provider
+   * still returns the field, so it stays modelled here to document that it is
+   * not to be linked to. `wikipedia` and `url` above are what a reader wants.
+   */
   otm?: string;
 };
 

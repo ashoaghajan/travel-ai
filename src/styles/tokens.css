@@ -19,18 +19,42 @@
   --color-primary: #6d3fef;
   --color-primary-hover: #5b32d6;
   --color-primary-soft: #efe9ff;
+  /*
+   * Split from `--color-primary` because one value cannot do both jobs.
+   * The fill carries a white label (5.82:1 here); this carries itself as
+   * text on the page (6.89:1). Before the split the dark theme's button
+   * label sat at 4.23:1, under AA.
+   */
+  --color-accent: #5b32d6;
+  /*
+   * What a label on `--color-primary` is painted in.
+   *
+   * Its own token rather than `--color-text-light`, because two of the
+   * three appearances fill their primary with a *pale* colour on a dark
+   * ground — white on Atlas dark's #f2efe9 would be invisible. Every look
+   * states the pair, so the button can never be assembled from one look's
+   * fill and another's label.
+   */
+  --color-on-primary: #ffffff;
 
   --color-background: #f7f8fc;
   --color-surface: #ffffff;
   --color-surface-muted: #f3f4f8;
 
   --color-border: #e5e7ef;
+  /*
+   * For anything that bounds a *control* — an input, a checkbox. WCAG
+   * 1.4.11 wants 3:1 there, and the hairline above is 1.23:1: right for a
+   * decorative card edge, wrong for the edge of a text field.
+   */
+  --color-border-strong: #8f94a6;
 
   --color-text-main: #111827;
   --color-text-muted: #6b7280;
   --color-text-light: #ffffff;
 
-  --color-success: #16a34a;
+  /* Was #16a34a — 3.30:1 on white, under AA. This is 5.02:1. */
+  --color-success: #15803d;
   --color-warning: #f59e0b;
   --color-danger: #dc2626;
   /* Extension: tinted background for danger messages, matching -soft naming */
@@ -186,9 +210,16 @@
 :root[data-theme='dark'] {
   color-scheme: dark;
 
-  /* Lifted, because #6d3fef against #0f1117 is too dim to read. */
-  --color-primary: #8b5cf6;
-  --color-primary-hover: #a78bfa;
+  /*
+   * The lift that used to live on `--color-primary` moved here, where it
+   * belongs. #8b5cf6 was chosen because #6d3fef is too dim to *read* against
+   * #0f1117 — a text problem — but it was also filling buttons, where it left
+   * a white label at 4.23:1. Accent 6.93:1, fill 7.10:1; both pass now.
+   */
+  --color-accent: #a78bfa;
+  --color-primary: #6d28d9;
+  --color-primary-hover: #7c3aed;
+  --color-on-primary: #ffffff;
   /*
    * The pale lavender inverted. This one earns its keep in three jobs — soft
    * background tint, hover border, and half of the photo-placeholder gradient
@@ -202,6 +233,8 @@
   --color-surface-muted: #1f232c;
 
   --color-border: #2a2f3a;
+  /* 3.14:1 on the dark surface — see the light block. */
+  --color-border-strong: #606880;
 
   --color-text-main: #e8eaf0;
   --color-text-muted: #9aa1af;
@@ -250,3 +283,199 @@
  *   Tablet   768px  – 1023px  (@media (min-width: 768px))
  *   Desktop  1024px and above (@media (min-width: 1024px))
  */
+
+/* ===================================================================
+ * The other two appearances — DESIGN_SPEC §4.1
+ *
+ * `data-appearance` on `<html>` selects the look; `data-theme` still selects
+ * the ground. The reader chooses the first; the operating system decides the
+ * second, which is why no appearance below offers a light/dark switch of its
+ * own.
+ *
+ * **These select any element, not just `:root`.** Dropping `:root` is what
+ * lets the settings screen paint a swatch in a look the reader is not
+ * currently on — the preview is not a copy of those colours, it *is* those
+ * colours, so it cannot drift from the look it advertises. Custom properties
+ * inherit, so a subtree carrying `data-appearance` re-themes everything under
+ * it and nothing above it.
+ *
+ * **Ordering here is load-bearing.** `[data-appearance='atlas']` and
+ * `:root[data-theme='dark']` have identical specificity, so source order
+ * breaks the tie, and these blocks are written last. An appearance therefore
+ * wins for every property it declares, while anything it leaves alone still
+ * takes Sharpen's dark value on a dark ground — which is why the blocks below
+ * restate only what they actually change. `--color-backdrop` is the clearest
+ * case: 45% black over a light page and 68% over a dark one, correct for all
+ * three looks, so no appearance mentions it.
+ *
+ * Geometry (radii, type, spacing, shadows) is ground-independent and so is
+ * declared once, in the light block, and inherited by the dark one.
+ * =================================================================== */
+
+/* -------------------------------------------------------------- Atlas
+ * Photography-led. The image edge is the boundary, so cards have neither
+ * border nor shadow, and the ground warms up to stop white cards cutting
+ * holes in the page. Type does the structural work instead: a serif display
+ * face and a true 1.25 scale, replacing a ramp that stepped 1.25, 1.40, 1.29
+ * and left headings looking unrelated to body text.
+ */
+[data-appearance='atlas'] {
+  color-scheme: light;
+
+  --color-primary: #2f2b26;
+  --color-primary-hover: #46403a;
+  --color-primary-soft: #efe9df;
+  --color-accent: #5b32d6;
+  --color-on-primary: #fdfcf9;
+
+  --color-background: #fdfcf9;
+  --color-surface: #fdfcf9;
+  --color-surface-muted: #f3f0e8;
+
+  --color-border: #e6e0d4;
+  --color-border-strong: #8d867a;
+
+  --color-text-main: #1b1a17;
+  --color-text-muted: #77726a;
+
+  --color-success: #15803d;
+  --color-warning: #b45309;
+  --color-danger: #b3261e;
+  --color-danger-soft: #fbeae8;
+
+  /* A print, not a sticker. */
+  --radius-sm: 2px;
+  --radius-md: 3px;
+  --radius-lg: 4px;
+  --radius-xl: 6px;
+
+  /* 1.25 from a 16px base, rounded to whole pixels. */
+  --font-xs: 12px;
+  --font-sm: 14px;
+  --font-md: 16px;
+  --font-lg: 20px;
+  --font-xl: 25px;
+  --font-2xl: 39px;
+
+  --font-family-display: 'Newsreader', Georgia, 'Times New Roman', serif;
+
+  /* Space separates, so there is more of it. */
+  --space-xl: 28px;
+  --space-2xl: 40px;
+  --space-3xl: 56px;
+  --space-4xl: 76px;
+
+  /* Nothing floats: separation is the image edge and the gap beside it. */
+  --shadow-card: none;
+  --shadow-soft: none;
+  --shadow-card-hover: none;
+  --shadow-bar-top: none;
+  --shadow-primary: none;
+}
+
+[data-appearance='atlas'][data-theme='dark'] {
+  color-scheme: dark;
+
+  --color-primary: #f2efe9;
+  --color-primary-hover: #ffffff;
+  --color-primary-soft: #2b2721;
+  --color-accent: #c3b5f7;
+  --color-on-primary: #17150f;
+
+  --color-background: #17150f;
+  --color-surface: #17150f;
+  --color-surface-muted: #221f18;
+
+  --color-border: #322d24;
+  --color-border-strong: #7b7466;
+
+  --color-text-main: #f2efe9;
+  --color-text-muted: #a49d92;
+
+  --color-success: #6ee7a0;
+  --color-warning: #f0b661;
+  --color-danger: #f2938c;
+  --color-danger-soft: #3a201d;
+}
+
+/* ------------------------------------------------------------ Console
+ * Density-led. Planning is logistics, so more fits on a screen: tighter
+ * spacing, small radii, and hairline borders instead of shadows — which also
+ * retires the one piece of the system `tokens.test.ts` cannot guard, since a
+ * CSS `box-shadow` and React Native's four properties plus `elevation` have
+ * no equality to assert. Colour is spent on state, not on decoration.
+ */
+[data-appearance='console'] {
+  color-scheme: light;
+
+  --color-primary: #1f2430;
+  --color-primary-hover: #333a4a;
+  --color-primary-soft: #e7eaf1;
+  --color-accent: #5b32d6;
+  --color-on-primary: #ffffff;
+
+  --color-background: #f4f5f8;
+  --color-surface: #ffffff;
+  --color-surface-muted: #eceef3;
+
+  --color-border: #d3d7e0;
+  --color-border-strong: #8f94a6;
+
+  --color-text-main: #16181d;
+  --color-text-muted: #5f6672;
+
+  --color-success: #15803d;
+  --color-warning: #b45309;
+  --color-danger: #be123c;
+  --color-danger-soft: #fdf0f3;
+
+  --radius-sm: 4px;
+  --radius-md: 5px;
+  --radius-lg: 6px;
+  --radius-xl: 8px;
+
+  --font-xs: 11px;
+  --font-sm: 13px;
+  --font-md: 15px;
+  --font-lg: 18px;
+  --font-xl: 24px;
+  --font-2xl: 30px;
+
+  --space-md: 10px;
+  --space-lg: 14px;
+  --space-xl: 20px;
+  --space-2xl: 28px;
+  --space-3xl: 40px;
+  --space-4xl: 52px;
+
+  --shadow-card: none;
+  --shadow-soft: none;
+  --shadow-card-hover: none;
+  --shadow-bar-top: none;
+  --shadow-primary: none;
+}
+
+[data-appearance='console'][data-theme='dark'] {
+  color-scheme: dark;
+
+  --color-primary: #cdd3e0;
+  --color-primary-hover: #e4e9f2;
+  --color-primary-soft: #232936;
+  --color-accent: #a78bfa;
+  --color-on-primary: #14171d;
+
+  --color-background: #101318;
+  --color-surface: #14171d;
+  --color-surface-muted: #1b1f27;
+
+  --color-border: #333a46;
+  --color-border-strong: #6a7288;
+
+  --color-text-main: #e6e9f0;
+  --color-text-muted: #939bab;
+
+  --color-success: #4ade80;
+  --color-warning: #d08a2c;
+  --color-danger: #fb7185;
+  --color-danger-soft: #3a1c24;
+}

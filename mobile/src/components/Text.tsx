@@ -17,7 +17,7 @@ import { lineHeightFor } from '../theme/tokens';
  */
 
 type Variant = 'xs' | 'sm' | 'md' | 'lg' | 'xl' | 'xxl';
-type Tone = 'main' | 'muted' | 'light' | 'primary' | 'danger' | 'success';
+type Tone = 'main' | 'muted' | 'light' | 'onPrimary' | 'primary' | 'danger' | 'success';
 type Weight = 'regular' | 'medium' | 'semibold' | 'bold';
 
 export type TextProps = RNTextProps & {
@@ -42,6 +42,12 @@ export function Text({
     main: theme.color.textMain,
     muted: theme.color.textMuted,
     light: theme.color.textLight,
+    /*
+     * For a label sitting on `color.primary`, which is not always dark: Atlas
+     * and Console fill their primary with a *pale* colour on a dark ground, so
+     * `light` there would be white on near-white.
+     */
+    onPrimary: theme.color.onPrimary,
     primary: theme.color.primary,
     danger: theme.color.danger,
     success: theme.color.success,

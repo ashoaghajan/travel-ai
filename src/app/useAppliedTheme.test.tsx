@@ -5,17 +5,19 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { render } from '@testing-library/react';
 import { act } from 'react';
 import { settingsService } from '../services/settings.service';
+import type { Appearance } from '../types/settings.types';
 import { DARK_QUERY } from '../services/theme.service';
-import type { ThemePreference } from '../types/settings.types';
 import { useAppliedTheme } from './useAppliedTheme';
 
 /**
  * The wiring, not the resolver.
  *
- * `theme.service.test.ts` already covers what a preference resolves to; these
- * tests are about the three things that only exist once the hook is mounted —
- * the settings screen reaching the document element, another tab doing the
- * same, and the OS changing its mind under a `system` preference.
+ * `theme.service.test.ts` already covers what a stored value resolves to;
+ * these tests are about what only exists once the hook is mounted — the
+ * settings screen reaching the document element, another tab doing the same,
+ * and the OS changing its mind. That last one used to depend on the preference
+ * being `system`; it no longer depends on anything, which is what several of
+ * the assertions below now pin down.
  */
 
 /** A `matchMedia` whose answer can change after the fact. */
@@ -62,16 +64,18 @@ function Harness() {
  * theme is painted from the cache, because the blocking script in `index.html`
  * has to know it before any request could have finished.
  */
-function choose(theme: ThemePreference) {
+function choose(theme: Appearance) {
   act(() => {
     settingsService.adopt({ ...settingsService.getSettings(), theme });
   });
 }
 
 const painted = () => document.documentElement.dataset.theme;
+const look = () => document.documentElement.dataset.appearance;
 
 beforeEach(() => {
   delete document.documentElement.dataset.theme;
+  delete document.documentElement.dataset.appearance;
 });
 
 afterEach(() => {
@@ -79,29 +83,34 @@ afterEach(() => {
 });
 
 describe('useAppliedTheme', () => {
-  it('paints the stored preference on mount', () => {
+  it('paints the stored appearance on mount', () => {
     stubMatchMedia(false);
-    settingsService.adopt({ ...settingsService.getSettings(), theme: 'dark' });
+    settingsService.adopt({ ...settingsService.getSettings(), theme: 'atlas' });
 
     render(<Harness />);
 
-    expect(painted()).toBe('dark');
+    expect(look()).toBe('atlas');
+    expect(painted()).toBe('light');
   });
 
-  it('repaints when the settings screen changes the preference', () => {
+  it('repaints when the settings screen changes the appearance', () => {
     stubMatchMedia(false);
     render(<Harness />);
-    expect(painted()).toBe('light');
+    expect(look()).toBe('sharpen');
 
-    choose('dark');
-    expect(painted()).toBe('dark');
+    choose('console');
+    expect(look()).toBe('console');
 
-    choose('light');
-    expect(painted()).toBe('light');
+    choose('atlas');
+    expect(look()).toBe('atlas');
   });
 
-  // The default preference, and the only one that keeps listening.
-  it('follows the OS while the preference is system', () => {
+  /*
+   * Unconditional now, where this once read "while the preference is system".
+   * Light and dark stopped being a preference, so there is no longer any state
+   * in which the app declines to follow the device.
+   */
+  it('follows the OS ground whatever the appearance', () => {
     const media = stubMatchMedia(false);
     render(<Harness />);
     expect(painted()).toBe('light');
@@ -109,32 +118,51 @@ describe('useAppliedTheme', () => {
     media.change(true);
     expect(painted()).toBe('dark');
 
+    choose('console');
     media.change(false);
     expect(painted()).toBe('light');
-  });
 
-  // The whole point of an explicit choice: a reader who picked light keeps it
-  // when their appearance schedule flips at sunset.
-  it('ignores the OS once a theme is chosen explicitly', () => {
-    const media = stubMatchMedia(false);
-    render(<Harness />);
-
-    choose('light');
     media.change(true);
-
-    expect(painted()).toBe('light');
+    expect(painted()).toBe('dark');
   });
 
-  it('stops listening to the OS when the preference leaves system', () => {
+  // The two axes are independent: the device owns one, the reader owns the
+  // other, and neither may overwrite the other's.
+  it('keeps the ground when the appearance changes under a dark OS', () => {
+    stubMatchMedia(true);
+    render(<Harness />);
+    expect(painted()).toBe('dark');
+
+    choose('atlas');
+
+    expect(look()).toBe('atlas');
+    expect(painted()).toBe('dark');
+  });
+
+  it('keeps exactly one OS listener across an appearance change', () => {
     const media = stubMatchMedia(false);
     render(<Harness />);
     expect(media.listenerCount()).toBe(1);
 
-    choose('dark');
-    expect(media.listenerCount()).toBe(0);
-
-    choose('system');
+    choose('atlas');
     expect(media.listenerCount()).toBe(1);
+
+    choose('console');
+    expect(media.listenerCount()).toBe(1);
+  });
+
+  // A record written before the appearances existed must not reach
+  // `data-appearance`, where it would select no palette at all.
+  it('paints Sharpen for a retired light/dark preference', () => {
+    stubMatchMedia(false);
+    settingsService.adopt({
+      ...settingsService.getSettings(),
+      theme: 'dark' as never,
+    });
+
+    render(<Harness />);
+
+    expect(look()).toBe('sharpen');
   });
 
   // A leaked listener would paint on behalf of an unmounted tree, and

@@ -5,6 +5,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { authStore, useAuth } from '../src/core/store/auth.store';
 import { ThemeProvider } from '../src/theme/ThemeProvider';
 import { useTheme } from '../src/theme/useTheme';
+import { useThemePreference } from '../src/theme/useThemePreference';
 
 /**
  * The root layout: providers, and the one decision about where the app is.
@@ -68,9 +69,17 @@ function Guard() {
 }
 
 export default function RootLayout() {
+  /*
+   * Read here rather than inside `ThemeProvider` so that provider stays what
+   * its own docs promise: the one place that resolves `'system'`, and no place
+   * at all that knows where a preference is stored. It took a prop from the
+   * day it was written precisely so this line could arrive later.
+   */
+  const appearance = useThemePreference();
+
   return (
     <SafeAreaProvider>
-      <ThemeProvider>
+      <ThemeProvider appearance={appearance}>
         <Guard />
       </ThemeProvider>
     </SafeAreaProvider>

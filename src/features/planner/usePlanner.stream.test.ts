@@ -64,7 +64,7 @@ const PRO_USER: ApiUser = {
   plan: 'pro',
   proSince: '2026-08-13T00:00:00.000Z',
   settings: {
-    theme: 'system',
+    theme: 'sharpen',
     currency: 'USD',
     notifications: { tripReminders: true, priceAlerts: false },
   },

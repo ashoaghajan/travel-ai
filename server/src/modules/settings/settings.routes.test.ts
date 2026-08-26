@@ -14,7 +14,7 @@ import { api, signUp } from '../../test/harness';
 const SETTINGS = '/api/settings';
 
 const DEFAULTS = {
-  theme: 'system',
+  theme: 'sharpen',
   currency: 'USD',
   notifications: { tripReminders: true, priceAlerts: false },
 };
@@ -25,7 +25,7 @@ describe('authentication', () => {
   });
 
   it('refuses a write with no token', async () => {
-    await api().put(SETTINGS).send({ theme: 'dark' }).expect(401);
+    await api().put(SETTINGS).send({ theme: 'atlas' }).expect(401);
   });
 });
 
@@ -63,10 +63,10 @@ describe('PUT /api/settings', () => {
     const { accessToken } = await signUp();
     const auth = `Bearer ${accessToken}`;
 
-    await api().put(SETTINGS).set('Authorization', auth).send({ theme: 'dark' }).expect(200);
+    await api().put(SETTINGS).set('Authorization', auth).send({ theme: 'atlas' }).expect(200);
 
     const response = await api().get(SETTINGS).set('Authorization', auth).expect(200);
-    expect(response.body.theme).toBe('dark');
+    expect(response.body.theme).toBe('atlas');
   });
 
   it('leaves the fields a patch did not mention', async () => {
@@ -77,7 +77,7 @@ describe('PUT /api/settings', () => {
     const response = await api()
       .put(SETTINGS)
       .set('Authorization', auth)
-      .send({ theme: 'dark' })
+      .send({ theme: 'atlas' })
       .expect(200);
 
     expect(response.body.currency).toBe('EUR');
@@ -159,14 +159,14 @@ describe('boot in one request', () => {
   it('carries the settings on the account', async () => {
     const { accessToken } = await signUp();
     const auth = `Bearer ${accessToken}`;
-    await api().put(SETTINGS).set('Authorization', auth).send({ currency: 'AMD', theme: 'dark' });
+    await api().put(SETTINGS).set('Authorization', auth).send({ currency: 'AMD', theme: 'atlas' });
 
     const me = await api().get('/api/me').set('Authorization', auth).expect(200);
 
     // The whole point: starting the app is one request, not three. The theme
     // and the currency are right by the time anything renders.
     expect(me.body.settings).toEqual({
-      theme: 'dark',
+      theme: 'atlas',
       currency: 'AMD',
       notifications: { tripReminders: true, priceAlerts: false },
     });
@@ -182,7 +182,7 @@ describe('boot in one request', () => {
 
   it('carries them on the sign-in response too', async () => {
     const { accessToken } = await signUp();
-    await api().put(SETTINGS).set('Authorization', `Bearer ${accessToken}`).send({ theme: 'dark' });
+    await api().put(SETTINGS).set('Authorization', `Bearer ${accessToken}`).send({ theme: 'atlas' });
 
     const login = await api()
       .post('/api/auth/login')
@@ -191,6 +191,6 @@ describe('boot in one request', () => {
 
     // Signing in must paint the right theme immediately, without a second
     // request to discover it.
-    expect(login.body.user.settings.theme).toBe('dark');
+    expect(login.body.user.settings.theme).toBe('atlas');
   });
 });

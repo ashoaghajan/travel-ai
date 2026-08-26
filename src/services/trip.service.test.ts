@@ -68,6 +68,7 @@ const ATTRACTION: Activity = {
   rating: 5,
   reviews: 120,
   image: '/matenadaran.jpg',
+  source: 'opentripmap',
 };
 
 /** The API refusing with one of its own codes. */

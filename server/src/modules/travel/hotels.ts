@@ -94,6 +94,29 @@ function describeKind(place: Place): string {
  * for that property with the reader's dates rather than on its booking page:
  * we have no property id to link deeper with, and a named search is honest
  * about that where a fabricated deep link would not be.
+ *
+ * **`/hotels?destination=`, not `/?query=`.** The first version of this used
+ * the second form, and Hotellook did not recognise it: rather than failing, it
+ * dropped the search entirely and forwarded to Booking.com's *homepage* —
+ * `sp.booking.com/?aid=…`, with no property and no dates, its search box
+ * holding whatever the reader last looked for. So a card promising "Hotel
+ * Livin, US$224" opened a blank search, and the only way on was to type the
+ * name again. Checked against the live chain on 2026-08-25: `/hotels` with
+ * `destination` lands on `sp.booking.com/searchresults.en.html?ss=Hotel+Livin
+ * +Tbilisi&checkin=…&checkout=…`, which resolves to one property found.
+ *
+ * The parameter names are Hotellook's, and they are not the ones Booking uses
+ * on the other side of the redirect — `checkIn` here becomes `checkin` there.
+ * They are also not guessable, which is why the note above records what was
+ * observed rather than what the format ought to be.
+ *
+ * **`adults` does carry**, though it took two looks to be sure. A desktop test
+ * showed the results page pricing for one guest, which read like Booking
+ * dropping the parameter; the same link opened on a phone arrived with
+ * "Adults 2" set. The difference was the browser, not the link — the desktop
+ * had an existing Booking session whose stored occupancy won. So the figure a
+ * reader sees can still be a single-guest price, but only where their own
+ * session already said so, and nothing here can or should override that.
  */
 export function hotelBookingUrl(
   name: string,
@@ -103,9 +126,9 @@ export function hotelBookingUrl(
   guests: number,
   marker: string | null,
 ): string {
-  const url = new URL('https://search.hotellook.com/');
+  const url = new URL('https://search.hotellook.com/hotels');
 
-  url.searchParams.set('query', `${name} ${destination}`.trim());
+  url.searchParams.set('destination', `${name} ${destination}`.trim());
   url.searchParams.set('checkIn', checkIn);
   url.searchParams.set('checkOut', checkOut);
   url.searchParams.set('adults', String(guests));

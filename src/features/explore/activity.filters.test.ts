@@ -21,6 +21,7 @@ function activity(title: string, category: ActivityCategory): Activity {
     rating: 0,
     reviews: 0,
     image: '/photo.jpg',
+    source: 'opentripmap',
   };
 }
 

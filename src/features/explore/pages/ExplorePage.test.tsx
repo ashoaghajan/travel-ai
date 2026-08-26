@@ -23,6 +23,7 @@ const ACTIVITY: Activity = {
   rating: 0,
   reviews: 0,
   image: '/photo.jpg',
+  source: 'opentripmap',
 };
 
 function renderPage() {

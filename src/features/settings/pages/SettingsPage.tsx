@@ -4,16 +4,10 @@ import { Switch } from '../../../components/common/Switch';
 import { settingsService } from '../../../services/settings.service';
 import { useTrips } from '../../../store/trip.store';
 import { formatBytes } from '../../../utils/bytes';
-import type { ThemePreference } from '../../../types/settings.types';
+import { APPEARANCES } from '../../../types/settings.types';
 import { SettingsSection } from '../components/SettingsSection';
 import { useSettings } from '../useSettings';
 import styles from './SettingsPage.module.css';
-
-const THEME_OPTIONS: { id: ThemePreference; label: string }[] = [
-  { id: 'system', label: 'System' },
-  { id: 'light', label: 'Light' },
-  { id: 'dark', label: 'Dark' },
-];
 
 /** Friendlier names for the storage keys shown on this screen. */
 const STORAGE_LABELS: Record<string, string> = {
@@ -27,6 +21,13 @@ const STORAGE_LABELS: Record<string, string> = {
 
 export function SettingsPage() {
   const { settings, error, update, setNotification } = useSettings();
+
+  /*
+   * Read off the document rather than from `matchMedia`, so the swatches agree
+   * with the page around them even in the frame before an OS change has been
+   * applied. `useAppliedTheme` is the only writer of this attribute.
+   */
+  const ground = document.documentElement.dataset.theme ?? 'light';
   const trips = useTrips();
 
   // Five `getItem` calls — cheap enough to read on every render, and the trip
@@ -47,15 +48,22 @@ export function SettingsPage() {
 
         <SettingsSection
           title="Appearance"
-          description="System follows your device's light or dark setting, and changes with it."
+          description="Three looks for the same app. Light and dark follow your device."
         >
           <fieldset className={styles.fieldset}>
-            <legend className="visually-hidden">Theme preference</legend>
-            <div className={styles.segmented}>
-              {THEME_OPTIONS.map((option) => (
+            <legend className="visually-hidden">Appearance</legend>
+            {/*
+              Stacked rather than segmented: each option carries a line of
+              description, and three of those will not sit side by side on a
+              phone-width column. The swatch is the useful part — it is painted
+              from the option's own tokens, so it previews the look rather than
+              describing it.
+            */}
+            <div className={styles.appearances}>
+              {APPEARANCES.map((option) => (
                 <label
                   key={option.id}
-                  className={styles.segment}
+                  className={styles.appearance}
                   data-checked={settings.theme === option.id}
                 >
                   <input
@@ -66,7 +74,28 @@ export function SettingsPage() {
                     checked={settings.theme === option.id}
                     onChange={() => update({ theme: option.id })}
                   />
-                  {option.label}
+                  {/*
+                    Carries the ground as well as the look, so the preview
+                    shows what the reader would actually get rather than always
+                    the light version. `data-theme` on a nested element selects
+                    the same block the document element does — see the note in
+                    `tokens.css` about these selectors not being pinned to
+                    `:root`.
+                  */}
+                  <span
+                    className={styles.swatch}
+                    data-appearance={option.id}
+                    data-theme={ground}
+                    aria-hidden="true"
+                  >
+                    <span className={styles.swatchFill} />
+                    <span className={styles.swatchLine} />
+                    <span className={styles.swatchLine} data-short="true" />
+                  </span>
+                  <span className={styles.appearanceText}>
+                    <span className={styles.appearanceLabel}>{option.label}</span>
+                    <span className={styles.appearanceDescription}>{option.description}</span>
+                  </span>
                 </label>
               ))}
             </div>

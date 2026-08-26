@@ -3,6 +3,7 @@ import { ActivityIndicator, TextInput, View } from 'react-native';
 import type { ApiPerson, FriendStatus } from '@ai-travel/shared';
 import { Button } from '../../components/Button';
 import { Card } from '../../components/Card';
+import { ScreenHeader } from '../../components/ScreenHeader';
 import { Screen } from '../../components/Screen';
 import { Text } from '../../components/Text';
 import { friendService } from '../../core/services/friend.service';
@@ -113,9 +114,7 @@ export function FriendsScreen() {
   return (
     <Screen>
       <View style={{ gap: 4 }}>
-        <Text variant="xl" weight="bold" leading="tight">
-          Friends
-        </Text>
+        <ScreenHeader title="Friends" />
         <Text variant="sm" tone="muted" leading="snug">
           You can message the people you are friends with.
         </Text>

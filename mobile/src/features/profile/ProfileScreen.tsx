@@ -6,6 +6,7 @@ import { useTrips } from '../../core/store/trip.store';
 import { Avatar } from '../../components/Avatar';
 import { Button } from '../../components/Button';
 import { Card } from '../../components/Card';
+import { ScreenHeader } from '../../components/ScreenHeader';
 import { Screen } from '../../components/Screen';
 import { Text } from '../../components/Text';
 import { useTheme } from '../../theme/useTheme';
@@ -88,6 +89,8 @@ export function ProfileScreen() {
 
   return (
     <Screen>
+      <ScreenHeader />
+
       <Card padding="lg" elevation="card">
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.space.md }}>
           <Avatar name={user.name} size="lg" />

@@ -791,9 +791,62 @@ describe('getActivityById', () => {
       category: 'culture',
       fullDescription: 'The Bali Museum is an archaeological museum.',
       address: 'Jalan Mayor Wisnu, Denpasar, Indonesia',
-      sourceUrl: 'https://opentripmap.com/en/card/N1',
+      source: 'opentripmap',
       coordinates: { lat: -8.65, lng: 115.2 },
     });
+  });
+
+  /*
+   * The provider still returns `otm`, and every one of those cards 404s — its
+   * consumer site stopped serving them while the API carried on advertising
+   * them. Linking to it put the only outbound link on the details page onto a
+   * dead page, so the mapper drops it on the floor rather than passing it on.
+   */
+  it('does not carry the dead OpenTripMap card link through', async () => {
+    vi.spyOn(openTripMapService, 'getPlaceDetails').mockResolvedValue(
+      details({ otm: 'https://opentripmap.com/en/card/N1' }),
+    );
+
+    const activity = await activityService.getActivityById('N1');
+
+    expect(activity?.sourceUrl).toBeUndefined();
+  });
+
+  it('carries the official website and the Wikipedia article', async () => {
+    vi.spyOn(openTripMapService, 'getPlaceDetails').mockResolvedValue(
+      details({
+        url: 'http://balimuseum.example',
+        wikipedia: 'https://en.wikipedia.org/wiki/Bali%20Museum',
+      }),
+    );
+
+    const activity = await activityService.getActivityById('N1');
+
+    expect(activity?.website).toBe('http://balimuseum.example');
+    expect(activity?.wikipediaUrl).toBe('https://en.wikipedia.org/wiki/Bali%20Museum');
+  });
+
+  /*
+   * OpenStreetMap stores the `website` tag as free text, so two sites arrive
+   * as one semicolon-joined string rather than as a list. Rendering it whole
+   * would produce a link to neither.
+   */
+  it('takes the first usable URL out of a semicolon-joined website tag', async () => {
+    vi.spyOn(openTripMapService, 'getPlaceDetails').mockResolvedValue(
+      details({ url: 'http://balimuseum.example;http://www.balimuseum.example' }),
+    );
+
+    expect((await activityService.getActivityById('N1'))?.website).toBe(
+      'http://balimuseum.example',
+    );
+  });
+
+  it('ignores a website tag that is not a link', async () => {
+    vi.spyOn(openTripMapService, 'getPlaceDetails').mockResolvedValue(
+      details({ url: 'balimuseum.example' }),
+    );
+
+    expect((await activityService.getActivityById('N1'))?.website).toBeUndefined();
   });
 
   it('prefers the detail photo over the pooled one', async () => {

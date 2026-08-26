@@ -16,7 +16,14 @@ import { CURRENCY_CODES } from '../currency.types';
  * default that applies when nobody has chosen.
  */
 export const updateSettingsSchema = z.object({
-  theme: z.enum(['system', 'light', 'dark']).optional(),
+  /*
+   * The appearances. Deliberately *not* accepting the retired
+   * 'system' | 'light' | 'dark': a client still sending those is out of date,
+   * and a 422 says so where a silent coercion would leave it believing a
+   * choice was saved. Reading an old row is the other direction and does
+   * coerce — see `settings.service.ts`.
+   */
+  theme: z.enum(['sharpen', 'atlas', 'console']).optional(),
   /**
    * Checked against the offered list rather than accepted as any ISO code.
    *

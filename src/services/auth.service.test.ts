@@ -16,7 +16,7 @@ const ADA: ApiUser = {
   plan: 'free',
   proSince: null,
   settings: {
-    theme: 'system' as const,
+    theme: 'sharpen' as const,
     currency: 'USD',
     notifications: { tripReminders: true, priceAlerts: false },
   },

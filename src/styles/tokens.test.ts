@@ -8,7 +8,14 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { darkColors, lightColors } from '../../mobile/src/theme/tokens';
+import {
+  atlasDarkColors,
+  atlasLightColors,
+  consoleDarkColors,
+  consoleLightColors,
+  darkColors,
+  lightColors,
+} from '../../mobile/src/theme/tokens';
 
 /**
  * The one thing standing between this product and two colour systems.
@@ -59,6 +66,10 @@ function block(selector: string): Map<string, string> {
 
 const light = block(':root {');
 const dark = block(":root[data-theme='dark']");
+const atlasLight = block("\n[data-appearance='atlas'] {");
+const atlasDark = block("[data-appearance='atlas'][data-theme='dark']");
+const consoleLight = block("\n[data-appearance='console'] {");
+const consoleDark = block("[data-appearance='console'][data-theme='dark']");
 
 /**
  * Both notations reduced to comparable numbers.
@@ -129,6 +140,9 @@ const MAP: Record<keyof typeof lightColors, string> = {
   textOnOverlayMuted: 'color-text-on-overlay-muted',
   photoPlaceholder: 'color-photo-placeholder',
   surfaceTranslucent: 'color-surface-translucent',
+  accent: 'color-accent',
+  onPrimary: 'color-on-primary',
+  borderStrong: 'color-border-strong',
 };
 
 const entries = Object.entries(MAP) as [keyof typeof lightColors, string][];
@@ -150,6 +164,44 @@ describe('the mobile palette matches tokens.css', () => {
      */
      const expected = dark.get(property) ?? (light.get(property) as string);
     expect(rgba(darkColors[token])).toEqual(rgba(expected));
+  });
+});
+
+/**
+ * The other two appearances, checked the same way.
+ *
+ * **The chains below are the browser's real cascade, and they are not
+ * obvious.** `:root[data-appearance='atlas']` and `:root[data-theme='dark']`
+ * have identical specificity, so source order decides — and the appearance
+ * blocks are written last. That means Atlas wins for every property it
+ * *declares*, while a property it leaves alone still takes Sharpen's dark
+ * value, because that block is more specific than bare `:root`.
+ *
+ * So the dark chain is: the appearance's dark block (two attributes), then
+ * Sharpen's dark block — which outranks the appearance's *light* block, one
+ * attribute against two — then that light block, then `:root`. That is deliberate rather than
+ * tolerated — it is what lets an appearance restate only the colours it
+ * actually changes and inherit ground-dependent ones like `--color-backdrop`,
+ * which is 45% black on a light page and 68% on a dark one whichever look is
+ * on. `atlasDarkColors` spreading `darkColors` is the same statement in
+ * TypeScript, and this test is what keeps the two spellings agreeing.
+ */
+const APPEARANCE_CASES: [string, Record<string, string>, Map<string, string>[]][] = [
+  ['atlas light', atlasLightColors, [atlasLight, light]],
+  ['atlas dark', atlasDarkColors, [atlasDark, dark, atlasLight, light]],
+  ['console light', consoleLightColors, [consoleLight, light]],
+  ['console dark', consoleDarkColors, [consoleDark, dark, consoleLight, light]],
+];
+
+describe.each(APPEARANCE_CASES)('the %s palette matches tokens.css', (_name, palette, chain) => {
+  it.each(entries)('%s', (token, property) => {
+    const css = chain.reduce<string | undefined>(
+      (found, source) => found ?? source.get(property),
+      undefined,
+    );
+
+    expect(css, `--${property} resolves nowhere for this appearance`).toBeDefined();
+    expect(rgba(palette[token])).toEqual(rgba(css as string));
   });
 });
 

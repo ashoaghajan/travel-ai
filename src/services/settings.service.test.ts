@@ -30,8 +30,10 @@ describe('getSettings', () => {
     expect(settingsService.getSettings()).toEqual(DEFAULT_SETTINGS);
   });
 
-  it('defaults to the system theme', () => {
-    expect(DEFAULT_SETTINGS.theme).toBe('system');
+  // Sharpen and not one of the other two: it is the look the app already had,
+  // so nobody's interface changes character because they never opened Settings.
+  it('defaults to the Sharpen appearance', () => {
+    expect(DEFAULT_SETTINGS.theme).toBe('sharpen');
   });
 
   it('defaults to the currency every price is already quoted in', () => {
@@ -48,23 +50,23 @@ describe('getSettings', () => {
 
   it('returns what the account was last known to hold', () => {
     settingsService.adopt({
-      theme: 'dark',
+      theme: 'atlas',
       currency: 'AMD',
       notifications: { tripReminders: false, priceAlerts: true },
     });
 
     expect(settingsService.getSettings()).toEqual({
-      theme: 'dark',
+      theme: 'atlas',
       currency: 'AMD',
       notifications: { tripReminders: false, priceAlerts: true },
     });
   });
 
   it('fills in missing fields from the defaults', () => {
-    storageService.set(STORAGE_KEYS.settings, { theme: 'light' });
+    storageService.set(STORAGE_KEYS.settings, { theme: 'console' });
 
     expect(settingsService.getSettings()).toEqual({
-      theme: 'light',
+      theme: 'console',
       currency: DEFAULT_SETTINGS.currency,
       notifications: DEFAULT_SETTINGS.notifications,
     });
@@ -86,33 +88,33 @@ describe('getSettings', () => {
 
 describe('adopt', () => {
   it('caches what came back with the account', () => {
-    settingsService.adopt({ ...DEFAULT_SETTINGS, theme: 'dark' });
+    settingsService.adopt({ ...DEFAULT_SETTINGS, theme: 'atlas' });
 
     // Written synchronously, because the next page load's blocking script
     // reads this key before anything could be fetched.
     expect(localStorage.getItem(STORAGE_KEYS.settings)).not.toBeNull();
-    expect(settingsService.getSettings().theme).toBe('dark');
+    expect(settingsService.getSettings().theme).toBe('atlas');
   });
 });
 
 describe('save', () => {
   it('sends only the fields that changed', async () => {
-    const put = vi.spyOn(http, 'put').mockResolvedValue({ ...DEFAULT_SETTINGS, theme: 'dark' });
+    const put = vi.spyOn(http, 'put').mockResolvedValue({ ...DEFAULT_SETTINGS, theme: 'atlas' });
 
-    await settingsService.save({ theme: 'dark' });
+    await settingsService.save({ theme: 'atlas' });
 
     // The settings screen writes one toggle at a time; the server merges.
-    expect(put).toHaveBeenCalledWith('/settings', { theme: 'dark' });
+    expect(put).toHaveBeenCalledWith('/settings', { theme: 'atlas' });
   });
 
   it('caches what the server answered, not what was sent', async () => {
     vi.spyOn(http, 'put').mockResolvedValue({
       ...DEFAULT_SETTINGS,
-      theme: 'dark',
+      theme: 'atlas',
       currency: 'AMD',
     });
 
-    await settingsService.save({ theme: 'dark' });
+    await settingsService.save({ theme: 'atlas' });
 
     // The response is the whole record. Merging towards it instead is how a
     // screen ends up showing a preference the database does not hold.
@@ -120,26 +122,26 @@ describe('save', () => {
   });
 
   it('leaves the cache alone when the save fails', async () => {
-    settingsService.adopt({ ...DEFAULT_SETTINGS, theme: 'light' });
+    settingsService.adopt({ ...DEFAULT_SETTINGS, theme: 'console' });
     vi.spyOn(http, 'put').mockRejectedValue(new ApiError(502, 'INTERNAL' as never, 'Nope.'));
 
-    await expect(settingsService.save({ theme: 'dark' })).rejects.toBeInstanceOf(ApiError);
+    await expect(settingsService.save({ theme: 'atlas' })).rejects.toBeInstanceOf(ApiError);
 
     // A preference on screen that was never stored is worse than one that
     // visibly refused to change.
-    expect(settingsService.getSettings().theme).toBe('light');
+    expect(settingsService.getSettings().theme).toBe('console');
   });
 
   it('survives storage refusing the write', async () => {
-    vi.spyOn(http, 'put').mockResolvedValue({ ...DEFAULT_SETTINGS, theme: 'dark' });
+    vi.spyOn(http, 'put').mockResolvedValue({ ...DEFAULT_SETTINGS, theme: 'atlas' });
     vi.spyOn(storageService, 'set').mockImplementation(() => {
       throw new Error('QuotaExceededError');
     });
 
     // The preference applied for this session; only the pre-paint read on the
     // next load degrades, and it degrades to the default theme.
-    await expect(settingsService.save({ theme: 'dark' })).resolves.toMatchObject({
-      theme: 'dark',
+    await expect(settingsService.save({ theme: 'atlas' })).resolves.toMatchObject({
+      theme: 'atlas',
     });
   });
 });
@@ -156,7 +158,7 @@ describe('load', () => {
 
 describe('clearCache', () => {
   it('forgets the previous reader’s preferences', () => {
-    settingsService.adopt({ ...DEFAULT_SETTINGS, theme: 'dark' });
+    settingsService.adopt({ ...DEFAULT_SETTINGS, theme: 'atlas' });
 
     settingsService.clearCache();
 
@@ -171,7 +173,7 @@ describe('subscribe', () => {
     const listener = vi.fn();
     const unsubscribe = settingsService.subscribe(listener);
 
-    settingsService.adopt({ ...DEFAULT_SETTINGS, theme: 'dark' });
+    settingsService.adopt({ ...DEFAULT_SETTINGS, theme: 'atlas' });
 
     expect(listener).toHaveBeenCalledTimes(1);
     unsubscribe();
@@ -193,5 +195,52 @@ describe('getStorageUsage', () => {
     const usage = settingsService.getStorageUsage();
 
     expect(usage.map((entry) => entry.key).sort()).toEqual(Object.values(STORAGE_KEYS).sort());
+  });
+});
+
+/*
+ * The one-way door out of the old preference.
+ *
+ * These records exist on real devices — anyone who opened the app before the
+ * appearances shipped has one — and the value in them is no longer a look. Left
+ * alone it would reach `data-appearance` and select no palette at all, so the
+ * page would paint half of one look over the ground of another.
+ */
+describe('records written before the appearances existed', () => {
+  it.each(['system', 'light', 'dark'])('reads a stored %s as Sharpen', (retired) => {
+    localStorage.setItem(
+      STORAGE_KEYS.settings,
+      JSON.stringify({ ...DEFAULT_SETTINGS, theme: retired }),
+    );
+
+    expect(settingsService.getSettings().theme).toBe('sharpen');
+  });
+
+  it('reads outright nonsense as Sharpen too', () => {
+    localStorage.setItem(
+      STORAGE_KEYS.settings,
+      JSON.stringify({ ...DEFAULT_SETTINGS, theme: 'purple' }),
+    );
+
+    expect(settingsService.getSettings().theme).toBe('sharpen');
+  });
+
+  // The rest of the record is still good: a migration must not cost somebody
+  // their currency because one neighbouring field went out of date.
+  it('keeps everything else in the record', () => {
+    localStorage.setItem(
+      STORAGE_KEYS.settings,
+      JSON.stringify({
+        theme: 'dark',
+        currency: 'AMD',
+        notifications: { tripReminders: false, priceAlerts: true },
+      }),
+    );
+
+    const settings = settingsService.getSettings();
+
+    expect(settings.theme).toBe('sharpen');
+    expect(settings.currency).toBe('AMD');
+    expect(settings.notifications).toEqual({ tripReminders: false, priceAlerts: true });
   });
 });

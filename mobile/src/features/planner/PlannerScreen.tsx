@@ -17,6 +17,7 @@ import { formatDateRange } from '../../core/utils/date';
 import { useCurrentUser } from '../../core/hooks/useCurrentUser';
 import { Button } from '../../components/Button';
 import { Card } from '../../components/Card';
+import { ScreenHeader } from '../../components/ScreenHeader';
 import { Text } from '../../components/Text';
 import { ArrowUpIcon, CrownIcon, MicIcon, StopIcon } from '../../components/icons';
 import { useTheme } from '../../theme/useTheme';
@@ -164,6 +165,21 @@ export function PlannerScreen() {
       style={{ flex: 1, backgroundColor: theme.color.background }}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
+      {/*
+        The planner is the one tab with no heading of its own — it opens
+        straight into the conversation — so the gear sits alone above the
+        transcript. It also takes over reserving the notch: the list below used
+        to do that itself, and two things padding for the same status bar is
+        how a gap appears under it.
+      */}
+      <ScreenHeader
+        style={{
+          paddingTop: insets.top,
+          paddingHorizontal: theme.space.lg,
+          paddingBottom: theme.space.sm,
+        }}
+      />
+
       <FlatList
         ref={listRef}
         inverted
@@ -171,7 +187,9 @@ export function PlannerScreen() {
         keyExtractor={(message) => message.id}
         contentContainerStyle={{
           paddingTop: theme.space.lg,
-          paddingBottom: insets.top + theme.space.lg,
+          // An inverted list draws its `paddingBottom` at the visual top, so
+          // this is the gap between the header above and the newest message.
+          paddingBottom: theme.space.lg,
           paddingHorizontal: theme.space.lg,
         }}
         keyboardShouldPersistTaps="handled"

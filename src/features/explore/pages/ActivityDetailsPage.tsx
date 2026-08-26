@@ -241,16 +241,56 @@ export function ActivityDetailsPage() {
           </Card>
         ) : null}
 
-        {activity.sourceUrl ? (
-          <a
-            className={styles.source}
-            href={activity.sourceUrl}
-            target="_blank"
-            rel="noreferrer nofollow"
-          >
-            View on OpenTripMap
-            <ExternalLinkIcon size={14} />
-          </a>
+        {/*
+          Where to read more, most authoritative first.
+
+          This replaced a single "View on OpenTripMap" link, which pointed at
+          `details.otm` — a page that 404s for every place, because the
+          provider's consumer site stopped serving those routes while its API
+          carried on returning the field. These two resolve. Neither is
+          guaranteed: roughly a third of places record a website and three
+          quarters have an article, so the row renders whatever exists and
+          nothing when there is neither.
+        */}
+        {activity.website || activity.wikipediaUrl || activity.sourceUrl ? (
+          <div className={styles.sources}>
+            {activity.website ? (
+              <a
+                className={styles.source}
+                href={activity.website}
+                target="_blank"
+                rel="noreferrer nofollow"
+              >
+                Official website
+                <ExternalLinkIcon size={14} />
+              </a>
+            ) : null}
+
+            {activity.wikipediaUrl ? (
+              <a
+                className={styles.source}
+                href={activity.wikipediaUrl}
+                target="_blank"
+                rel="noreferrer nofollow"
+              >
+                Read on Wikipedia
+                <ExternalLinkIcon size={14} />
+              </a>
+            ) : null}
+
+            {/* A bookable product carries the page that sells it. */}
+            {activity.source === 'viator' && activity.sourceUrl ? (
+              <a
+                className={styles.source}
+                href={activity.sourceUrl}
+                target="_blank"
+                rel="sponsored noopener"
+              >
+                Book on Viator
+                <ExternalLinkIcon size={14} />
+              </a>
+            ) : null}
+          </div>
         ) : null}
       </div>
 

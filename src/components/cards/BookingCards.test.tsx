@@ -147,6 +147,7 @@ describe('ActivityCard', () => {
     rating: 0,
     reviews: 0,
     image: '/cascade.jpg',
+    source: 'opentripmap',
   };
 
   it('renders as it always did when no actions are supplied', () => {

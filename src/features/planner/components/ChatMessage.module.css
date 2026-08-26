@@ -60,7 +60,7 @@
 
 .user .bubble {
   background-color: var(--color-primary);
-  color: var(--color-text-light);
+  color: var(--color-on-primary);
   border-bottom-right-radius: var(--radius-sm);
 }
 

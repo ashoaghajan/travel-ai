@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { speechLang } from './speechLang';
 
 /**
  * Dictating a prompt instead of typing it.
@@ -237,9 +238,14 @@ export function useSpeech({ onText }: { onText: (text: string) => void }): Speec
     const session = sessionRef.current;
     note(`▶ session ${session} opened`);
 
-    // The reader's own language, so a French speaker is not transcribed as if
-    // they were speaking English.
-    recognition.lang = navigator.language || 'en-US';
+    /*
+     * The reader's own language, so a French speaker is not transcribed as if
+     * they were speaking English — but as a tag the engine actually has a model
+     * for. `navigator.language` answers where somebody is, not what the engine
+     * supports, and handing over an unlisted pair like `en-AE` is its own way
+     * of transcribing English badly. See `speechLang`.
+     */
+    recognition.lang = speechLang(navigator.language);
     // Keeps listening through the pauses in a sentence rather than stopping at
     // the first one — somebody describing a trip thinks mid-sentence.
     recognition.continuous = true;

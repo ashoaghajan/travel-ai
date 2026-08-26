@@ -23,7 +23,7 @@
      the icon rather than merging into it. */
   border: 2px solid var(--color-background);
   background-color: var(--color-primary);
-  color: var(--color-text-light);
+  color: var(--color-on-primary);
   font-size: 10px;
   font-weight: var(--font-weight-semibold);
   line-height: 1;

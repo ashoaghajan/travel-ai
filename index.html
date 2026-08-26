@@ -6,31 +6,43 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#6d3fef" />
     <!--
-      Paints the theme before the first frame.
+      Paints the look before the first frame.
 
       This has to be inline and blocking: a module script is deferred, so by the
-      time `useAppliedTheme` runs, a dark-theme reader has already been shown a
-      white page. The light theme is the document's default, so there is nothing
-      to do unless the answer is dark.
+      time `useAppliedTheme` runs, a dark-ground reader has already been shown a
+      white page.
 
-      `src/services/theme.service.ts` is the source of truth for this logic —
-      the duplication is deliberate and both copies must resolve alike.
+      Two attributes now, not one. `sharpen` on a light ground is the
+      document's default, so the only work is writing anything that differs.
+
+      `src/services/theme.service.ts` is the source of truth for this logic and
+      for the `theme-color` table — the duplication is deliberate and both
+      copies must resolve alike.
     -->
     <script>
       (function () {
+        var CHROME = {
+          sharpen: { light: '#6d3fef', dark: '#0f1117' },
+          atlas: { light: '#fdfcf9', dark: '#17150f' },
+          console: { light: '#f4f5f8', dark: '#101318' },
+        };
+
         try {
           var stored = JSON.parse(localStorage.getItem('ai-travel-planner:settings') || 'null');
-          var preference = (stored && stored.theme) || 'system';
-          var dark =
-            preference === 'dark' ||
-            (preference === 'system' && matchMedia('(prefers-color-scheme: dark)').matches);
+          var appearance = (stored && stored.theme) || 'sharpen';
 
-          if (dark) {
-            document.documentElement.dataset.theme = 'dark';
-            document.querySelector('meta[name="theme-color"]').content = '#0f1117';
-          }
+          // Records written before the appearances existed hold 'system',
+          // 'light' or 'dark'. They were all being shown Sharpen already.
+          if (!CHROME[appearance]) appearance = 'sharpen';
+
+          var ground = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+
+          if (appearance !== 'sharpen') document.documentElement.dataset.appearance = appearance;
+          if (ground === 'dark') document.documentElement.dataset.theme = 'dark';
+
+          document.querySelector('meta[name="theme-color"]').content = CHROME[appearance][ground];
         } catch {
-          // Blocked storage or an unparseable record: light is the safe answer.
+          // Blocked storage or an unparseable record: the default is the safe answer.
         }
       })();
     </script>

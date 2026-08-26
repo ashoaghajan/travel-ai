@@ -54,6 +54,8 @@ const IDENTICAL: [string, string][] = [
     'search',
     'flight',
     'hotel',
+    'settings',
+    'rates',
   ].map(
     (name): [string, string] => [
       `src/services/${name}.service.ts`,
@@ -61,7 +63,14 @@ const IDENTICAL: [string, string][] = [
     ],
   ),
   ['src/services/booking.migration.ts', 'mobile/src/core/services/booking.migration.ts'],
-  ...['createResource', 'broadcast', 'trip.store', 'booking.store', 'friend.store'].map(
+  ...[
+    'createResource',
+    'broadcast',
+    'trip.store',
+    'booking.store',
+    'friend.store',
+    'currency.store',
+  ].map(
     (name): [string, string] => [`src/store/${name}.ts`, `mobile/src/core/store/${name}.ts`],
   ),
   ...['planner', 'partners', 'airports', 'flights'].map(

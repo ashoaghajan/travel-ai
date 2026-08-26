@@ -2,12 +2,15 @@ import { useMemo, useState } from 'react';
 import { ActivityIndicator, FlatList, Pressable, TextInput, View } from 'react-native';
 import { Button } from '../../components/Button';
 import { Card } from '../../components/Card';
+import { ScreenHeader } from '../../components/ScreenHeader';
 import { Screen } from '../../components/Screen';
 import { Text } from '../../components/Text';
 import { CompassIcon } from '../../components/icons';
+import type { Activity } from '../../core/types/travel.types';
 import { flagOf } from '../../core/utils/flag';
 import { useTheme } from '../../theme/useTheme';
 import { ActivityCard } from './ActivityCard';
+import { AddToTripSheet } from './AddToTripSheet';
 import { CountryPicker } from './CountryPicker';
 import {
   ACTIVITY_CHIPS,
@@ -71,6 +74,15 @@ export function ExploreScreen() {
   const [isPickingCountry, setIsPickingCountry] = useState(false);
 
   /*
+   * The place whose sheet is open, rather than a boolean plus a separate id:
+   * the sheet cannot be open without one, and holding them apart is how a
+   * sheet ends up rendering for an activity that has since scrolled out of the
+   * list and been replaced.
+   */
+  const [addingTo, setAddingTo] = useState<Activity | null>(null);
+  const [added, setAdded] = useState<string | null>(null);
+
+  /*
    * The city box is a draft until Explore is pressed, and the prompt below has
    * to read it too — otherwise it goes on asking for a city that is already
    * typed.
@@ -121,9 +133,9 @@ export function ExploreScreen() {
   const header = (
     <View style={{ gap: theme.space.md }}>
       <View style={{ gap: 4 }}>
-        <Text variant="xl" weight="bold" leading="tight">
-          {exploredCity ? `Top Activities in ${exploredCity}` : 'Explore Activities'}
-        </Text>
+        <ScreenHeader
+          title={exploredCity ? `Top Activities in ${exploredCity}` : 'Explore Activities'}
+        />
         {selectionSource === 'trip' && exploredCity ? (
           <Text variant="sm" tone="muted" leading="snug">
             Following your trip to {exploredCity}
@@ -331,6 +343,16 @@ export function ExploreScreen() {
           {visible.length} {visible.length === 1 ? 'activity' : 'activities'}
         </Text>
       )}
+
+      {/*
+        Said here rather than in the sheet, because the sheet closes on success
+        and a confirmation nobody sees is not one. It clears on the next tap.
+      */}
+      {added ? (
+        <Text variant="xs" tone="success" accessibilityRole="alert" leading="snug">
+          Added to {added}.
+        </Text>
+      ) : null}
     </View>
   );
 
@@ -343,7 +365,14 @@ export function ExploreScreen() {
         contentContainerStyle={{ gap: theme.space.md, paddingBottom: theme.space.xl }}
         ListHeaderComponent={header}
         renderItem={({ item }) => (
-          <ActivityCard activity={item} categoryLabel={categoryLabel(item.category)} />
+          <ActivityCard
+            activity={item}
+            categoryLabel={categoryLabel(item.category)}
+            onPress={() => {
+              setAdded(null);
+              setAddingTo(item);
+            }}
+          />
         )}
         /*
          * The web pulls the next page from a sentinel below the grid, so a
@@ -388,6 +417,21 @@ export function ExploreScreen() {
             setIsPickingCountry(false);
           }}
           onClose={() => setIsPickingCountry(false)}
+        />
+      ) : null}
+
+      {addingTo ? (
+        <AddToTripSheet
+          activity={addingTo}
+          /*
+           * The country the explorer is browsing, which is what decides whether
+           * a trip can take this place. Null while nothing is chosen — the
+           * reader followed their trip here — and null is "no evidence" rather
+           * than "no match", so every trip stays available.
+           */
+          placeCountry={selection.countryName ?? null}
+          onAdded={(tripTitle) => setAdded(tripTitle)}
+          onClose={() => setAddingTo(null)}
         />
       ) : null}
     </Screen>

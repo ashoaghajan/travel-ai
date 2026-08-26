@@ -34,10 +34,11 @@ export const PAGE_SIZE = 10;
 const CACHE_TTL_MS = 5 * 60 * 1000;
 
 /** Bump to invalidate every cached copy after a shape change. */
-// Bumped for the priced Viator products merged in below: a cache written
-// before them holds attractions only, and would look like a place with no
-// tours rather than one whose list predates them.
-const CACHE_VERSION = 5;
+// Bumped for `Activity.source`: rows written before it carry no catalogue, and
+// the booking link now reads that field to decide whether it can link straight
+// to a product. An old row would read as `undefined` and fall to the search
+// even where a real product page exists.
+const CACHE_VERSION = 6;
 
 const SEARCH_RADIUS_M = 60_000;
 /** Candidates pulled per group — the pool the pages are drawn from. */
@@ -171,6 +172,22 @@ export type ActivityDetails = Activity & {
    * guessing at where the commas fall.
    */
   country?: string;
+  /**
+   * The place's own website, when it has one — about a third of them do.
+   *
+   * One URL, already picked out of the semicolon-separated tag OpenStreetMap
+   * stores. The most authoritative thing a reader can be sent to: opening
+   * hours and ticket prices live here and nowhere else in this data.
+   */
+  website?: string;
+  /**
+   * The Wikipedia article behind `fullDescription`, where one exists — about
+   * three quarters of places have one.
+   *
+   * The extract is already shown inline; this is for the reader who wants the
+   * whole article, its sources and its photographs.
+   */
+  wikipediaUrl?: string;
 };
 
 export type ActivitiesSource = 'network' | 'cache' | 'stale-cache';
@@ -291,6 +308,7 @@ export function toActivity(place: OpenTripMapPlace): Activity | null {
     reviews: 0,
     // Search results carry no photo, so every card wears its category's.
     image: CATEGORY_IMAGES[category],
+    source: 'opentripmap',
     coordinates: place.point ? { lat: place.point.lat, lng: place.point.lon } : undefined,
   };
 }
@@ -468,6 +486,10 @@ async function fetchPricedActivities(destination: string): Promise<Activity[]> {
         rating: product.rating,
         reviews: product.reviews,
         image: product.image || CATEGORY_IMAGES.culture,
+        source: 'viator' as const,
+        // Viator's `productUrl` — the page that actually sells this product,
+        // which is why these rows can be booked directly and the ones below
+        // can only be searched for.
         sourceUrl: product.sourceUrl,
       }));
   } catch {
@@ -707,6 +729,42 @@ export function toActivityDetails(
     coordinates: details.point
       ? { lat: details.point.lat, lng: details.point.lon }
       : pooled?.coordinates,
-    sourceUrl: details.otm,
+    /*
+     * Not `pooled?.source`: reaching here at all means OpenTripMap resolved
+     * this xid, so the record being merged over is one of its places whatever
+     * the pooled copy was. A Viator row never gets this far — its product code
+     * is not an xid, the lookup throws, and `getActivityById` answers with the
+     * pooled copy untouched.
+     */
+    source: 'opentripmap',
+    website: firstUrl(details.url),
+    wikipediaUrl: details.wikipedia?.trim() || undefined,
+    /*
+     * Deliberately not `details.otm`. That field is a card on OpenTripMap's
+     * own website, and every one of them 404s — the API host is healthy, the
+     * consumer site stopped serving those routes. It used to be linked from
+     * the details page as "View on OpenTripMap", which meant the one outbound
+     * link on the page was broken. `website` and `wikipediaUrl` above are the
+     * links that actually resolve.
+     */
+    sourceUrl: undefined,
   };
+}
+
+/**
+ * The first usable URL out of an OpenStreetMap `website` tag.
+ *
+ * The tag is free text and holds more than one often enough to matter —
+ * `http://a.example;http://www.a.example` is a single string, not a list — so
+ * the separator is split on before anything treats this as a link. Anything
+ * that is not http(s) is dropped rather than shown: the tag also carries bare
+ * hostnames and the occasional `mailto:`.
+ */
+function firstUrl(raw: string | undefined): string | undefined {
+  for (const candidate of (raw ?? '').split(';')) {
+    const trimmed = candidate.trim();
+    if (/^https?:\/\/\S+$/i.test(trimmed)) return trimmed;
+  }
+
+  return undefined;
 }

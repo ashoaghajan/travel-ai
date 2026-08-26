@@ -24,7 +24,7 @@ import {
 import { useBookings } from '../../../store/booking.store';
 import { categoryLabel } from '../../explore/activity.filters';
 import { BOOKING_TABS } from '../partner.filters';
-import { buildActivityUrl } from '../partner.links';
+import { buildActivityUrl, isDirectlyBookable } from '../partner.links';
 import { useBookingDeals } from '../useBookingDeals';
 import { useDestinationAirport } from '../useDestinationAirport';
 import { hasReturnLeg, legRoute } from '../flight.legs';
@@ -381,7 +381,20 @@ export function BookingBrowser({
                           activity={activity}
                           categoryLabel={categoryLabel(activity.category)}
                           to={`/activities/${encodeURIComponent(activity.id)}`}
-                          bookingUrl={buildActivityUrl(activity.title, context.destinationCity)}
+                          /*
+                            Only a row somebody actually sells gets an outbound
+                            button. A place from the directory used to get a
+                            name search at a tour partner, which is what sent
+                            readers to a page that did not list the place they
+                            tapped — and there is nothing to sell them anyway.
+                            Their card opens the details page, one tap away on
+                            the title, where the website and the article are.
+                          */
+                          bookingUrl={
+                            isDirectlyBookable(activity)
+                              ? buildActivityUrl(activity, context.destinationCity)
+                              : undefined
+                          }
                           onAddToTrip={() =>
                             setPendingDrafts([activityToBookingDraft(activity, context, tripId)])
                           }

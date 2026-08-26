@@ -50,6 +50,7 @@ const activity: Activity = {
   rating: 0,
   reviews: 0,
   image: '/museum.jpg',
+  source: 'opentripmap',
 };
 
 function renderPricedScreen() {

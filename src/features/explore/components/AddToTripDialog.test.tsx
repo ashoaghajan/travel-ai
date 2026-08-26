@@ -73,6 +73,7 @@ const ACTIVITY: Activity = {
   rating: 5,
   reviews: 0,
   image: '/ardoukoba.jpg',
+  source: 'opentripmap',
 };
 
 /**

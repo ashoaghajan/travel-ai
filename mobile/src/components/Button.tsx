@@ -56,11 +56,19 @@ export function Button({
   // A button doing something is not a button you may press again.
   const inert = disabled || loading;
 
+  const ICON_COLOR = {
+    onPrimary: theme.color.onPrimary,
+    light: theme.color.textLight,
+    main: theme.color.textMain,
+  };
+
   const palette = {
     primary: {
       backgroundColor: theme.color.primary,
       borderColor: 'transparent',
-      tone: 'light' as const,
+      // Not `light`: two of the three appearances fill this pale on a dark
+      // ground, where a white label would vanish. See `--color-on-primary`.
+      tone: 'onPrimary' as const,
       shadow: theme.shadow.primary,
     },
     secondary: {
@@ -103,7 +111,7 @@ export function Button({
       {loading ? (
         <ActivityIndicator
           size="small"
-          color={palette.tone === 'light' ? theme.color.textLight : theme.color.textMain}
+          color={ICON_COLOR[palette.tone]}
         />
       ) : (
         <>

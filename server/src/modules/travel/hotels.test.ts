@@ -242,7 +242,13 @@ describe('hotelBookingUrl', () => {
     );
 
     expect(url.hostname).toBe('search.hotellook.com');
-    expect(url.searchParams.get('query')).toBe('Sofitel Dubai Downtown Dubai');
+    /*
+     * Path and parameter both matter, and neither is decorative: `/?query=` is
+     * the form Hotellook silently discards, forwarding to Booking's homepage
+     * with no property and no dates. See `hotelBookingUrl` for the chain.
+     */
+    expect(url.pathname).toBe('/hotels');
+    expect(url.searchParams.get('destination')).toBe('Sofitel Dubai Downtown Dubai');
     expect(url.searchParams.get('checkIn')).toBe('2026-09-11');
     expect(url.searchParams.get('checkOut')).toBe('2026-09-14');
     expect(url.searchParams.get('adults')).toBe('2');
@@ -260,5 +266,6 @@ describe('hotelBookingUrl', () => {
 
     expect(url.searchParams.has('marker')).toBe(false);
     expect(url.hostname).toBe('search.hotellook.com');
+    expect(url.pathname).toBe('/hotels');
   });
 });

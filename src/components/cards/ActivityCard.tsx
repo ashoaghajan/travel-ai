@@ -32,7 +32,13 @@ export type ActivityCardProps = {
   onAddToTrip?: () => void;
   /** Already attached to the trip the screen is filling for. */
   isOnTrip?: boolean;
-  /** Where "Book" goes — see `buildActivityUrl`. */
+  /**
+   * Where "Book" goes — see `buildActivityUrl`.
+   *
+   * Supplied only for a listing somebody actually sells. A place from the
+   * attractions directory has no seller and so no button: its card opens the
+   * details page instead, where the website and the article live.
+   */
   bookingUrl?: string;
   as?: 'div' | 'li';
   className?: string;

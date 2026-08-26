@@ -15,7 +15,7 @@ import { prisma } from '../../prisma';
  */
 
 export const DEFAULT_SETTINGS: ApiSettings = {
-  theme: 'system',
+  theme: 'sharpen',
   // The currency prices are already quoted in, so the default costs no
   // conversion and no rate lookup.
   currency: BASE_CURRENCY,
@@ -37,9 +37,15 @@ export function toApiSettings(row: UserSettings | null): ApiSettings {
   if (!row) return DEFAULT_SETTINGS;
 
   const theme: ApiSettings['theme'] =
-    row.theme === 'dark' || row.theme === 'light' || row.theme === 'system'
+    row.theme === 'sharpen' || row.theme === 'atlas' || row.theme === 'console'
       ? row.theme
-      : DEFAULT_SETTINGS.theme;
+      : /*
+         * Covers both the genuinely corrupt and the merely old. Rows written
+         * before the appearances existed hold 'system' | 'light' | 'dark', and
+         * every one of them was being shown what is now called Sharpen — so
+         * falling back is a rename, not a loss of the reader's choice.
+         */
+        DEFAULT_SETTINGS.theme;
 
   return {
     theme,

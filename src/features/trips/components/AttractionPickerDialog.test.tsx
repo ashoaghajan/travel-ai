@@ -31,6 +31,7 @@ function activity(id: string, title: string, description = 'Monuments · 0.8 km'
     rating: 0,
     reviews: 0,
     image: '/photo.jpg',
+    source: 'opentripmap',
   };
 }
 

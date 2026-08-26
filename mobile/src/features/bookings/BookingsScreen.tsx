@@ -2,7 +2,11 @@ import { useMemo, useState } from 'react';
 import { FlatList, Modal, Pressable, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import type { FlightSearchQuery, PartnerCategory } from '../../core/types/travel.types';
+import type {
+  BookingContext,
+  FlightSearchQuery,
+  PartnerCategory,
+} from '../../core/types/travel.types';
 import { MOCK_PARTNERS } from '../../core/mock/partners';
 import { searchService } from '../../core/services/search.service';
 import { useActiveTripId, useTrips } from '../../core/store/trip.store';
@@ -10,12 +14,16 @@ import { formatDateRange } from '../../core/utils/date';
 import { formatTravellers } from '../../core/utils/trip';
 import { Button } from '../../components/Button';
 import { Card } from '../../components/Card';
+import { ScreenHeader } from '../../components/ScreenHeader';
 import { Screen } from '../../components/Screen';
 import { Text } from '../../components/Text';
 import { TicketIcon } from '../../components/icons';
 import { useTheme } from '../../theme/useTheme';
 import { BookingSearchForm } from './BookingSearchForm';
 import { DealCardsList } from './DealCardsList';
+import { FlightLegs } from './FlightLegs';
+import { hasReturnLeg, legRoute } from './flight.legs';
+import type { FlightLeg } from './flight.legs';
 import { useDestinationAirport } from './useDestinationAirport';
 import { PartnerCard } from './PartnerCard';
 import { NO_TRIP, resolveBookingContext, toFlightQuery } from './booking.context';
@@ -152,6 +160,65 @@ export function BookingsScreen() {
   );
 
   /*
+   * Which half of the journey is being priced.
+   *
+   * The step only — where it flies is not a choice, it is `legRoute` of the
+   * search above. Held here rather than inside `FlightLegs` because the search
+   * is driven by it: the steps and the fares have to agree on which leg is on
+   * screen.
+   */
+  const [leg, setLeg] = useState<FlightLeg>('outbound');
+
+  const hasReturn = hasReturnLeg(searchContext);
+
+  // A one-way search has no way home to show, and must not be left holding a
+  // leg that no longer exists.
+  const activeLeg: FlightLeg = hasReturn ? leg : 'outbound';
+
+  /*
+   * Back to the way out whenever the journey itself changes. Keyed on the
+   * route rather than the whole context: changing the party size, or the
+   * Hotels tab, must not throw the reader back to step one.
+   */
+  const journey = `${searchContext.originCode ?? ''}|${searchContext.destinationCode ?? ''}|${searchContext.departDate ?? ''}|${searchContext.returnDate ?? ''}`;
+  const [seenJourney, setSeenJourney] = useState(journey);
+
+  if (seenJourney !== journey) {
+    setSeenJourney(journey);
+    setLeg('outbound');
+  }
+
+  /*
+   * The context the fare search actually runs against.
+   *
+   * **One way, always.** Each leg is its own fare and its own booking. Handing
+   * the provider a return date brings back a bundled round trip — one number
+   * covering both flights — which is exactly what this screen was showing
+   * before, and what `flight.legs.ts` explains the web moved away from: the
+   * halves of a bundle are a fiction, and the same journey that bundles at
+   * $363 is $177 out and $220 back.
+   *
+   * Only the flights tab is rewritten. Hotels and Activities search on the
+   * destination and the dates, and know nothing about legs.
+   */
+  const route = legRoute(searchContext, activeLeg);
+
+  const flightContext: BookingContext = useMemo(
+    () =>
+      activeTab === 'flights'
+        ? {
+            ...searchContext,
+            tripType: 'one-way',
+            originCode: route.from || null,
+            destinationCode: route.to || null,
+            departDate: route.date || null,
+            returnDate: null,
+          }
+        : searchContext,
+    [activeTab, searchContext, route.from, route.to, route.date],
+  );
+
+  /*
    * Saved as well as held, so re-opening the screen — or a second trip — starts
    * from the search that was last run rather than from the spec defaults.
    */
@@ -169,9 +236,7 @@ export function BookingsScreen() {
 
   const header = (
     <View style={{ gap: theme.space.md }}>
-      <Text variant="xl" weight="bold" leading="tight">
-        Book with our partners
-      </Text>
+      <ScreenHeader title="Book with our partners" />
 
       {/* Which trip this is for, and the way to change or drop it. */}
       <Card padding="lg" elevation="soft">
@@ -287,7 +352,11 @@ export function BookingsScreen() {
         })}
       </View>
 
-      <DealCardsList context={searchContext} tab={activeTab} />
+      {activeTab === 'flights' ? (
+        <FlightLegs context={searchContext} value={activeLeg} onChange={setLeg} />
+      ) : null}
+
+      <DealCardsList context={flightContext} tab={activeTab} tripId={filledTripId} />
 
       <Text variant="md" weight="semibold" leading="tight">
         Or search our partners directly

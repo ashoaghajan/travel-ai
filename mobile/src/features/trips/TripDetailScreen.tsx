@@ -5,7 +5,7 @@ import type { ItineraryActivity, ItineraryDay, Trip } from '../../core/types/tri
 import { imageSource } from '../../assets/bundled-images';
 import { useTrips } from '../../core/store/trip.store';
 import { formatDateRange, formatWeekdayDate } from '../../core/utils/date';
-import { usdFormatter } from '../../core/utils/currency';
+import { useMoney } from '../../core/store/currency.store';
 import { Button } from '../../components/Button';
 import { Card } from '../../components/Card';
 import { Screen } from '../../components/Screen';
@@ -38,6 +38,7 @@ import { useEditTrip } from './useEditTrip';
 
 function Activity({ activity }: { activity: ItineraryActivity }) {
   const theme = useTheme();
+  const money = useMoney();
 
   return (
     <View style={{ flexDirection: 'row', gap: theme.space.md }}>
@@ -64,7 +65,7 @@ function Activity({ activity }: { activity: ItineraryActivity }) {
       {/* Zero is a real answer — "free" — and must not read as "unknown". */}
       {typeof activity.priceEstimate === 'number' ? (
         <Text variant="xs" weight="semibold" style={{ fontVariant: ['tabular-nums'] }}>
-          {activity.priceEstimate === 0 ? 'Free' : usdFormatter.format(activity.priceEstimate)}
+          {activity.priceEstimate === 0 ? 'Free' : money.format(activity.priceEstimate)}
         </Text>
       ) : null}
     </View>

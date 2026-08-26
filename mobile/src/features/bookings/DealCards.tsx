@@ -1,7 +1,7 @@
 import { Image, Linking, View } from 'react-native';
 import type { Flight, Hotel, PriceSource } from '../../core/types/travel.types';
 import { imageSource } from '../../assets/bundled-images';
-import { usdFormatter } from '../../core/utils/currency';
+import { useMoney } from '../../core/store/currency.store';
 import { Button } from '../../components/Button';
 import { Card } from '../../components/Card';
 import { Text } from '../../components/Text';
@@ -51,8 +51,23 @@ export function PriceProvenance({
   );
 }
 
-export function FlightCard({ flight }: { flight: Flight }) {
+export function FlightCard({
+  flight,
+  onAddToTrip,
+  isOnTrip,
+}: {
+  flight: Flight;
+  /**
+   * Record this fare against a trip. Absent for a sample fare, whose price is
+   * invented and which carries no booking link — filing one would write a
+   * fiction the trip tab then repeats back as fact.
+   */
+  onAddToTrip?: () => void;
+  /** Already recorded, so the button says so rather than inviting a duplicate. */
+  isOnTrip?: boolean;
+}) {
   const theme = useTheme();
+  const money = useMoney();
 
   return (
     <Card padding="lg" elevation="soft">
@@ -68,7 +83,7 @@ export function FlightCard({ flight }: { flight: Flight }) {
           </View>
 
           <Text variant="md" weight="bold" tone="primary" leading="tight">
-            {usdFormatter.format(flight.price)}
+            {money.format(flight.price)}
           </Text>
         </View>
 
@@ -96,6 +111,18 @@ export function FlightCard({ flight }: { flight: Flight }) {
           </Text>
         ) : null}
 
+        {/*
+          Two different acts, and the order says which is which. Adding records
+          the fare and stays here; booking leaves for the partner. The primary
+          button is the one that keeps the reader in the app, because the other
+          is the one they cannot undo from here.
+        */}
+        {onAddToTrip ? (
+          <Button fullWidth onPress={onAddToTrip} disabled={isOnTrip}>
+            {isOnTrip ? 'On this trip' : 'Add to trip'}
+          </Button>
+        ) : null}
+
         {flight.bookingUrl ? (
           <Button
             variant="secondary"
@@ -110,8 +137,28 @@ export function FlightCard({ flight }: { flight: Flight }) {
   );
 }
 
-export function HotelCard({ hotel }: { hotel: Hotel }) {
+export function HotelCard({
+  hotel,
+  onAddToTrip,
+  isOnTrip,
+  isFullyBooked,
+}: {
+  hotel: Hotel;
+  /** Record this stay against a trip. Absent for a sample price. */
+  onAddToTrip?: () => void;
+  /** Already recorded, so the button says so rather than inviting a duplicate. */
+  isOnTrip?: boolean;
+  /**
+   * Every night of the trip already has a bed booked.
+   *
+   * Different from `isOnTrip`, which is about *this* stay: another hotel would
+   * double up on nights already paid for rather than fill anything, so the
+   * button says why instead of quietly accepting it.
+   */
+  isFullyBooked?: boolean;
+}) {
   const theme = useTheme();
+  const money = useMoney();
   const photo = imageSource(hotel.image);
 
   return (
@@ -141,7 +188,7 @@ export function HotelCard({ hotel }: { hotel: Hotel }) {
           ) : (
             <View style={{ alignItems: 'flex-end' }}>
               <Text variant="md" weight="bold" tone="primary" leading="tight">
-                {usdFormatter.format(hotel.pricePerNight)}
+                {money.format(hotel.pricePerNight)}
               </Text>
               <Text variant="xs" tone="muted" leading="tight">
                 per night
@@ -155,6 +202,14 @@ export function HotelCard({ hotel }: { hotel: Hotel }) {
             ★ <Text variant="xs" weight="semibold">{hotel.rating.toFixed(1)}</Text>
             {hotel.reviews > 0 ? ` (${hotel.reviews})` : ''}
           </Text>
+        ) : null}
+
+        {/* Adding records the stay and stays here; the link below leaves for
+            the partner. Same order, and same reason, as `FlightCard`. */}
+        {onAddToTrip ? (
+          <Button fullWidth onPress={onAddToTrip} disabled={isOnTrip || isFullyBooked}>
+            {isOnTrip ? 'On this trip' : isFullyBooked ? 'Every night booked' : 'Add to trip'}
+          </Button>
         ) : null}
 
         {hotel.bookingUrl ? (

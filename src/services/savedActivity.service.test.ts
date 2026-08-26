@@ -32,6 +32,7 @@ function activity(id: string, title = `Place ${id}`): Activity {
     rating: 5,
     reviews: 0,
     image: 'city.jpg',
+    source: 'opentripmap',
   };
 }
 

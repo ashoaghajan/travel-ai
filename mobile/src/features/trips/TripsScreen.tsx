@@ -5,6 +5,7 @@ import { imageSource } from '../../assets/bundled-images';
 import { useTripsResource } from '../../core/store/trip.store';
 import { formatDateRange } from '../../core/utils/date';
 import { Card } from '../../components/Card';
+import { ScreenHeader } from '../../components/ScreenHeader';
 import { Screen } from '../../components/Screen';
 import { Text } from '../../components/Text';
 import { SuitcaseIcon } from '../../components/icons';
@@ -60,9 +61,7 @@ export function TripsScreen() {
         keyExtractor={(trip) => trip.id}
         contentContainerStyle={{ gap: theme.space.md, paddingBottom: theme.space.xl }}
         ListHeaderComponent={
-          <Text variant="xl" weight="bold" leading="tight" style={{ marginBottom: theme.space.md }}>
-            Trips
-          </Text>
+          <ScreenHeader title="Trips" style={{ marginBottom: theme.space.md }} />
         }
         renderItem={({ item }) => (
           <TripRow trip={item} onPress={() => router.push(`/trips/${item.id}`)} />

@@ -137,6 +137,14 @@
   line-height: var(--line-height-relaxed, 1.7);
 }
 
+/* Wraps rather than crowds: a place can carry both links, and on a narrow
+   screen "Official website" and "Read on Wikipedia" do not sit side by side. */
+.sources {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm) var(--space-lg);
+}
+
 .source {
   display: inline-flex;
   align-items: center;

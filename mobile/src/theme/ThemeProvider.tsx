@@ -4,45 +4,44 @@ import { useColorScheme } from 'react-native';
 import { ThemeContext } from './ThemeContext';
 import { themeFor } from './tokens';
 import type { ColorScheme } from './tokens';
+import type { Appearance } from '../core/types/settings.types';
+import { DEFAULT_APPEARANCE } from '../core/types/settings.types';
 
 /**
  * The resolved theme, for everything below it.
  *
- * **`preference` is the stored choice; the scheme is what gets painted.** The
- * web app draws that same distinction in `theme.service.ts`, and for the same
- * reason: `'system'` is a thing somebody can choose but not a thing that can
- * be rendered, so exactly one place is allowed to resolve it. That place is
- * here.
+ * Two axes, and only one of them is a choice:
  *
- * The preference is a prop rather than read from storage, because storage does
- * not exist on this side yet — the settings store arrives with the rest of the
- * core plumbing. Until then the caller passes `'system'` and the OS decides.
- * When it does arrive, this component does not change.
+ * - **`appearance`** is the reader's — `sharpen`, `atlas`, `console`. It comes
+ *   in as a prop from `useThemePreference`, so this component stays a pure
+ *   function of what it is given and can be rendered in a test without
+ *   storage.
+ * - **The ground** is light or dark and belongs to the device. Nobody chooses
+ *   it in this app any more; `useColorScheme()` is the only authority.
+ *
+ * That split is why there is no `'system'` here to resolve. Under the old
+ * preference this component collapsed three values into two; now the OS answer
+ * *is* the answer, and the web's `theme.service.ts` draws the same line.
  */
-
-export type ThemePreference = ColorScheme | 'system';
-
 export function ThemeProvider({
-  preference = 'system',
+  appearance = DEFAULT_APPEARANCE,
   children,
 }: {
-  preference?: ThemePreference;
+  appearance?: Appearance;
   children: ReactNode;
 }) {
   /*
    * The OS answers `'light'`, `'dark'`, `'unspecified'`, or null — and only
-   * the first two are things that can be painted. Anything else falls back to
-   * light, matching the web's `resolveTheme`, so a device that declines to
-   * answer gets the same app as one that answers "light".
+   * the first two can be painted. Anything else falls back to light, matching
+   * the web's `resolveGround`, so a device that declines to answer gets the
+   * same app as one that answers "light".
    */
   const reported = useColorScheme();
-  const system: ColorScheme = reported === 'dark' ? 'dark' : 'light';
-  const scheme: ColorScheme = preference === 'system' ? system : preference;
+  const scheme: ColorScheme = reported === 'dark' ? 'dark' : 'light';
 
-  // Rebuilt only when the resolved scheme actually changes: every styled
-  // component below reads this, so an identity change on each render would
-  // invalidate all of them.
-  const theme = useMemo(() => themeFor(scheme), [scheme]);
+  // Rebuilt only when one of the two actually changes: every styled component
+  // below reads this, so an identity change per render would invalidate them all.
+  const theme = useMemo(() => themeFor(appearance, scheme), [appearance, scheme]);
 
   return <ThemeContext.Provider value={theme}>{children}</ThemeContext.Provider>;
 }

@@ -6,16 +6,33 @@ import { env } from '../../env';
  * The only file that knows which provider this is. One call, one answer: audio
  * in, words out — there is no session, nothing to stream and nothing to keep.
  *
- * **Whisper large-v3-turbo**, which is the fast variant: a phone waiting on a
- * sentence is a person waiting, and the accuracy difference against the full
- * model is not worth the seconds on a spoken prompt.
+ * **Whisper large-v3, not the turbo variant.** Turbo was chosen here first, on
+ * the reasoning that a phone waiting on a sentence is a person waiting and the
+ * accuracy difference "is not worth the seconds". Measured against Groq, both
+ * halves of that turned out to be wrong.
+ *
+ * The cost is not seconds. On 6.4 s of audio, five calls each: turbo averaged
+ * 755 ms round trip and large-v3 averaged 809 ms. Fifty-four milliseconds is
+ * not a wait anybody can feel.
+ *
+ * The accuracy difference is not small, and it lands exactly where this app
+ * cannot afford it — proper nouns. On the same recording degraded to a
+ * realistic 15 dB signal-to-noise ratio, six trials each, large-v3 transcribed
+ * "Reykjavik and Akureyri" correctly 6 times out of 6 and turbo 0 out of 6,
+ * offering "Reiki of the Kandaku area" among others. A travel planner that
+ * cannot hear a place name is not doing the job, and a destination is the one
+ * word in a spoken prompt that has to survive.
+ *
+ * On clean audio the two are indistinguishable, which is why the original
+ * choice looked fine: the difference only appears once there is a room behind
+ * the voice.
  *
  * A plain `fetch`, as every other provider in this codebase is called, so it
  * stubs at `fetch` in tests rather than needing an SDK's HTTP layer mocked.
  */
 
 const ENDPOINT = 'https://api.groq.com/openai/v1/audio/transcriptions';
-const MODEL = 'whisper-large-v3-turbo';
+const MODEL = 'whisper-large-v3';
 
 /** Whether transcription is switched on at all. */
 export function isConfigured(): boolean {

@@ -57,7 +57,7 @@
  * ---------------------------------------------------------------------- */
 .primary {
   background-color: var(--color-primary);
-  color: var(--color-text-light);
+  color: var(--color-on-primary);
   box-shadow: var(--shadow-primary);
 }
 

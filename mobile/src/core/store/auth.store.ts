@@ -2,6 +2,7 @@ import { useSyncExternalStore } from 'react';
 import type { ApiUser, LoginRequest, RegisterRequest, UserPlan } from '@ai-travel/shared';
 import { authService } from '../services/auth.service';
 import { signedOut } from '../services/http';
+import { settingsService } from '../services/settings.service';
 import { bookingStore } from './booking.store';
 import { friendStore } from './friend.store';
 import { tripStore } from './trip.store';
@@ -69,7 +70,30 @@ function forgetAccount(): void {
   bookingStore.reset();
   // Nor who the last account was friends with.
   friendStore.reset();
+  /*
+   * Nor their theme. The cached copy is what paints before the next account's
+   * settings arrive, so leaving it would show the previous reader's dark app
+   * to whoever signs in next — on a phone, quite likely the person standing
+   * beside them.
+   */
+  settingsService.clearCache();
   setState(ANONYMOUS);
+}
+
+/**
+ * Enter a session with the account the server just described.
+ *
+ * The settings ride along on `ApiUser`, exactly as they do on the web, so
+ * adopting them here — before the state change — means the theme and the
+ * currency are already right by the time anything re-renders. Doing it at each
+ * of the four doors into a session separately is how one of them ends up
+ * forgotten; this is the single door they all go through.
+ */
+function enterSession(user: ApiUser): ApiUser {
+  settingsService.adopt(user.settings);
+  setState({ status: 'authenticated', user });
+
+  return user;
 }
 
 /*
@@ -92,21 +116,16 @@ export const authStore = {
   async bootstrap(): Promise<void> {
     const user = await authService.restore();
 
-    setState(user ? { status: 'authenticated', user } : ANONYMOUS);
+    if (user) enterSession(user);
+    else setState(ANONYMOUS);
   },
 
   async signIn(input: LoginRequest): Promise<ApiUser> {
-    const user = await authService.login(input);
-    setState({ status: 'authenticated', user });
-
-    return user;
+    return enterSession(await authService.login(input));
   },
 
   async signUp(input: RegisterRequest): Promise<ApiUser> {
-    const user = await authService.register(input);
-    setState({ status: 'authenticated', user });
-
-    return user;
+    return enterSession(await authService.register(input));
   },
 
   /**
@@ -117,10 +136,7 @@ export const authStore = {
    * sign-in — which is the point.
    */
   async signInWithGoogle(credential: string): Promise<ApiUser> {
-    const user = await authService.signInWithGoogle(credential);
-    setState({ status: 'authenticated', user });
-
-    return user;
+    return enterSession(await authService.signInWithGoogle(credential));
   },
 
   async signOut(): Promise<void> {
@@ -133,8 +149,7 @@ export const authStore = {
   },
 
   async setPlan(plan: UserPlan): Promise<void> {
-    const user = await authService.setPlan(plan);
-    setState({ status: 'authenticated', user });
+    enterSession(await authService.setPlan(plan));
   },
 
   /** Testing seam — the module cache otherwise outlives a single test. */

@@ -108,7 +108,7 @@ describe('transcribing', () => {
 
   it('keeps the provider’s own words out of the answer', async () => {
     const { accessToken } = await signUp();
-    groqSays('rate limit exceeded for model whisper-large-v3-turbo on account acct_123', false);
+    groqSays('rate limit exceeded for model whisper-large-v3 on account acct_123', false);
 
     const response = await api()
       .post(PATH)

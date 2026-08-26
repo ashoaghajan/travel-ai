@@ -66,7 +66,7 @@
   border: 0;
   border-radius: var(--radius-pill);
   background-color: var(--color-primary);
-  color: var(--color-text-light);
+  color: var(--color-on-primary);
   font-size: var(--font-xs);
   font-weight: var(--font-weight-semibold);
   cursor: pointer;

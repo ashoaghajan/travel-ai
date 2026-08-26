@@ -111,8 +111,11 @@ model UserSettings {
   userId String @id
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  /// 'system' | 'light' | 'dark'. A string, not an enum — see the header.
-  theme String @default("system")
+  /// 'sharpen' | 'atlas' | 'console'. A string, not an enum — see the header,
+  /// and note that being a plain column is what let the appearances replace
+  /// 'system' | 'light' | 'dark' without a migration. Older rows still hold
+  /// those three; `settings.service.ts` narrows them to 'sharpen' on read.
+  theme String @default("sharpen")
 
   /// ISO 4217, e.g. 'USD'. Display only: prices are quoted and stored in USD
   /// and converted at render time, so this changes what a reader sees and

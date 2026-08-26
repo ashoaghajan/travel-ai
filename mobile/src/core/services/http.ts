@@ -1,6 +1,6 @@
 import { ERROR_CODES } from '@ai-travel/shared';
 /*
- * DIFFERS FROM WEB (2/8): a fetch that can stream.
+ * DIFFERS FROM WEB (2/9): a fetch that can stream.
  *
  * React Native's built-in fetch is XHR-backed and leaves `response.body`
  * undefined, which would make `stream()` below throw "the server sent an empty
@@ -35,12 +35,12 @@ import type { AccessTokenResponse, ApiErrorBody, ErrorCode } from '@ai-travel/sh
  * this file has to do two things the web's version never had to: present it,
  * and store the replacement the server rotates to.
  *
- * Eight differences from `src/services/http.ts`, each marked DIFFERS FROM WEB
+ * Nine differences from `src/services/http.ts`, each marked DIFFERS FROM WEB
  * where it happens. `core-copies.test.ts` asserts they are still there.
  */
 
 /*
- * DIFFERS FROM WEB (1/8): where the API is.
+ * DIFFERS FROM WEB (1/9): where the API is.
  *
  * The web defaults to the relative `/api`, which is what makes it same-origin
  * and is why it needs no CORS. A phone has no origin to be the same as, so the
@@ -140,7 +140,7 @@ function buildUrl(path: string, query: RequestOptions['query']): string {
  */
 function isBinary(body: unknown): body is ArrayBuffer {
   /*
-   * DIFFERS FROM WEB (8/8): what bytes look like.
+   * DIFFERS FROM WEB (8/9): what bytes look like.
    *
    * The web hands `MediaRecorder`'s `Blob` straight to `fetch`, and reads the
    * content type off it. There is no such blob here — a recording is a file on
@@ -170,7 +170,7 @@ async function send(path: string, options: RequestOptions): Promise<Response> {
   if (accessToken && !options.skipAuth) headers.Authorization = `Bearer ${accessToken}`;
 
   /*
-   * DIFFERS FROM WEB (3/8): the transport this client can hold.
+   * DIFFERS FROM WEB (3/9): the transport this client can hold.
    *
    * Tells the server to answer with the refresh token in the body rather than
    * setting a cookie. Sent on every request rather than only on `/api/auth`,
@@ -193,7 +193,7 @@ async function send(path: string, options: RequestOptions): Promise<Response> {
             ? options.body
             : JSON.stringify(options.body),
       /*
-       * DIFFERS FROM WEB (4/8): no cookie to include.
+       * DIFFERS FROM WEB (4/9): no cookie to include.
        *
        * The web's session rides an httpOnly refresh cookie. A native client
        * cannot be trusted to persist one across a cold start, so the refresh
@@ -206,7 +206,7 @@ async function send(path: string, options: RequestOptions): Promise<Response> {
     // `fetch` rejects only for a dead network, DNS failure or an abort —
     // every HTTP status, including 500, resolves.
     /*
-     * DIFFERS FROM WEB (5/8): how an abort is recognised.
+     * DIFFERS FROM WEB (5/9): how an abort is recognised.
      *
      * There is no `DOMException` in Hermes, so the web's check is always false
      * here and a cancelled request falls through to the network error below —
@@ -259,7 +259,7 @@ let refreshing: Promise<boolean> | null = null;
 async function refreshAccessToken(): Promise<boolean> {
   try {
     /*
-     * DIFFERS FROM WEB (6/8): the token is presented, not implied.
+     * DIFFERS FROM WEB (6/9): the token is presented, not implied.
      *
      * The browser sends nothing here — the cookie rides along by itself. This
      * client has to read the token out of the keychain and put it in the body,
@@ -323,6 +323,35 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
     });
 
     if (await refreshing) return request<T>(path, { ...options, isRetry: true });
+  }
+
+  /*
+   * A 401 that is *about the credentials just offered*, not about a session.
+   *
+   * Signing in with the wrong password answers 401 `INVALID_CREDENTIALS`, and
+   * this function used to treat every 401 alike: it cleared the token, emitted
+   * `signedOut`, and threw "Your session has ended. Please sign in again." So
+   * the sign-in screen told somebody mistyping their password that their
+   * session had expired — on the one screen where they have no session to
+   * expire. It reads as a bug in the app rather than as a typo, which is
+   * exactly the wrong place to send them looking.
+   *
+   * The server's own wording is better than anything invented here — "That
+   * email or password is not right" — so it is passed through untouched, and
+   * nothing is reset: there is no session to end.
+   *
+   * **DIFFERS FROM WEB (9/9): the web does this too and gets away with it.**
+   * Its `http.ts` overwrites the same message — but only the message. The
+   * `code` survives, and `auth.messages.ts` maps codes to what the reader
+   * sees, so the replaced text is never rendered there. `SignInScreen` on this
+   * side shows `caught.message` directly, with no such table, which is what
+   * makes the overwrite visible here and invisible there.
+   *
+   * Fixed here rather than by adding a message table, so there is one wording
+   * — the server's — instead of two that can drift.
+   */
+  if (code === ERROR_CODES.INVALID_CREDENTIALS) {
+    throw new ApiError(401, code, message, details);
   }
 
   // Unrecoverable: no token, a dead refresh, or a replayed one.
@@ -430,7 +459,7 @@ export async function* stream<T>(
   }
 
   /*
-   * DIFFERS FROM WEB (7/8): decoding.
+   * DIFFERS FROM WEB (7/9): decoding.
    *
    * Hermes has `TextDecoder` but not `TextDecoderStream`, so the web's
    * `pipeThrough` has nothing to pipe through. Decoding each chunk with

@@ -9,7 +9,7 @@
   align-items: center;
   justify-content: center;
   background-color: var(--color-primary);
-  color: var(--color-text-light);
+  color: var(--color-on-primary);
   border-radius: var(--radius-md);
   box-shadow: var(--shadow-primary);
 }

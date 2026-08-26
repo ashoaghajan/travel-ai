@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
-import { Image, View } from 'react-native';
+import { Image, Linking, Pressable, View } from 'react-native';
 import type { Activity } from '../../core/types/travel.types';
 import { CATEGORY_IMAGES } from '../../core/assets/category-images';
-import { usdFormatter } from '../../core/utils/currency';
+import { useMoney } from '../../core/store/currency.store';
 import { imageSource } from '../../assets/bundled-images';
+import { Button } from '../../components/Button';
 import { Card } from '../../components/Card';
 import { Text } from '../../components/Text';
 import { useTheme } from '../../theme/useTheme';
@@ -11,9 +12,27 @@ import { useTheme } from '../../theme/useTheme';
 /**
  * One attraction (DESIGN_SPEC Screen 6): photo, title, description, rating.
  *
- * The web's `ActivityCard` minus the parts that only exist there. There is no
- * `to` — the phone has no attraction page yet — and no "Add to trip" or
- * "Book", which the web only renders on its booking screen.
+ * The web's `ActivityCard` minus the parts that only exist there: no "Book",
+ * which the web only renders on its booking screen.
+ *
+ * **`onPress` stands in for the web's `to`.** There, the card is a link to an
+ * attraction page and the "Add to trip" button lives on that page. There is no
+ * attraction page here, so the card opens `AddToTripSheet` directly — one tap
+ * instead of two, and the page the reader would only have passed through is
+ * not invented to hold a button.
+ *
+ * The card is only pressable when a handler is given. A card with no `onPress`
+ * renders as it always did rather than as something that looks tappable and
+ * is not, which is the bug this replaces: nothing happened because nothing was
+ * ever wired, and the card gave no sign of it either way.
+ *
+ * **Two callers, two different acts, and the difference is not cosmetic.**
+ * From the explorer the whole card is pressable and it files an *itinerary
+ * activity* — a plan for a day, which is a guess. From the booking screen it
+ * grows buttons and files a *booking* — a record of something arranged, which
+ * is a fact. The web draws the same line by giving its card `to` for the first
+ * and `onAddToTrip`/`bookingUrl` for the second; the props here are named after
+ * the web's for that reason.
  *
  * **The photo falls back the same way, for the same reason.** Photographs come
  * from Wikimedia, so a URL can rot between the cache being written and the card
@@ -24,11 +43,24 @@ import { useTheme } from '../../theme/useTheme';
 export function ActivityCard({
   activity,
   categoryLabel,
+  onPress,
+  onAddToTrip,
+  isOnTrip,
+  bookingUrl,
 }: {
   activity: Activity;
   categoryLabel?: string;
+  /** Explorer: the whole card opens the itinerary sheet. */
+  onPress?: () => void;
+  /** Booking screen: record this as a booking rather than as a day's plan. */
+  onAddToTrip?: () => void;
+  /** Already recorded, so the button says so rather than inviting a duplicate. */
+  isOnTrip?: boolean;
+  /** Where the partner sells it. Absent when we have no link to offer. */
+  bookingUrl?: string | null;
 }) {
   const theme = useTheme();
+  const money = useMoney();
   const { title, description, price, rating, reviews, image, category, imageCredit } = activity;
 
   const [hasFailed, setHasFailed] = useState(false);
@@ -40,7 +72,7 @@ export function ActivityCard({
   const source = imageSource(hasFailed ? CATEGORY_IMAGES[category] : image);
   const credit = hasFailed ? undefined : imageCredit;
 
-  return (
+  const card = (
     <Card padding="none" elevation="card" style={{ overflow: 'hidden' }}>
       <View>
         {source ? (
@@ -118,13 +150,51 @@ export function ActivityCard({
 
         {price > 0 ? (
           <Text variant="sm" weight="semibold" tone="primary" leading="tight">
-            {usdFormatter.format(price)}{' '}
+            {money.format(price)}{' '}
             <Text variant="xs" tone="muted" weight="regular">
               per person
             </Text>
           </Text>
         ) : null}
+
+        {/* Adding records it and stays here; booking leaves for the partner.
+            Same order, and same reason, as the flight and hotel cards. The
+            row is its own view because the card body is gapped for text. */}
+        {onAddToTrip || bookingUrl ? (
+          <View style={{ gap: theme.space.sm, marginTop: theme.space.sm }}>
+            {onAddToTrip ? (
+              <Button fullWidth onPress={onAddToTrip} disabled={isOnTrip}>
+                {isOnTrip ? 'On this trip' : 'Add to trip'}
+              </Button>
+            ) : null}
+
+            {bookingUrl ? (
+              <Button
+                variant="secondary"
+                fullWidth
+                onPress={() => void Linking.openURL(bookingUrl)}
+              >
+                Book
+              </Button>
+            ) : null}
+          </View>
+        ) : null}
       </View>
     </Card>
+  );
+
+  if (!onPress) return card;
+
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      // Named rather than left to the card's own text, which reads out as a
+      // photo credit and a price before it reaches what the button does.
+      accessibilityLabel={`${activity.title}. Add to a trip.`}
+      style={({ pressed }) => ({ opacity: pressed ? 0.85 : 1 })}
+    >
+      {card}
+    </Pressable>
   );
 }
