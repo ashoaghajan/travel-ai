@@ -4,7 +4,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ERROR_CODES } from '@ai-travel/shared';
 import type { Booking, BookingDraft } from '../types/booking.types';
-import type { Activity, BookingContext, Flight, Hotel, Partner } from '../types/travel.types';
+import type { Activity, BookingContext, Flight, Hotel } from '../types/travel.types';
 import type { ItineraryDay, Trip } from '../types/trip.types';
 import {
   BookingAlreadyOnTripError,
@@ -15,7 +15,6 @@ import {
   hotelToBookingDraft,
   isResultOnTrip,
   itineraryActivityToBookingDraft,
-  partnerToBookingDraft,
 } from './booking.service';
 import { ApiError, http } from './http';
 
@@ -770,42 +769,7 @@ describe('mappers', () => {
     expect(draft.priceBasis).toEqual({ unit: 'perPerson', units: 1 });
   });
 
-  it('maps a partner to the kind of its tab', () => {
-    const partner: Partner = {
-      id: 'booking',
-      name: 'Booking.com',
-      description: 'Wide selection of hotels',
-      categories: ['hotels'],
-      brandColor: '#003580',
-      brandTextColor: '#fff',
-      initials: 'BK',
-      linkBuilder: 'booking',
-      homeUrl: 'https://booking.com',
-    };
-    const draft = partnerToBookingDraft(partner, 'hotels', 'https://booking.com/x', CONTEXT, 't1');
 
-    expect(draft.kind).toBe('hotel');
-    expect(draft.title).toBe('Booking.com');
-    expect(draft.source?.resultId).toBe('booking:hotels');
-    expect(draft.source?.bookingUrl).toBe('https://booking.com/x');
-  });
-
-  it('maps the other two partner tabs', () => {
-    const partner: Partner = {
-      id: 'expedia',
-      name: 'Expedia',
-      description: '',
-      categories: ['flights', 'activities'],
-      brandColor: '#000',
-      brandTextColor: '#fff',
-      initials: 'EX',
-      linkBuilder: 'expedia',
-      homeUrl: 'https://expedia.com',
-    };
-
-    expect(partnerToBookingDraft(partner, 'flights', 'u', CONTEXT, null).kind).toBe('flight');
-    expect(partnerToBookingDraft(partner, 'activities', 'u', CONTEXT, null).kind).toBe('activity');
-  });
 
   it('leaves the date empty when the search has none', () => {
     const empty: BookingContext = { ...CONTEXT, departDate: null };

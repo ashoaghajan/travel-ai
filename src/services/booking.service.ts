@@ -2,7 +2,6 @@ import { ERROR_CODES } from '@ai-travel/shared';
 import type {
   Booking,
   BookingDraft,
-  BookingKind,
   BookingPatch,
   BookingStatus,
   PriceBasis,
@@ -12,8 +11,6 @@ import type {
   BookingContext,
   Flight,
   Hotel,
-  Partner,
-  PartnerCategory,
   PriceSource,
 } from '../types/travel.types';
 import type { ItineraryActivity, ItineraryDay, Trip } from '../types/trip.types';
@@ -509,30 +506,3 @@ export function itineraryActivityToBookingDraft(
   };
 }
 
-/** Which kind a partner tab records as, when the reader books through one. */
-const PARTNER_KINDS: Record<PartnerCategory, BookingKind> = {
-  flights: 'flight',
-  hotels: 'hotel',
-  activities: 'activity',
-};
-
-export function partnerToBookingDraft(
-  partner: Partner,
-  category: PartnerCategory,
-  url: string,
-  context: BookingContext,
-  tripId: string | null,
-): BookingDraft {
-  return {
-    tripId,
-    kind: PARTNER_KINDS[category],
-    status: 'saved',
-    title: partner.name,
-    date: context.departDate ?? '',
-    reference: '',
-    source: capture(partner.id, `${partner.id}:${category}`, {
-      subtitle: partner.description,
-      bookingUrl: url,
-    }),
-  };
-}

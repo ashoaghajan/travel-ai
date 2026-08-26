@@ -7,9 +7,6 @@ import { TicketIcon } from '../../../components/common/icons';
 import { MOCK_PARTNERS } from '../../../mock/partners';
 import { searchService } from '../../../services/search.service';
 import { useActiveTripId, useTrips } from '../../../store/trip.store';
-import { partnerToBookingDraft } from '../../../services/booking.service';
-import type { BookingDraft } from '../../../types/booking.types';
-import { AddBookingToTripDialog } from '../components/AddBookingToTripDialog';
 import { BookingBrowser } from '../components/BookingBrowser';
 import { NO_TRIP, resolveBookingContext, toFlightQuery } from '../booking.context';
 import { formatDateRange } from '../../../utils/date';
@@ -94,7 +91,6 @@ export function BookingsPage() {
   const summary = describeBookingContext(context);
 
   // A list: a round-trip fare is two flights, and each becomes its own booking.
-  const [pendingDrafts, setPendingDrafts] = useState<BookingDraft[] | null>(null);
   const [added, setAdded] = useState<string | null>(null);
 
   function updateSearch(next: FlightSearchQuery) {
@@ -219,17 +215,6 @@ export function BookingsPage() {
                     as="li"
                     partner={partner}
                     href={buildPartnerUrl(partner, activeTab, context)}
-                    onAddToTrip={() =>
-                      setPendingDrafts([
-                        partnerToBookingDraft(
-                          partner,
-                          activeTab,
-                          buildPartnerUrl(partner, activeTab, context),
-                          context,
-                          resolved.trip?.id ?? null,
-                        ),
-                      ])
-                    }
                   />
                 ))}
               </ul>
@@ -249,13 +234,6 @@ export function BookingsPage() {
         </p>
       </div>
 
-      {pendingDrafts ? (
-        <AddBookingToTripDialog
-          drafts={pendingDrafts}
-          onClose={() => setPendingDrafts(null)}
-          onAdded={setAdded}
-        />
-      ) : null}
     </div>
   );
 }
