@@ -125,6 +125,28 @@ type MinRatesResponse = {
  */
 export { roomsFor } from '@ai-travel/shared';
 
+/**
+ * The provider's guest score, on the scale the app's `Hotel` type promises.
+ *
+ * LiteAPI quotes out of ten, the way the booking sites do — the ibis Styles in
+ * Tbilisi comes back as `9.4`. Every consumer of `Hotel.rating` reads it as out
+ * of five: the type says so, the sample stays are 4.4–4.8, and both cards draw
+ * a single star beside it. Passing the provider's figure through unconverted
+ * put two scales behind one glyph, so a live "9.4" and a sample "4.8" claimed
+ * to be the same measurement, and any rating filter written against the
+ * documented scale silently matched everything.
+ *
+ * Converted here, at the provider boundary, for the reason the docblock at the
+ * top of this file gives: this module speaks the provider's dialect and the
+ * caller gets ours.
+ */
+export function toFivePointScale(score: number | undefined): number {
+  if (typeof score !== 'number' || !Number.isFinite(score) || score <= 0) return 0;
+
+  // Rounded to one place, which is all either card shows.
+  return Math.round(Math.min(score, 10) * 5) / 10;
+}
+
 /** Whole nights between two ISO dates; at least one, so a rate is never /0. */
 export function nightsBetween(checkIn: string, checkOut: string): number {
   const from = Date.parse(`${checkIn}T00:00:00Z`);
@@ -199,7 +221,7 @@ export async function searchStays(search: StaySearch): Promise<LiteStay[]> {
     // The provider reports guest score and star rating separately. The guest
     // score is the one the card means by "rating"; stars describe the class of
     // property, not how anyone found it.
-    rating: hotel.rating ?? 0,
+    rating: toFivePointScale(hotel.rating),
     reviews: hotel.reviewCount ?? 0,
     image: (hotel.main_photo ?? hotel.thumbnail ?? '').trim(),
     coordinates:

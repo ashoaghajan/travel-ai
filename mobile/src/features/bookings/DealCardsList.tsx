@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { ActivityIndicator, View } from 'react-native';
 import type { BookingContext, PartnerCategory } from '../../core/types/travel.types';
 import type { BookingDraft } from '../../core/types/booking.types';
@@ -11,7 +11,15 @@ import {
 import { useBookings } from '../../core/store/booking.store';
 import { stayGaps, stayPriceBasis } from '../../core/utils/booking';
 import type { StayGap } from '../../core/utils/booking';
+import {
+  EMPTY_HOTEL_FILTERS,
+  applyHotelFilters,
+  countActiveFilters,
+  sortHotels,
+} from '@ai-travel/shared';
+import type { HotelFilters, HotelSortId } from '@ai-travel/shared';
 import { AddBookingToTripSheet } from './AddBookingToTripSheet';
+import { HotelFilterBar } from './HotelFilterBar';
 import { ActivityCard } from '../explore/ActivityCard';
 import { categoryLabel } from '../explore/activity.filters';
 import { Card } from '../../components/Card';
@@ -73,6 +81,38 @@ export function DealCardsList({
   const [added, setAdded] = useState<string | null>(null);
 
   /*
+   * How the Hotels tab is ordered and narrowed. The web's `BookingBrowser`
+   * holds the same two pieces of state for the same reason: the controls and
+   * the rows have to agree, and neither owns the other.
+   */
+  const [hotelSort, setHotelSort] = useState<HotelSortId>('recommended');
+  const [hotelFilters, setHotelFilters] = useState<HotelFilters>(EMPTY_HOTEL_FILTERS);
+
+  /*
+   * A new stay search clears the filters. Caps are drawn from the results, so
+   * "up to $250" carried from Zurich into Hanoi hides nothing and carried the
+   * other way empties the screen — neither of which the reader asked for.
+   * Compared during render rather than in an effect, so the first paint of a
+   * new city is already unfiltered.
+   */
+  const staySearch = `${context.destinationCity ?? ''}|${context.departDate ?? ''}|${context.returnDate ?? ''}|${context.travellers}`;
+  const [seenStaySearch, setSeenStaySearch] = useState(staySearch);
+
+  if (seenStaySearch !== staySearch) {
+    setSeenStaySearch(staySearch);
+    setHotelFilters(EMPTY_HOTEL_FILTERS);
+  }
+
+  /*
+   * The stays as ordered and narrowed for display. Client-side over the page
+   * already fetched — narrowing is a view of the results, not a new search.
+   */
+  const visibleHotels = useMemo(
+    () => sortHotels(applyHotelFilters(deals.hotels, hotelFilters), hotelSort),
+    [deals.hotels, hotelFilters, hotelSort],
+  );
+
+  /*
    * Which nights of this trip still have no bed, so a second hotel fills the
    * gap rather than re-booking what is already covered. Empty when no trip is
    * being filled for — then nothing is known and nothing is assumed.
@@ -126,6 +166,31 @@ export function DealCardsList({
         <View style={{ gap: theme.space.md }}>
           <PriceProvenance source={deals.source} quotedAt={deals.quotedAt} />
 
+          {/* Sorting and filtering, once there is a list to sort. */}
+          {tab === 'hotels' && deals.hotels.length > 0 ? (
+            <HotelFilterBar
+              hotels={deals.hotels}
+              sort={hotelSort}
+              onSortChange={setHotelSort}
+              filters={hotelFilters}
+              onFiltersChange={setHotelFilters}
+            />
+          ) : null}
+
+          {/* Narrowed to nothing: said here, with the count that says how much
+              widening would get back. The bar above stays on screen, so the
+              reader who over-narrowed has the controls to undo it. */}
+          {tab === 'hotels' && deals.hotels.length > 0 && visibleHotels.length === 0 ? (
+            <Text variant="xs" tone="muted" leading="snug" accessibilityRole="alert">
+              No stay matches those filters. Widen them to see the other {deals.hotels.length} back
+              from this search.
+            </Text>
+          ) : tab === 'hotels' && countActiveFilters(hotelFilters) > 0 ? (
+            <Text variant="xs" tone="muted" leading="snug">
+              Showing {visibleHotels.length} of {deals.hotels.length} stays.
+            </Text>
+          ) : null}
+
           {tab === 'flights'
             ? deals.flights.map((flight) => (
                 <FlightCard
@@ -145,7 +210,7 @@ export function DealCardsList({
                 />
               ))
             : tab === 'hotels'
-              ? deals.hotels.map((hotel) => (
+              ? visibleHotels.map((hotel) => (
                   <HotelCard
                     key={hotel.id}
                     hotel={hotel}

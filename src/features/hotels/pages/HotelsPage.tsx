@@ -15,9 +15,11 @@ import {
   EMPTY_HOTEL_FILTERS,
   applyHotelFilters,
   countActiveFilters,
+  priceBounds,
+  ratingFilterOptions,
   sortHotels,
-} from '../hotel.filters';
-import type { HotelFilters, HotelSortId } from '../hotel.filters';
+} from '@ai-travel/shared';
+import type { HotelFilters, HotelSortId } from '@ai-travel/shared';
 import { useHotelSearch } from '../useHotelSearch';
 import styles from './HotelsPage.module.css';
 
@@ -37,6 +39,11 @@ export function HotelsPage() {
     () => sortHotels(applyHotelFilters(hotels, filters), sort),
     [hotels, filters, sort],
   );
+
+  // Derived from the whole result, not from `visible`: a range that narrowed
+  // itself as the reader filtered would leave no way back up.
+  const bounds = useMemo(() => priceBounds(hotels), [hotels]);
+  const ratingOptions = useMemo(() => ratingFilterOptions(hotels), [hotels]);
 
   const activeFilterCount = countActiveFilters(filters);
 
@@ -62,7 +69,13 @@ export function HotelsPage() {
         {isLoading ? null : <PriceNote source={source} quotedAt={quotedAt} />}
 
         {isFilterOpen ? (
-          <HotelFilterPanel id={FILTER_PANEL_ID} filters={filters} onChange={setFilters} />
+          <HotelFilterPanel
+            id={FILTER_PANEL_ID}
+            filters={filters}
+            onChange={setFilters}
+            priceBounds={bounds}
+            ratingOptions={ratingOptions}
+          />
         ) : null}
 
         {isMapOpen && visible.length > 0 ? (

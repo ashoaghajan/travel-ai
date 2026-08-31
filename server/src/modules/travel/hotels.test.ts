@@ -194,7 +194,8 @@ describe('searchHotels with a pricing provider', () => {
   it('shows the rating and photo the directory could never supply', async () => {
     const [first] = await searchHotels(SEARCH);
 
-    expect(first.rating).toBe(8.6);
+    // Converted from the provider's ten-point score — see `toFivePointScale`.
+    expect(first.rating).toBe(4.3);
     expect(first.reviews).toBe(1204);
     expect(first.image).toBe('https://img.example/grand.jpg');
   });

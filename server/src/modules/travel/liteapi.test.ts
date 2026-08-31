@@ -1,6 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { resetEnvCache } from '../../env';
-import { isLiteApiConfigured, nightsBetween, roomsFor, searchStays } from './liteapi';
+import {
+  isLiteApiConfigured,
+  nightsBetween,
+  roomsFor,
+  searchStays,
+  toFivePointScale,
+} from './liteapi';
 
 /**
  * The LiteAPI pricing client.
@@ -137,6 +143,34 @@ describe('isLiteApiConfigured', () => {
   });
 });
 
+describe('toFivePointScale', () => {
+  it('halves the provider\'s ten-point guest score', () => {
+    expect(toFivePointScale(9.4)).toBe(4.7);
+    expect(toFivePointScale(8.6)).toBe(4.3);
+    expect(toFivePointScale(10)).toBe(5);
+  });
+
+  it('rounds to the one place both cards show', () => {
+    expect(toFivePointScale(7.77)).toBe(3.9);
+  });
+
+  /*
+   * Zero is the card's "unrated", not a bad score — so everything that is not
+   * a usable number lands there rather than on some fraction of nothing.
+   */
+  it('reads a missing or unusable score as unrated', () => {
+    expect(toFivePointScale(undefined)).toBe(0);
+    expect(toFivePointScale(0)).toBe(0);
+    expect(toFivePointScale(Number.NaN)).toBe(0);
+    expect(toFivePointScale(-3)).toBe(0);
+  });
+
+  /* A provider that ever quotes out of five must not become a 7.5 out of 5. */
+  it('never returns more than five', () => {
+    expect(toFivePointScale(12)).toBe(5);
+  });
+});
+
 describe('searchStays', () => {
   it('turns a stay total into a nightly rate', async () => {
     const stays = await searchStays(SEARCH);
@@ -151,7 +185,8 @@ describe('searchStays', () => {
 
     expect(first).toMatchObject({
       name: 'Grand Hotel Yerevan',
-      rating: 8.6,
+      // 8.6 out of ten, which is what `Hotel.rating` calls 4.3 out of five.
+      rating: 4.3,
       reviews: 1204,
       image: 'https://img.example/grand.jpg',
     });

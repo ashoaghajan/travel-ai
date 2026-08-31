@@ -50,3 +50,10 @@
     flex: none;
   }
 }
+
+/* Said in place of the controls when a listing carries neither figure. */
+.note {
+  margin: 0;
+  font-size: var(--font-sm);
+  color: var(--color-text-muted);
+}

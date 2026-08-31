@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Card } from '../../../components/common/Card';
 import { Skeleton } from '../../../components/common/Skeleton';
 import { PriceNote } from '../../../components/common/PriceNote';
@@ -9,7 +9,16 @@ import { TicketIcon } from '../../../components/common/icons';
 import { FlightResultCard } from '../../../components/cards/FlightResultCard';
 import { HotelCard } from '../../../components/cards/HotelCard';
 import { ActivityCard } from '../../../components/cards/ActivityCard';
-import { describeOccupancy } from '@ai-travel/shared';
+import {
+  EMPTY_HOTEL_FILTERS,
+  applyHotelFilters,
+  countActiveFilters,
+  describeOccupancy,
+  priceBounds,
+  ratingFilterOptions,
+  sortHotels,
+} from '@ai-travel/shared';
+import type { HotelFilters, HotelSortId } from '@ai-travel/shared';
 import type { BookingContext, PartnerCategory } from '../../../types/travel.types';
 import type { BookingDraft } from '../../../types/booking.types';
 import type { StayGap } from '../../../utils/booking';
@@ -29,11 +38,16 @@ import { useBookingDeals } from '../useBookingDeals';
 import { useDestinationAirport } from '../useDestinationAirport';
 import { hasReturnLeg, legRoute } from '../flight.legs';
 import type { FlightLeg } from '../flight.legs';
+import { HotelToolbar } from '../../hotels/components/HotelToolbar';
+import { HotelFilterPanel } from '../../hotels/components/HotelFilterPanel';
 import { AddBookingToTripDialog } from './AddBookingToTripDialog';
 import { FlightLegs } from './FlightLegs';
 import styles from './BookingBrowser.module.css';
 
 const SKELETON_COUNT = 3;
+
+/** Distinguishes this screen's filter panel from the one on `/hotels`. */
+const FILTER_PANEL_SUFFIX = 'stay-filters';
 
 /**
  * A stay draft aimed at the nights that still need one.
@@ -169,6 +183,34 @@ export function BookingBrowser({
    */
   const [pendingLeg, setPendingLeg] = useState<FlightLeg | null>(null);
 
+  /*
+   * How the Hotels tab is ordered and narrowed.
+   *
+   * Local to the screen and not in the URL, unlike the tab: the same rows in a
+   * different order is a way of reading a list, not a place to link somebody
+   * to. Held here rather than inside the list so the toolbar and the rows
+   * cannot disagree about which sort is on.
+   */
+  const [hotelSort, setHotelSort] = useState<HotelSortId>('recommended');
+  const [hotelFilters, setHotelFilters] = useState<HotelFilters>(EMPTY_HOTEL_FILTERS);
+  const [isFilterOpen, setIsFilterOpen] = useState(false);
+
+  /*
+   * A new stay search clears the filters, on the same reasoning as the leg
+   * reset above. Caps are drawn from the results, so "up to $250" carried from
+   * Zurich into Hanoi is a filter that hides nothing, and carried the other way
+   * it is one that empties the screen — in both cases without the reader having
+   * touched it. Compared during render rather than in an effect so the first
+   * paint of a new city is already unfiltered.
+   */
+  const staySearch = `${searched.destinationCity ?? ''}|${searched.departDate ?? ''}|${searched.returnDate ?? ''}|${searched.travellers}`;
+  const [seenStaySearch, setSeenStaySearch] = useState(staySearch);
+
+  if (seenStaySearch !== staySearch) {
+    setSeenStaySearch(staySearch);
+    setHotelFilters(EMPTY_HOTEL_FILTERS);
+  }
+
   /**
    * A fare taken for a leg: tick it, and move on to the way home.
    *
@@ -184,6 +226,28 @@ export function BookingBrowser({
     if (taken === 'outbound' && hasReturn) setLeg('return');
   }
 
+  /*
+   * The stays as ordered and narrowed for display.
+   *
+   * Client-side over the page already fetched: narrowing is a view of the
+   * results, not a new search, so it costs no provider quota and no spinner.
+   */
+  const visibleHotels = useMemo(
+    () => sortHotels(applyHotelFilters(deals.hotels, hotelFilters), hotelSort),
+    [deals.hotels, hotelFilters, hotelSort],
+  );
+
+  // Drawn from the whole result rather than from what is visible: a range that
+  // narrowed as the reader filtered would leave no way back up.
+  const bounds = useMemo(() => priceBounds(deals.hotels), [deals.hotels]);
+  const ratingOptions = useMemo(() => ratingFilterOptions(deals.hotels), [deals.hotels]);
+
+  /*
+   * `deals.hotels`, not `visibleHotels`. What is on screen decides whether the
+   * *section* is there at all, and filtering down to nothing would otherwise
+   * take the toolbar away with the rows — leaving a reader who over-narrowed
+   * with no control to undo it.
+   */
   const results =
     activeTab === 'flights'
       ? deals.flights
@@ -191,6 +255,10 @@ export function BookingBrowser({
         ? deals.hotels
         : deals.activities;
   const hasResults = deals.canSearch && (deals.isLoading || results.length > 0);
+
+  /** Narrowed to nothing, as opposed to a search that came back with nothing. */
+  const filteredOutEverything =
+    activeTab === 'hotels' && results.length > 0 && visibleHotels.length === 0;
 
   const heading =
     activeTab === 'flights'
@@ -305,11 +373,52 @@ export function BookingBrowser({
               {activeTab === 'hotels' && coverage ? (
                 <p className={styles.coverage}>{coverage}</p>
               ) : null}
+
+              {/* Sorting and filtering, once there is a list to sort. Hidden
+                  while the skeletons are up, where the controls would act on
+                  nothing. */}
+              {activeTab === 'hotels' && !deals.isLoading && deals.hotels.length > 0 ? (
+                <div className={styles.stayControls}>
+                  <HotelToolbar
+                    sort={hotelSort}
+                    onSortChange={setHotelSort}
+                    isFilterOpen={isFilterOpen}
+                    onToggleFilter={() => setIsFilterOpen((open) => !open)}
+                    activeFilterCount={countActiveFilters(hotelFilters)}
+                    filterPanelId={`${idPrefix}-${FILTER_PANEL_SUFFIX}`}
+                  />
+
+                  {isFilterOpen ? (
+                    <HotelFilterPanel
+                      id={`${idPrefix}-${FILTER_PANEL_SUFFIX}`}
+                      filters={hotelFilters}
+                      onChange={setHotelFilters}
+                      priceBounds={bounds}
+                      ratingOptions={ratingOptions}
+                    />
+                  ) : null}
+
+                  {/* How much of the list is being hidden, said where the
+                      hiding was done. */}
+                  {countActiveFilters(hotelFilters) > 0 && !filteredOutEverything ? (
+                    <p className={styles.coverage}>
+                      Showing {visibleHotels.length} of {deals.hotels.length} stays.
+                    </p>
+                  ) : null}
+                </div>
+              ) : null}
             </div>
 
             {deals.error ? (
               <p className={styles.error} role="alert">
                 {deals.error}
+              </p>
+            ) : null}
+
+            {filteredOutEverything && !deals.isLoading ? (
+              <p className={styles.coverage} role="status">
+                No stay matches those filters. Widen them to see the other{' '}
+                {deals.hotels.length} back from this search.
               </p>
             ) : null}
 
@@ -352,7 +461,7 @@ export function BookingBrowser({
                       />
                     ))
                   : activeTab === 'hotels'
-                    ? deals.hotels.map((hotel) => (
+                    ? visibleHotels.map((hotel) => (
                         <HotelCard
                           key={hotel.id}
                           as="li"

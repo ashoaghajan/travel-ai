@@ -72,3 +72,13 @@
 .legs {
   margin-bottom: var(--space-md);
 }
+
+/* The Hotels tab's sort row, filter panel and "showing n of m" line, stacked
+   under the heading rather than beside it — the toolbar's own pills already
+   wrap, and a second row of them next to the title crowds both. */
+.stayControls {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  margin-top: var(--space-xs);
+}

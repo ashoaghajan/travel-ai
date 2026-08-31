@@ -1,7 +1,7 @@
 import { FilterIcon, MapIcon, SortIcon } from '../../../components/common/icons';
 import { cx } from '../../../utils/cx';
-import { HOTEL_SORTS } from '../hotel.filters';
-import type { HotelSortId } from '../hotel.filters';
+import { HOTEL_SORTS } from '@ai-travel/shared';
+import type { HotelSortId } from '@ai-travel/shared';
 import styles from './HotelToolbar.module.css';
 
 export type HotelToolbarProps = {
@@ -9,8 +9,15 @@ export type HotelToolbarProps = {
   onSortChange: (sort: HotelSortId) => void;
   isFilterOpen: boolean;
   onToggleFilter: () => void;
-  isMapOpen: boolean;
-  onToggleMap: () => void;
+  /**
+   * The map toggle, or omitted for a list with no map beside it.
+   *
+   * Optional because the booking screen reuses this row inside a tab panel
+   * that has no map of its own — the trip map lives on the trip, and a second
+   * one here would be a map of search results nobody asked to see.
+   */
+  isMapOpen?: boolean;
+  onToggleMap?: () => void;
   activeFilterCount: number;
   /** Id of the panel the filter button controls. */
   filterPanelId: string;
@@ -62,15 +69,17 @@ export function HotelToolbar({
         </select>
       </label>
 
-      <button
-        type="button"
-        className={cx(styles.pill, isMapOpen && styles.active)}
-        aria-pressed={isMapOpen}
-        onClick={onToggleMap}
-      >
-        <MapIcon size={18} />
-        Map
-      </button>
+      {onToggleMap ? (
+        <button
+          type="button"
+          className={cx(styles.pill, isMapOpen && styles.active)}
+          aria-pressed={isMapOpen}
+          onClick={onToggleMap}
+        >
+          <MapIcon size={18} />
+          Map
+        </button>
+      ) : null}
     </div>
   );
 }

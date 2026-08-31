@@ -1,0 +1,96 @@
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  flex: 1;
+  min-width: 0;
+}
+
+.label {
+  font-size: var(--font-xs);
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.readout {
+  font-size: var(--font-sm);
+  color: var(--color-text-main);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Tall enough to be a comfortable touch target, with the track drawn down the
+   middle of it rather than at the top. */
+.slider {
+  position: relative;
+  height: 36px;
+}
+
+.track,
+.fill {
+  position: absolute;
+  top: 50%;
+  height: 4px;
+  border-radius: var(--radius-pill);
+  transform: translateY(-50%);
+}
+
+.track {
+  left: 0;
+  right: 0;
+  background-color: var(--color-border);
+}
+
+.fill {
+  background-color: var(--color-primary);
+}
+
+/*
+  Both inputs sit on top of each other, invisible. `pointer-events: none` on the
+  input and `auto` on the thumb is what keeps the lower one reachable: without
+  it the input rendered second would swallow every click across the whole track,
+  and one of the two handles could never be grabbed.
+*/
+.input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  margin: 0;
+  appearance: none;
+  -webkit-appearance: none;
+  background: transparent;
+  pointer-events: none;
+}
+
+.input::-webkit-slider-thumb {
+  appearance: none;
+  -webkit-appearance: none;
+  pointer-events: auto;
+  width: 20px;
+  height: 20px;
+  border-radius: var(--radius-pill);
+  border: 2px solid var(--color-primary);
+  background-color: var(--color-surface);
+  cursor: grab;
+}
+
+.input::-moz-range-thumb {
+  pointer-events: auto;
+  width: 16px;
+  height: 16px;
+  border-radius: var(--radius-pill);
+  border: 2px solid var(--color-primary);
+  background-color: var(--color-surface);
+  cursor: grab;
+}
+
+.input:focus-visible::-webkit-slider-thumb {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+.input:focus-visible::-moz-range-thumb {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
