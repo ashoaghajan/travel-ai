@@ -50,6 +50,28 @@
       name="description"
       content="AI Travel Planner — plan the perfect trip in minutes. Customised. Smart. Effortless."
     />
+
+    <!--
+      The link preview a scraper builds when this URL is pasted into LinkedIn,
+      Slack or a message. None of it is read by the app.
+
+      Absolute URLs, not paths: a scraper resolves these against nothing, so a
+      leading-slash path yields no image at all. Update the origin here if the
+      deployment ever moves off Render.
+    -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="AI Travel Planner" />
+    <meta property="og:title" content="AI Travel Planner — describe a trip, get an itinerary" />
+    <meta
+      property="og:description"
+      content="Full-stack AI trip planner: React + TypeScript web client, Node/Express API on PostgreSQL, and an Expo React Native app sharing one core."
+    />
+    <meta property="og:url" content="https://travel-ai-io1t.onrender.com/" />
+    <meta property="og:image" content="https://travel-ai-io1t.onrender.com/og-image.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="627" />
+    <meta property="og:image:alt" content="AI Travel Planner — React, TypeScript, Node.js, PostgreSQL, React Native" />
+    <meta name="twitter:card" content="summary_large_image" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
