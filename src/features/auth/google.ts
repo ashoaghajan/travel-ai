@@ -27,6 +27,16 @@ type GoogleIdentityServices = {
           shape?: 'rectangular' | 'pill';
           width?: number;
           logo_alignment?: 'left' | 'center';
+          /**
+           * The language the button labels itself in.
+           *
+           * Left unset, GIS picks for itself — from the Google account signed
+           * in to the browser, not from the page — so an English form rendered
+           * "الاشتراك من خلال Google" under an English heading. It is the one
+           * control on these screens whose text this app does not write, which
+           * is exactly why it has to be told.
+           */
+          locale?: string;
         },
       ) => void;
       disableAutoSelect: () => void;

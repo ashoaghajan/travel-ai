@@ -88,6 +88,16 @@ export function useStopCoordinates(
       return;
     }
 
+    /*
+     * The claim on `key` is released if this effect is torn down before its
+     * lookup lands, and it has to be. Under StrictMode the effect runs, is
+     * cleaned up, and runs again on the same key: the first pass set the ref
+     * and started the request, the cleanup set `active = false` so its result
+     * was thrown away, and the second pass returned early because the ref
+     * already held the key. Nothing was left to write the coordinates, so the
+     * map drew none of the stops and said "0 of 2" under itself — with the
+     * geocode cache on disk holding the very points it would not show.
+     */
     let active = true;
     setIsLoading(true);
     setNotice(null);
@@ -115,6 +125,8 @@ export function useStopCoordinates(
 
     return () => {
       active = false;
+      // Torn down before the answer arrived: let the next run ask again.
+      if (requested.current === key) requested.current = '';
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [missingKey, countryCode]);

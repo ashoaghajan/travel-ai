@@ -64,6 +64,9 @@ export function GoogleSignInButton({
           shape: 'pill',
           text,
           logo_alignment: 'center',
+          // The page's own language, so the button agrees with the form around
+          // it rather than with whoever is signed in to the browser.
+          locale: document.documentElement.lang || 'en',
         });
       })
       .catch(() => {

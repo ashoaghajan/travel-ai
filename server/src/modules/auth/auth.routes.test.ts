@@ -380,7 +380,9 @@ describe('native refresh transport', () => {
     // The token went to the body *instead of* the cookie, not as well as.
     // Read from the raw header: the harness's helper throws when absent, and
     // absence is exactly what this asserts.
-    const cookies = response.headers['set-cookie'] ?? [];
+    // Supertest types the header bag as `Record<string, string>`; `set-cookie`
+    // is the one header Node hands back as an array.
+    const cookies = (response.headers['set-cookie'] as unknown as string[] | undefined) ?? [];
     expect(cookies.some((cookie: string) => cookie.startsWith(`${REFRESH_COOKIE}=`))).toBe(false);
   });
 
