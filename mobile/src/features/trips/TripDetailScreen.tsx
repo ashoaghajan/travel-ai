@@ -15,6 +15,8 @@ import { EditableDay } from './EditableDay';
 import { TripEditFields } from './TripEditFields';
 import { TripRouteMap } from './TripRouteMap';
 import { useEditTrip } from './useEditTrip';
+import { describeCalendarTarget, useCalendarExport } from './useCalendarExport';
+import { useTripBookings } from '../../core/store/booking.store';
 
 /**
  * One trip: the header, the route, and the days.
@@ -156,6 +158,8 @@ function TripView({ trip }: { trip: Trip }) {
   const theme = useTheme();
   const [isEditing, setIsEditing] = useState(false);
   const edit = useEditTrip(trip);
+  const bookings = useTripBookings(trip.id);
+  const calendar = useCalendarExport();
 
   function leaveEditing() {
     edit.cancel();
@@ -198,6 +202,45 @@ function TripView({ trip }: { trip: Trip }) {
           </Button>
         )}
       </View>
+
+      {/*
+        Not hidden behind Edit: adding a trip to a calendar is something you do
+        *to* a saved trip, like the web's export, and putting it inside the edit
+        mode would mean entering one to leave with a copy.
+
+        The label names Google on Android and stays vague on iOS, because that
+        is the difference the platform actually makes — see the hook.
+      */}
+      {isEditing ? null : (
+        <View style={{ gap: theme.space.xs }}>
+          <Button
+            variant="secondary"
+            disabled={calendar.isAdding}
+            onPress={() => {
+              calendar.reset();
+              void calendar.addToCalendar(trip, bookings);
+            }}
+          >
+            {calendar.isAdding ? 'Adding…' : `Add to ${describeCalendarTarget()}`}
+          </Button>
+
+          {calendar.result ? (
+            <Text variant="xs" tone="muted">
+              {calendar.result.added === 0
+                ? 'Nothing on this trip has a time yet.'
+                : `Added ${calendar.result.added} ${
+                    calendar.result.added === 1 ? 'entry' : 'entries'
+                  } to ${calendar.result.calendarTitle}.`}
+            </Text>
+          ) : null}
+
+          {calendar.error ? (
+            <Text variant="xs" tone="danger">
+              {calendar.error}
+            </Text>
+          ) : null}
+        </View>
+      )}
 
       {/*
         The map is drawn from the *saved* trip in both modes. Repointing it at

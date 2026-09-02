@@ -6,6 +6,7 @@ import {
   parseTimeOfDay,
   shiftWallClock,
   toCalendarEvents,
+  zonedTimeToInstant,
   type CalendarSourceDay,
 } from './calendar';
 
@@ -209,5 +210,48 @@ describe('bookingsToCalendarEvents', () => {
     ]);
 
     expect(event.end).toBe('2026-10-01');
+  });
+});
+
+describe('zonedTimeToInstant', () => {
+  it('reads a wall clock in the zone it belongs to', () => {
+    // 19:30 in Tbilisi (UTC+4, no DST) is 15:30Z.
+    expect(zonedTimeToInstant('2026-09-14T19:30:00', 'Asia/Tbilisi')?.toISOString()).toBe(
+      '2026-09-14T15:30:00.000Z',
+    );
+  });
+
+  it('is right on either side of a daylight-saving change', () => {
+    // Lisbon is UTC+1 in summer and UTC+0 in winter; the clocks go back on
+    // 2026-10-25. A fixed offset would put one of these an hour out.
+    expect(zonedTimeToInstant('2026-10-24T12:00:00', 'Europe/Lisbon')?.toISOString()).toBe(
+      '2026-10-24T11:00:00.000Z',
+    );
+    expect(zonedTimeToInstant('2026-10-26T12:00:00', 'Europe/Lisbon')?.toISOString()).toBe(
+      '2026-10-26T12:00:00.000Z',
+    );
+  });
+
+  it('handles a zone west of Greenwich', () => {
+    expect(zonedTimeToInstant('2026-01-15T09:00:00', 'America/New_York')?.toISOString()).toBe(
+      '2026-01-15T14:00:00.000Z',
+    );
+  });
+
+  it('takes a bare date as midnight', () => {
+    expect(zonedTimeToInstant('2026-09-14', 'Asia/Tbilisi')?.toISOString()).toBe(
+      '2026-09-13T20:00:00.000Z',
+    );
+  });
+
+  it('falls back to local time when no zone is known', () => {
+    const local = zonedTimeToInstant('2026-09-14T19:30:00');
+
+    expect(local?.getHours()).toBe(19);
+    expect(local?.getMinutes()).toBe(30);
+  });
+
+  it('returns null for something that is not a date', () => {
+    expect(zonedTimeToInstant('whenever', 'Asia/Tbilisi')).toBeNull();
   });
 });

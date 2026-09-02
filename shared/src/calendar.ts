@@ -252,6 +252,79 @@ export function bookingsToCalendarEvents(
   return events;
 }
 
+/**
+ * What a zone's offset was at a given instant, in milliseconds.
+ *
+ * There is no API that answers this directly, so the standard trick: format the
+ * instant *as* the target zone, read the wall-clock digits back, and subtract.
+ * `Intl` carries the whole history of a zone's rules, so this is right across a
+ * daylight-saving change rather than assuming a fixed offset.
+ */
+function offsetMsAt(instant: number, timeZone: string): number {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    hour12: false,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  }).formatToParts(new Date(instant));
+
+  const read: Record<string, string> = {};
+  for (const part of parts) read[part.type] = part.value;
+
+  const asUtc = Date.UTC(
+    Number(read.year),
+    Number(read.month) - 1,
+    Number(read.day),
+    // `hour12: false` renders midnight as 24 in some ICU versions.
+    Number(read.hour) % 24,
+    Number(read.minute),
+    Number(read.second),
+  );
+
+  return asUtc - instant;
+}
+
+/**
+ * A wall-clock stamp and its zone, as the instant it names.
+ *
+ * The file format does not need this — `.ics` carries the pair as-is — but a
+ * device calendar does: `expo-calendar` takes a `Date`, which is a point on the
+ * timeline, so 19:30 in Tbilisi has to be resolved before it can be written.
+ * This is the one place in the feature where that resolution happens, and it
+ * happens at the moment of writing rather than at the moment of planning.
+ *
+ * The offset is applied twice on purpose. The first pass asks what the offset
+ * was at roughly the right instant; the second asks again at the answer, which
+ * is what gets the hour right for a time that falls near a clock change, where
+ * the two differ.
+ *
+ * Returns local time when no zone is given, and falls back to local if `Intl`
+ * cannot do zones — Hermes has historically shipped without the data, and an
+ * event at the reader's own 19:30 is a better failure than no event at all.
+ */
+export function zonedTimeToInstant(wallClock: string, timeZone?: string): Date | null {
+  const match = /^(\d{4})-(\d{2})-(\d{2})(?:T(\d{2}):(\d{2}))?/.exec(wallClock);
+  if (!match) return null;
+
+  const [, year, month, day, hour = '0', minute = '0'] = match;
+  const parts = [Number(year), Number(month) - 1, Number(day), Number(hour), Number(minute)] as const;
+
+  if (!timeZone) return new Date(parts[0], parts[1], parts[2], parts[3], parts[4]);
+
+  try {
+    const guess = Date.UTC(...parts);
+    const once = guess - offsetMsAt(guess, timeZone);
+
+    return new Date(guess - offsetMsAt(once, timeZone));
+  } catch {
+    return new Date(parts[0], parts[1], parts[2], parts[3], parts[4]);
+  }
+}
+
 /** The distinct destinations an itinerary visits, for resolving zones once each. */
 export function calendarDestinations(days: CalendarSourceDay[]): string[] {
   const seen = new Set<string>();

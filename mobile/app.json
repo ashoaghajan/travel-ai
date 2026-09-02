@@ -23,7 +23,9 @@
         "android.permission.RECORD_AUDIO",
         "android.permission.MODIFY_AUDIO_SETTINGS",
         "android.permission.FOREGROUND_SERVICE",
-        "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK"
+        "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK",
+        "android.permission.READ_CALENDAR",
+        "android.permission.WRITE_CALENDAR"
       ]
     },
     "web": {
@@ -40,7 +42,13 @@
           "microphonePermission": "AI Travel uses the microphone so you can speak a trip instead of typing it. Recordings are transcribed and never stored."
         }
       ],
-      "@react-native-google-signin/google-signin"
+      "@react-native-google-signin/google-signin",
+      [
+        "expo-calendar",
+        {
+          "calendarPermission": "AI Travel adds the days of a trip you have saved to your calendar, so your itinerary sits beside the rest of your week. Nothing is read or sent anywhere."
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true

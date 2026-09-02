@@ -47,6 +47,15 @@ export const STORAGE_KEYS = {
   /** Place name → coordinates for the trip map. Reference data, not user data. */
   geocodes: 'ai-travel-planner:geocodes',
   /**
+   * Place name → IANA time zone, for calendar export. Reference data.
+   *
+   * Separate from `geocodes` rather than another field on it: the two are
+   * filled by different endpoints and a trip's stops resolve well in one and
+   * badly in the other, so sharing an entry would let a failure in either
+   * cache a miss for both.
+   */
+  timezones: 'ai-travel-planner:timezones',
+  /**
    * Cached exchange rates — reference data, not user data.
    *
    * Held so a reload repaints converted prices immediately instead of showing

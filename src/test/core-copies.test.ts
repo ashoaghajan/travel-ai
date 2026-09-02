@@ -56,6 +56,7 @@ const IDENTICAL: [string, string][] = [
     'hotel',
     'settings',
     'rates',
+    'timezone',
   ].map(
     (name): [string, string] => [
       `src/services/${name}.service.ts`,
