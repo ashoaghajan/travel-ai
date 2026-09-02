@@ -313,15 +313,26 @@ export function zonedTimeToInstant(wallClock: string, timeZone?: string): Date |
   const [, year, month, day, hour = '0', minute = '0'] = match;
   const parts = [Number(year), Number(month) - 1, Number(day), Number(hour), Number(minute)] as const;
 
-  if (!timeZone) return new Date(parts[0], parts[1], parts[2], parts[3], parts[4]);
+  const local = () => new Date(parts[0], parts[1], parts[2], parts[3], parts[4]);
+
+  if (!timeZone) return local();
 
   try {
     const guess = Date.UTC(...parts);
     const once = guess - offsetMsAt(guess, timeZone);
+    const resolved = new Date(guess - offsetMsAt(once, timeZone));
 
-    return new Date(guess - offsetMsAt(once, timeZone));
+    /*
+     * An engine can fail here without throwing. Hermes has shipped without the
+     * zone database, and `Intl.DateTimeFormat` then formats *something* rather
+     * than raising — the parts come back unparseable, `Date.UTC` yields NaN,
+     * and this becomes an Invalid Date. Which is truthy, so a caller checking
+     * the result for null would sail past it and hand a broken date to whatever
+     * writes the event. Checked here, once, rather than at every call site.
+     */
+    return Number.isNaN(resolved.getTime()) ? local() : resolved;
   } catch {
-    return new Date(parts[0], parts[1], parts[2], parts[3], parts[4]);
+    return local();
   }
 }
 

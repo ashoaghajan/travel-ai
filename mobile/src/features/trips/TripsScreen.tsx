@@ -54,6 +54,16 @@ export function TripsScreen() {
 
   const loading = status === 'loading' && trips.length === 0;
 
+  /*
+   * A load that failed is not an empty list, and this screen used to say it was.
+   * `status` has an error state and nothing read it, so a trips request that
+   * came back 500 — or never came back — rendered "No trips yet. Plan one from
+   * the Home tab." to somebody with nine of them. That is the worst sentence
+   * available: it is calm, it is plausible, and it is the one thing that would
+   * stop a reader looking for their data.
+   */
+  const failed = status === 'error' && trips.length === 0;
+
   return (
     <Screen scroll={false}>
       <FlatList
@@ -69,9 +79,18 @@ export function TripsScreen() {
         ListEmptyComponent={
           <Card>
             <View style={{ alignItems: 'center', gap: theme.space.sm, paddingVertical: theme.space.lg }}>
-              <SuitcaseIcon size={28} color={theme.color.textMuted} />
-              <Text variant="sm" tone="muted" leading="snug" style={{ textAlign: 'center' }}>
-                {loading ? 'Loading your trips…' : 'No trips yet. Plan one from the Home tab.'}
+              <SuitcaseIcon size={28} color={failed ? theme.color.danger : theme.color.textMuted} />
+              <Text
+                variant="sm"
+                tone={failed ? 'danger' : 'muted'}
+                leading="snug"
+                style={{ textAlign: 'center' }}
+              >
+                {loading
+                  ? 'Loading your trips…'
+                  : failed
+                    ? 'We could not load your trips. Check your connection and pull to retry.'
+                    : 'No trips yet. Plan one from the Home tab.'}
               </Text>
             </View>
           </Card>

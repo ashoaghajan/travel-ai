@@ -1,6 +1,16 @@
 import { useCallback, useState } from 'react';
 import { Platform } from 'react-native';
-import * as Calendar from 'expo-calendar';
+/*
+ * `expo-calendar/legacy`, not `expo-calendar`.
+ *
+ * SDK 57 repointed the package root at a new object-oriented API and left
+ * deprecated shims in its place. The shims warn on import and — found on an
+ * Honor ALT-LX2, not by any test —`requestCalendarPermissionsAsync` throws
+ * through one of them: no permission dialog appears, the permission stays
+ * denied, and the failure surfaces as the generic write error rather than the
+ * permission one. The package's own deprecation notice names this path.
+ */
+import * as Calendar from 'expo-calendar/legacy';
 import {
   bookingsToCalendarEvents,
   calendarDestinations,

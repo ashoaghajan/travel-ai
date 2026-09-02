@@ -255,3 +255,27 @@ describe('zonedTimeToInstant', () => {
     expect(zonedTimeToInstant('whenever', 'Asia/Tbilisi')).toBeNull();
   });
 });
+
+describe('zonedTimeToInstant, when the engine has no zone data', () => {
+  it('falls back to local time rather than returning an Invalid Date', () => {
+    // Hermes has shipped without the zone database, and `Intl` then formats
+    // something unparseable instead of throwing. An Invalid Date is truthy, so
+    // a null check at the call site would not catch it.
+    const real = Intl.DateTimeFormat;
+
+    try {
+      // @ts-expect-error — deliberately replacing the built-in for this test.
+      Intl.DateTimeFormat = function () {
+        return { formatToParts: () => [{ type: 'literal', value: '?' }] };
+      };
+
+      const result = zonedTimeToInstant('2026-09-14T19:30:00', 'Asia/Tbilisi');
+
+      expect(result).not.toBeNull();
+      expect(Number.isNaN(result!.getTime())).toBe(false);
+      expect(result!.getHours()).toBe(19);
+    } finally {
+      Intl.DateTimeFormat = real;
+    }
+  });
+});
