@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { PageHeader } from '../../../components/layout/PageHeader';
 import { EmptyState } from '../../../components/common/EmptyState';
@@ -78,14 +78,32 @@ export function BookingsPage() {
     resolved.trip ? toFlightQuery(resolved.context) : initialFlightQuery(),
   );
 
-  // Re-baselines when the trip being filled for changes, the way `useEditTrip`
-  // re-baselines its draft when the trip underneath it moves.
   const filledTripId = resolved.trip?.id ?? null;
-  useEffect(() => {
+
+  /*
+   * Re-baselines when the trip being filled for changes, the way `useEditTrip`
+   * re-baselines its draft when the trip underneath it moves.
+   *
+   * During render, not in an effect, and the difference is visible on screen.
+   * Trips arrive from the store a beat after this mounts, so `filledTripId`
+   * goes null → id on a later render, and that is the render where the form's
+   * `key` changes and it remounts. An effect runs *after* that commit: the form
+   * seeds its fields from the query as it was before the trip arrived — the
+   * spec defaults — and the effect then moves `query` underneath it, leaving
+   * the banner reading "Prices for Oct 1 - Oct 5" over a form still offering
+   * JFK → DPS in October. Setting state here re-renders before anything
+   * commits, so the new key and the new value land together.
+   *
+   * This is the phone's fix, arrived at there first — see the matching comment
+   * in `mobile/src/features/bookings/BookingsScreen.tsx`.
+   */
+  const [seededFor, setSeededFor] = useState(filledTripId);
+  if (filledTripId !== seededFor) {
+    setSeededFor(filledTripId);
+    // Only a trip has anything to re-baseline from; losing one leaves the
+    // reader's own search alone.
     if (filledTripId) setQuery(toFlightQuery(resolved.context));
-    // Keyed on the trip, not the context, which is rebuilt every render.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filledTripId]);
+  }
 
   const context = useMemo(() => toBookingContext(query), [query]);
   const summary = describeBookingContext(context);

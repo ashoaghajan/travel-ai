@@ -10,6 +10,13 @@ import { useSettings } from '../useSettings';
 import styles from './SettingsPage.module.css';
 
 /** Friendlier names for the storage keys shown on this screen. */
+/**
+ * A readable name for every key the usage list can report.
+ *
+ * Partial, it turned out: `getStorageUsage` walks all of `STORAGE_KEYS`, so any
+ * key missing here fell through to `?? entry.key` and the panel listed raw
+ * internals — "ai-travel-planner:geocodes" — beside the six that had names.
+ */
 const STORAGE_LABELS: Record<string, string> = {
   'ai-travel-planner:trips': 'Saved trips',
   'ai-travel-planner:activeTripId': 'Active trip',
@@ -17,6 +24,17 @@ const STORAGE_LABELS: Record<string, string> = {
   'ai-travel-planner:settings': 'Preferences',
   'ai-travel-planner:recentSearches': 'Recent searches',
   'ai-travel-planner:bookings': 'Bookings',
+  'ai-travel-planner:selectedCountry': 'Chosen country',
+  'ai-travel-planner:selectedCity': 'Chosen city',
+  'ai-travel-planner:savedActivities': 'Saved attractions',
+  'ai-travel-planner:messagesOpen': 'Messages panel',
+  'ai-travel-planner:airports': 'Airport lookups',
+  'ai-travel-planner:countries': 'Country list',
+  'ai-travel-planner:activities': 'Attraction results',
+  'ai-travel-planner:geocodes': 'Place coordinates',
+  'ai-travel-planner:exchangeRates': 'Exchange rates',
+  'ai-travel-planner:migratedFor': 'Migration record',
+  'ai-travel-planner:ownerUserId': 'Signed-in account',
 };
 
 export function SettingsPage() {
@@ -129,7 +147,7 @@ export function SettingsPage() {
 
         <SettingsSection
           title="Storage"
-          description="Everything you save stays in this browser. Nothing is uploaded."
+          description="What this browser is keeping on the device itself. Your trips and preferences live on your account, so they are not counted here."
         >
           <dl className={styles.usage}>
             {usage.map((entry) => (
