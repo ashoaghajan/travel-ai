@@ -234,7 +234,57 @@ async function answerOffline(
       return { reply: [CANNOT_ANSWER, proHint].filter(Boolean).join(' ') };
     case 'trip':
     default:
-      return mockAiService.generateItinerary(prompt);
+      return withDestinationFacts(await mockAiService.generateItinerary(prompt));
+  }
+}
+
+/**
+ * Labels the templates use that are not places, and must never be looked up.
+ *
+ * A prompt naming nowhere yields "Your destination", and asking the geocoder
+ * about it is a request whose failure is known in advance.
+ */
+const NON_PLACES = new Set(['your destination', 'departure', 'home']);
+
+/**
+ * The city and country a template itinerary cannot know.
+ *
+ * `mockAiService` reads a destination *name* out of the prompt and stops there,
+ * so a trip it built arrived with `destination: 'Lisbon'` and both
+ * `destinationCity` and `destinationCountry` empty. The model path fills them in
+ * — `toTripDraft` copies them straight off the plan — which is why this was
+ * invisible on Pro and broken for everybody else, free being the default tier.
+ *
+ * The two fields are not decoration. An empty country stops
+ * `useDestinationAirport` resolving an arrival airport, so the trip's Flights
+ * tab falls back to partner links; an empty city leaves the Hotels tab with
+ * nowhere to search and costs the geocoder the hint that tells Valencia, Spain
+ * from Valencia, Venezuela.
+ *
+ * The lookup is the one the planner already makes for a location question, so
+ * this adds a request to a path that was going to spend one anyway, and adds no
+ * new dependency. Failure costs the country and nothing else: the city is still
+ * the name the prompt gave, and the trip is exactly the trip it was before.
+ */
+async function withDestinationFacts(generated: GeneratedItinerary): Promise<GeneratedItinerary> {
+  const { trip } = generated;
+  const name = trip?.destination?.trim();
+
+  if (!trip || !name || NON_PLACES.has(name.toLowerCase())) return generated;
+
+  try {
+    const facts = await weatherService.findPlace(name);
+
+    return {
+      ...generated,
+      trip: {
+        ...trip,
+        destinationCity: facts.name || name,
+        destinationCountry: facts.country ?? trip.destinationCountry,
+      },
+    };
+  } catch {
+    return { ...generated, trip: { ...trip, destinationCity: name } };
   }
 }
 
