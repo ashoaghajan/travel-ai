@@ -26,6 +26,17 @@ import { useTheme } from '../../theme/useTheme';
 const TRACK_HEIGHT = 4;
 const HANDLE_SIZE = 26;
 
+/**
+ * The row the track is drawn down the middle of.
+ *
+ * Taller than the handle it carries, because 26dp is a dot to look at and a
+ * miss to touch — 44 is the smallest target a finger reliably lands on. It has
+ * to be height rather than `hitSlop`: Android does not deliver a touch that
+ * falls outside the parent's own bounds, so slop hung off a 26dp row would be
+ * ignored on exactly the platform this was measured on.
+ */
+const ROW_HEIGHT = 44;
+
 export function PriceRangeSlider({
   bounds,
   min,
@@ -42,13 +53,29 @@ export function PriceRangeSlider({
 
   const [width, setWidth] = useState(0);
 
+  /**
+   * How far the centre of a handle can move.
+   *
+   * Half a handle short of the track at each end, which is the difference
+   * between a control that looks drawn and one that looks cut. A handle
+   * centred on its own extreme hangs half of itself past the track, and this
+   * row runs the full width of the page — so on the phone that overhang was
+   * not a rough edge but half a circle sliced off by the side of the screen,
+   * at both ends, in the resting state every reader sees first.
+   *
+   * Positions are measured in this rather than in `width`, the drag included:
+   * a finger crossing the whole track has to cover the whole range, and
+   * dividing its `dx` by the wider figure would leave the far end unreachable.
+   */
+  const travel = Math.max(0, width - HANDLE_SIZE);
+
   /*
    * The pan responders are built once — rebuilding them mid-gesture drops the
    * drag — so everything they need to read is held in refs and refreshed on
    * each render rather than captured in their closures.
    */
-  const live = useRef({ bounds, min, max, width, onChange });
-  live.current = { bounds, min, max, width, onChange };
+  const live = useRef({ bounds, min, max, travel, onChange });
+  live.current = { bounds, min, max, travel, onChange };
 
   /** Where the dragged handle was when the finger went down. */
   const grabbed = useRef(0);
@@ -69,11 +96,11 @@ export function PriceRangeSlider({
         grabbed.current = end === 'min' ? live.current.min : live.current.max;
       },
       onPanResponderMove: (_event, gesture) => {
-        const { bounds: b, width: w } = live.current;
-        if (w <= 0) return;
+        const { bounds: b, travel: t } = live.current;
+        if (t <= 0) return;
 
         const span = b.max - b.min;
-        const moved = snap(grabbed.current + (gesture.dx / w) * span);
+        const moved = snap(grabbed.current + (gesture.dx / t) * span);
 
         if (end === 'min') {
           const next = Math.min(moved, live.current.max - b.step);
@@ -91,7 +118,9 @@ export function PriceRangeSlider({
   const maxPan = useRef(makeResponder('max')).current;
 
   const span = bounds.max - bounds.min;
-  const offset = (value: number) => ((value - bounds.min) / span) * width;
+
+  /** The left edge of the handle standing at `value`, within the row. */
+  const offset = (value: number) => ((value - bounds.min) / span) * travel;
 
   /** Keyboard and switch control: one step either way. */
   function nudge(end: 'min' | 'max', direction: 1 | -1) {
@@ -115,12 +144,10 @@ export function PriceRangeSlider({
         onAccessibilityAction={(event) =>
           nudge(end, event.nativeEvent.actionName === 'increment' ? 1 : -1)
         }
-        // Positioned by its centre, so the handle sits *on* its value rather
-        // than starting at it.
         style={{
           position: 'absolute',
-          left: offset(value) - HANDLE_SIZE / 2,
-          top: 0,
+          left: offset(value),
+          top: (ROW_HEIGHT - HANDLE_SIZE) / 2,
           width: HANDLE_SIZE,
           height: HANDLE_SIZE,
           borderRadius: theme.radius.pill,
@@ -146,7 +173,7 @@ export function PriceRangeSlider({
 
       <View
         onLayout={(event) => setWidth(event.nativeEvent.layout.width)}
-        style={{ height: HANDLE_SIZE, justifyContent: 'center', marginTop: theme.space.xs }}
+        style={{ height: ROW_HEIGHT, justifyContent: 'center', marginTop: theme.space.xs }}
       >
         <View
           style={{
@@ -158,12 +185,14 @@ export function PriceRangeSlider({
 
         {/* Everything below needs the measured width; one frame without it
             would put both handles on top of each other at zero. */}
-        {width > 0 ? (
+        {travel > 0 ? (
           <>
             <View
               style={{
+                // Drawn between the two handle *centres*, which is half a
+                // handle in from where the handles themselves start.
                 position: 'absolute',
-                left: offset(min),
+                left: offset(min) + HANDLE_SIZE / 2,
                 width: Math.max(0, offset(max) - offset(min)),
                 height: TRACK_HEIGHT,
                 borderRadius: theme.radius.pill,
