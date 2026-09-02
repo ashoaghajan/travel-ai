@@ -45,6 +45,8 @@ model User {
   /// Null for an account that only ever signed in through a provider.
   passwordHash String?
 
+  calendarConnections CalendarConnection[]
+
   /// Set once the browser's local data has been claimed by this account (Phase 4).
   localImportCompletedAt DateTime?
 
@@ -581,4 +583,74 @@ model TripShare {
 
   /// "What has been shared with me lately" — the only list this table has.
   @@index([toUserId, createdAt(sort: Desc)])
+}
+
+/// A reader's link to an external calendar.
+///
+/// One row per account per provider, which is what the unique index says. A
+/// second authorisation overwrites the first rather than accumulating: Google
+/// only issues a refresh token on the *first* consent unless re-prompted, so
+/// two live rows for one account would mean one of them holding a token that
+/// can no longer be refreshed.
+model CalendarConnection {
+  id     String @id @default(uuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  /// 'google' today. A string rather than an enum, per this schema's own rule.
+  provider String
+
+  /// The Google account the calendar belongs to, for the profile screen. Not
+  /// used for lookup, and not necessarily the address the reader signs in with.
+  accountEmail String?
+
+  /// The refresh token, encrypted with CALENDAR_TOKEN_KEY.
+  ///
+  /// Never the plaintext. This is a long-lived key to somebody's calendar that
+  /// signing out of *this* app does not invalidate — only the reader revoking
+  /// it in their Google account does — so a leaked dump would be a real breach.
+  refreshToken String
+
+  /// What Google actually granted, which can be less than what was asked for:
+  /// the consent screen lets a reader untick individual permissions.
+  scope String
+
+  /// The secondary calendar this app created and writes into.
+  ///
+  /// A calendar of our own rather than the reader's primary one, so that
+  /// removing a trip removes our events and touches nothing they put there
+  /// themselves — and so the whole thing can be hidden with one checkbox.
+  calendarId String?
+
+  events CalendarEventLink[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, provider])
+}
+
+/// One synced event: our id for it, and theirs.
+///
+/// Without this, a second sync of an edited trip would add a duplicate of every
+/// entry rather than updating it. `uid` is the stable id the shared calendar
+/// mapping generates — an activity's or a booking's — so the pairing survives a
+/// trip being renamed, re-dated or reordered.
+model CalendarEventLink {
+  id           String             @id @default(uuid())
+  connectionId String
+  connection   CalendarConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+
+  /// Ours, from `toCalendarEvents`.
+  uid String
+  /// Google's event id, as returned when it was inserted.
+  externalId String
+
+  /// Which trip it came from, so removing a trip can remove its events.
+  tripId String
+
+  updatedAt DateTime @updatedAt
+
+  @@unique([connectionId, uid])
+  @@index([connectionId, tripId])
 }

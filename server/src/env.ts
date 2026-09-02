@@ -192,6 +192,51 @@ const schema = z.object({
   GROQ_API_KEY: z.string().min(1).optional(),
 
   /**
+   * The client *secret* for the Google OAuth web client — Calendar only.
+   *
+   * Deliberately not part of signing in. That flow verifies an ID token
+   * against Google's public keys and needs no secret at all, which is what
+   * makes it safe for a static bundle; this one is the authorization-code
+   * flow, which exchanges a code for tokens and cannot be done in a browser
+   * without handing the secret to everybody who loads the page. The exchange
+   * therefore happens here and the secret never leaves this process.
+   *
+   * Optional, like every other provider key: without it the calendar
+   * endpoints answer PROVIDER_NOT_CONFIGURED, and the `.ics` export — which
+   * needs no account at all — carries on working.
+   */
+  GOOGLE_CLIENT_SECRET: z.string().min(1).optional(),
+
+  /**
+   * Where Google sends the reader back after they approve.
+   *
+   * Must match one of the redirect URIs registered on the OAuth client
+   * exactly, character for character — a trailing slash is a different URI and
+   * fails with `redirect_uri_mismatch`. It is configuration rather than a
+   * constant because the value differs per deployment: localhost while
+   * developing, the Render hostname in staging.
+   */
+  GOOGLE_OAUTH_REDIRECT_URI: z.string().url().optional(),
+
+  /**
+   * Encrypts refresh tokens at rest.
+   *
+   * A Google refresh token is a long-lived key to somebody's calendar, and
+   * unlike our own session tokens it cannot be rotated by signing out — it
+   * stays valid until the user revokes it in their Google account. A database
+   * dump that leaked one would be a real breach, so the column holds
+   * ciphertext and this is the key.
+   *
+   * 32 bytes, base64url. Generate one with:
+   *   node -e "console.log(require('crypto').randomBytes(32).toString('base64url'))"
+   *
+   * Rotating it makes every stored connection undecryptable, which reads to
+   * the app as "not connected" — the reader reconnects in two taps and no
+   * calendar is harmed. That is the intended failure, not a disaster.
+   */
+  CALENDAR_TOKEN_KEY: z.string().min(43).optional(),
+
+  /**
    * Turns off the credential throttles.
    *
    * Only ever set by the test suite, which deliberately fails login over and
