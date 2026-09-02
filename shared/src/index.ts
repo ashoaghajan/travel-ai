@@ -6,10 +6,12 @@
  * `@ai-travel/shared/schemas` export path, which only the server imports.
  */
 export * from './api.types';
+export * from './calendar';
 export * from './currency.types';
 export * from './error-codes';
 export * from './friend.types';
 export * from './hotel-filters';
+export * from './ics';
 export * from './messages.types';
 export * from './occupancy';
 export * from './planner.types';

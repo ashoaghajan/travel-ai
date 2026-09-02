@@ -12,7 +12,13 @@ import { tabId, tabPanelId } from '../../../components/common/tabs.helpers';
 import { TripRouteMap } from '../components/TripRouteMap';
 import { IconButton } from '../../../components/common/IconButton';
 import { ShareTripDialog } from '../components/ShareTripDialog';
-import { DownloadIcon, ShareIcon, SuitcaseIcon, TrashIcon } from '../../../components/common/icons';
+import {
+  CalendarIcon,
+  DownloadIcon,
+  ShareIcon,
+  SuitcaseIcon,
+  TrashIcon,
+} from '../../../components/common/icons';
 import type { Trip } from '../../../types/trip.types';
 import { formatDateRange } from '../../../utils/date';
 import {
@@ -30,6 +36,7 @@ import { TripNotes } from '../components/TripNotes';
 import { useDeleteTrip, useTripDetails } from '../useTrips';
 import { useEditTrip } from '../useEditTrip';
 import { useTripExport } from '../useTripExport';
+import { useCalendarExport } from '../useCalendarExport';
 import { useStopCoordinates } from '../useStopCoordinates';
 import { useBookingCoordinates } from '../useBookingCoordinates';
 import { useTripBookings } from '../../../store/booking.store';
@@ -169,6 +176,11 @@ function TripDetailsView({ trip }: { trip: Trip }) {
   const tripBookings = useTripBookings(trip.id);
   const money = useMoney();
   const { exportTrip, error: exportError } = useTripExport();
+  const {
+    exportCalendar,
+    isExporting: isExportingCalendar,
+    error: calendarError,
+  } = useCalendarExport();
 
   /*
    * Dates, party, and what it comes to. The cost joins the other two because
@@ -256,6 +268,20 @@ function TripDetailsView({ trip }: { trip: Trip }) {
                 >
                   <DownloadIcon size={20} />
                 </IconButton>
+                {/*
+                  The third destination for the same trip: a file for a person,
+                  a conversation for a friend, and this one for a calendar. It
+                  waits where the other two do not — every day's zone has to be
+                  resolved before a line can be written — so it is the one
+                  control in this row with a busy state.
+                */}
+                <IconButton
+                  label={`Add ${trip.title} to a calendar`}
+                  disabled={isExportingCalendar}
+                  onClick={() => exportCalendar(trip, tripBookings)}
+                >
+                  <CalendarIcon size={20} />
+                </IconButton>
                 <IconButton
                   label={`Delete ${trip.title}`}
                   disabled={isDeleting}
@@ -273,6 +299,12 @@ function TripDetailsView({ trip }: { trip: Trip }) {
         {exportError ? (
           <p className={styles.error} role="alert">
             {exportError}
+          </p>
+        ) : null}
+
+        {calendarError ? (
+          <p className={styles.error} role="alert">
+            {calendarError}
           </p>
         ) : null}
 

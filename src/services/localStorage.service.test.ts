@@ -33,6 +33,7 @@ describe('storage keys', () => {
       exchangeRates: 'ai-travel-planner:exchangeRates',
       migratedFor: 'ai-travel-planner:migratedFor',
       geocodes: 'ai-travel-planner:geocodes',
+      timezones: 'ai-travel-planner:timezones',
       ownerUserId: 'ai-travel-planner:ownerUserId',
     });
   });
