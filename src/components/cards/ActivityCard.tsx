@@ -116,11 +116,19 @@ export function ActivityCard({
         </h3>
         <p className={styles.description}>{description}</p>
 
-        {rating > 0 ? (
+        {/*
+          A star needs reviews behind it. OpenTripMap scores *importance* 0–3
+          and carries no reviews at all, and `ratingFromRate` stretches that
+          onto five — so every notable place scores 3 and every card in the grid
+          read "★ 5.0", a rating with no variance and no reviewers. Viator
+          products do carry real review counts, and those are the ones worth a
+          star, so the count is what the star hangs off.
+        */}
+        {rating > 0 && reviews > 0 ? (
           <p className={styles.rating}>
             <StarIcon size={14} className={styles.star} />
             <span className={styles.ratingValue}>{rating.toFixed(1)}</span>
-            {reviews > 0 ? <span className={styles.reviews}>({reviews})</span> : null}
+            <span className={styles.reviews}>({reviews})</span>
           </p>
         ) : null}
 

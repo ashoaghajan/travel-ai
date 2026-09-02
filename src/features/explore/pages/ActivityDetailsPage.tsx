@@ -167,7 +167,8 @@ export function ActivityDetailsPage() {
             <p className={styles.summary}>{activity.description}</p>
 
             <div className={styles.meta}>
-              {activity.rating > 0 ? (
+              {/* Reviews, not importance — see `ActivityCard`. */}
+              {activity.rating > 0 && activity.reviews > 0 ? (
                 <span className={styles.metaItem}>
                   <StarIcon size={14} className={styles.star} />
                   {activity.rating.toFixed(1)}

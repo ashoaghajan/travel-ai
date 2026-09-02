@@ -68,6 +68,14 @@ describe('categoryFromKinds', () => {
     ['waterfalls,natural', 'nature'],
     ['cultural,museums', 'culture'],
     ['religion,hindu_temples,interesting_places', 'culture'],
+    // A castle is tagged with the view from it. Before culture had a rule of
+    // its own these fell through to nature, which is how São Jorge Castle came
+    // to be badged Nature on a list of things to do in Lisbon.
+    ['castles,fortifications,view_points,historic', 'culture'],
+    ['view_points,fortifications,interesting_places', 'culture'],
+    // Rock-cut tombs carry "caves", which the adventure rule claims first.
+    ['cemeteries,megaliths,caves,archaeology', 'culture'],
+    ['historic_architecture,monasteries,view_points', 'culture'],
   ])('%s → %s', (kinds, expected) => {
     expect(categoryFromKinds(kinds)).toBe(expected);
   });

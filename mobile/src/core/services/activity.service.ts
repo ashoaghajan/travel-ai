@@ -78,11 +78,50 @@ const EXCLUDED_KINDS = [
  *
  * Order matters for places that carry several kinds: a surf beach
  * ("surfing,beaches,natural") reads as adventure rather than nature.
+ *
+ * Culture is a rule of its own *and* the fallback, and it has to be both. As a
+ * fallback alone it was unreachable for the places that need it most: a castle
+ * is tagged with the view from it, so "castles,fortifications,view_points" fell
+ * to the nature rule and São Jorge Castle was badged Nature; a megalithic tomb
+ * cut into rock carries "caves" and was badged Adventure. Neither is a tie
+ * being broken badly — the cultural kind never got a rule to match against.
+ *
+ * Only *specific* cultural nodes are listed. The broad ones ("cultural",
+ * "historic", "religion") are deliberately left out: they hang off a great many
+ * places whose real subject is something else, and a place carrying nothing but
+ * a broad node still lands on culture through the fallback, so listing them
+ * would widen the rule without reaching a single extra place.
  */
 const CATEGORY_RULES: { category: ActivityCategory; kinds: string[] }[] = [
   {
     category: 'food',
     kinds: ['foods', 'restaurants', 'cafes', 'fast_food', 'bakeries', 'bars', 'pubs', 'biergartens'],
+  },
+  {
+    category: 'culture',
+    kinds: [
+      'museums',
+      'art_galleries',
+      'theatres_and_entertainments',
+      'historic_architecture',
+      'historical_places',
+      'historic_districts',
+      'castles',
+      'fortifications',
+      'palaces',
+      'manor_houses',
+      'monuments_and_memorials',
+      'sculptures',
+      'archaeology',
+      'megaliths',
+      'cemeteries',
+      'churches',
+      'cathedrals',
+      'monasteries',
+      'temples',
+      'mosques',
+      'synagogues',
+    ],
   },
   {
     category: 'adventure',

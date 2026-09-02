@@ -141,10 +141,11 @@ export function ActivityCard({
           {description}
         </Text>
 
-        {rating > 0 ? (
+        {/* A star needs reviews behind it — see the web's `ActivityCard`. */}
+        {rating > 0 && reviews > 0 ? (
           <Text variant="xs" tone="muted" leading="tight">
             ★ <Text variant="xs" weight="semibold">{rating.toFixed(1)}</Text>
-            {reviews > 0 ? ` (${reviews})` : ''}
+            {` (${reviews})`}
           </Text>
         ) : null}
 
