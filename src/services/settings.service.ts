@@ -2,6 +2,7 @@ import { BASE_CURRENCY, isCurrencyCode } from '@ai-travel/shared';
 import type { ApiSettings } from '@ai-travel/shared';
 import type { AppSettings } from '../types/settings.types';
 import { DEFAULT_APPEARANCE, isAppearance } from '../types/settings.types';
+import { DEFAULT_PREFERENCES } from './itinerary.planner';
 import { http } from './http';
 import type { StorageEntryUsage } from './localStorage.service';
 import { STORAGE_KEYS, storageService } from './localStorage.service';
@@ -33,6 +34,9 @@ export const DEFAULT_SETTINGS: AppSettings = {
     tripReminders: true,
     priceAlerts: false,
   },
+  // The planner's own defaults, not a second opinion about them — this is the
+  // module that has to plan a trip before any account has loaded.
+  travel: DEFAULT_PREFERENCES,
 };
 
 /** Merges stored values over the defaults so a partial or older record still loads. */
@@ -54,6 +58,28 @@ function withDefaults(stored: Partial<AppSettings> | null): AppSettings {
     notifications: {
       ...DEFAULT_SETTINGS.notifications,
       ...(stored?.notifications ?? {}),
+    },
+    /*
+     * Merged field by field, and the weights merged again inside that.
+     *
+     * Records cached before these existed hold no `travel` at all, and a
+     * record written by an older bundle can be missing a category the app has
+     * since added. Spreading the defaults underneath means a missing weight
+     * reads as "not yet chosen" rather than as zero — which in this map means
+     * "never show me this", a preference nobody expressed by having an old
+     * copy on disk.
+     */
+    travel: {
+      ...DEFAULT_SETTINGS.travel,
+      ...(stored?.travel ?? {}),
+      categoryWeights: {
+        ...DEFAULT_SETTINGS.travel.categoryWeights,
+        ...(stored?.travel?.categoryWeights ?? {}),
+      },
+      meals: {
+        ...DEFAULT_SETTINGS.travel.meals,
+        ...(stored?.travel?.meals ?? {}),
+      },
     },
   };
 }
@@ -118,10 +144,37 @@ export const settingsService = {
    * have.
    */
   async save(patch: Partial<AppSettings>): Promise<AppSettings> {
-    const settings = fromApi(await http.put<ApiSettings>('/settings', patch));
-    writeCache(settings);
+    const previous = withDefaults(
+      storageService.get<Partial<AppSettings> | null>(STORAGE_KEYS.settings, null),
+    );
 
-    return settings;
+    /*
+     * The cache is written before the request, not only after it.
+     *
+     * It used to be only after, and that quietly lost preferences. Every
+     * caller builds its patch by merging over `getSettings()` — the whole
+     * `travel` object goes up, because two of its fields are clearable and the
+     * server has to tell an absent key from a null one. So two changes made
+     * inside one round trip both merged over the *same* pre-change cache, and
+     * the second overwrote the first with the value it had replaced.
+     *
+     * That is not a synthetic race. A range input fires a change per step, so
+     * dragging one slider two stops does it, and a browser found it on the
+     * first try: of four preferences changed in a second, one survived.
+     */
+    writeCache(withDefaults({ ...previous, ...patch }));
+
+    try {
+      const settings = fromApi(await http.put<ApiSettings>('/settings', patch));
+      writeCache(settings);
+
+      return settings;
+    } catch (error) {
+      // Nothing was stored, so nothing may be cached — `useSettings` puts the
+      // control back and the cache has to agree with it.
+      writeCache(previous);
+      throw error;
+    }
   },
 
   /**

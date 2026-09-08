@@ -76,7 +76,7 @@ export function PlanSection() {
             <span className={styles.detail}>
               {isPro
                 ? 'The planner writes with Claude, and you can talk to it.'
-                : 'The quick planner builds trips from templates, and answers weather and places.'}
+                : 'The quick planner builds trips from real places, to your own hours and budget.'}
             </span>
             {/* Only on Pro, and only when the server gave a date — an account
                 upgraded before this field existed has none, and "Pro since

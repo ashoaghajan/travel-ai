@@ -174,6 +174,37 @@ describe('GET /api/places/search', () => {
     expect(response.body).toEqual([]);
   });
 
+  it('caches a search, so the second reader costs nothing', async () => {
+    const fetchMock = providerAnswers([{ xid: 'a', name: 'Kuta Beach', rate: 3, kinds: 'beaches' }]);
+    vi.stubGlobal('fetch', fetchMock);
+
+    await api().get(SEARCH).query(query).expect(200);
+    const second = await api().get(SEARCH).query(query).expect(200);
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(second.body).toHaveLength(1);
+  });
+
+  it('does not cache an empty answer, which is usually the provider throttling', async () => {
+    const empty = providerAnswers([]);
+    vi.stubGlobal('fetch', empty);
+
+    const first = await api().get(SEARCH).query(query).expect(200);
+    expect(first.body).toEqual([]);
+
+    /*
+     * OpenTripMap answers a throttled request with 200 and nothing in it. This
+     * cache holds for a day, so storing that turned a city full of museums
+     * into a city with nothing in it until tomorrow — and put a template
+     * itinerary with stock photographs in front of somebody who asked for a
+     * real place.
+     */
+    vi.stubGlobal('fetch', providerAnswers([{ xid: 'a', name: 'Kuta Beach', rate: 3, kinds: 'beaches' }]));
+
+    const second = await api().get(SEARCH).query(query).expect(200);
+    expect(second.body.map((place: { name: string }) => place.name)).toEqual(['Kuta Beach']);
+  });
+
   it('refuses an unbounded radius', async () => {
     vi.stubGlobal('fetch', providerAnswers([]));
 

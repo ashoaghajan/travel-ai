@@ -4,6 +4,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { STORAGE_KEYS, storageService } from './localStorage.service';
 import { DEFAULT_SETTINGS, settingsService } from './settings.service';
+import type { ApiSettings } from '@ai-travel/shared';
 import { ApiError, http } from './http';
 
 /**
@@ -53,12 +54,14 @@ describe('getSettings', () => {
       theme: 'atlas',
       currency: 'AMD',
       notifications: { tripReminders: false, priceAlerts: true },
+      travel: DEFAULT_SETTINGS.travel,
     });
 
     expect(settingsService.getSettings()).toEqual({
       theme: 'atlas',
       currency: 'AMD',
       notifications: { tripReminders: false, priceAlerts: true },
+      travel: DEFAULT_SETTINGS.travel,
     });
   });
 
@@ -69,6 +72,7 @@ describe('getSettings', () => {
       theme: 'console',
       currency: DEFAULT_SETTINGS.currency,
       notifications: DEFAULT_SETTINGS.notifications,
+      travel: DEFAULT_SETTINGS.travel,
     });
   });
 
@@ -242,5 +246,121 @@ describe('records written before the appearances existed', () => {
     expect(settings.theme).toBe('sharpen');
     expect(settings.currency).toBe('AMD');
     expect(settings.notifications).toEqual({ tripReminders: false, priceAlerts: true });
+  });
+});
+
+/**
+ * The planning preferences, on the way in.
+ *
+ * These decide what a generated trip contains, and a record on disk can be
+ * older than the app reading it — so what a *missing* value means is the whole
+ * question. It must mean "not chosen", never "never show me this".
+ */
+describe('travel preferences', () => {
+  it('gives a record written before they existed the defaults', () => {
+    storageService.set(STORAGE_KEYS.settings, { theme: 'atlas', currency: 'USD' });
+
+    expect(settingsService.getSettings().travel).toEqual(DEFAULT_SETTINGS.travel);
+  });
+
+  it('keeps what was stored', () => {
+    storageService.set(STORAGE_KEYS.settings, {
+      travel: { ...DEFAULT_SETTINGS.travel, dayStart: '11:00', maxActivityPrice: 40 },
+    });
+
+    const { travel } = settingsService.getSettings();
+
+    expect(travel.dayStart).toBe('11:00');
+    expect(travel.maxActivityPrice).toBe(40);
+  });
+
+  it('fills in a category the stored weights never named', () => {
+    storageService.set(STORAGE_KEYS.settings, {
+      travel: { ...DEFAULT_SETTINGS.travel, categoryWeights: { nature: 1 } },
+    });
+
+    const { categoryWeights } = settingsService.getSettings().travel;
+
+    expect(categoryWeights.nature).toBe(1);
+    // Absent from an older record is "not chosen", and must not arrive as the
+    // zero that means "never plan this for me".
+    expect(categoryWeights.culture).toBe(DEFAULT_SETTINGS.travel.categoryWeights.culture);
+  });
+
+  it('keeps a deliberate zero, which is the one weight that excludes', () => {
+    storageService.set(STORAGE_KEYS.settings, {
+      travel: { ...DEFAULT_SETTINGS.travel, categoryWeights: { adventure: 0 } },
+    });
+
+    expect(settingsService.getSettings().travel.categoryWeights.adventure).toBe(0);
+  });
+
+  it('fills in a partially stored meals object', () => {
+    storageService.set(STORAGE_KEYS.settings, {
+      travel: { ...DEFAULT_SETTINGS.travel, meals: { dinner: false } },
+    });
+
+    expect(settingsService.getSettings().travel.meals).toEqual({ lunch: true, dinner: false });
+  });
+});
+
+/**
+ * Two changes inside one round trip.
+ *
+ * The regression this guards was found in a browser, not here: four
+ * preferences changed in a second, and one of them survived. Every caller
+ * merges its patch over `getSettings()`, so if the cache only moves when the
+ * server answers, the second change merges over the pre-change value and
+ * silently undoes the first.
+ */
+describe('overlapping saves', () => {
+  it('keeps both changes when the second is made before the first answers', async () => {
+    // Answers like the server does: the whole record, with the patch applied.
+    const put = vi
+      .spyOn(http, 'put')
+      .mockImplementation(
+        async (_path, body) =>
+          ({
+            ...settingsService.getSettings(),
+            ...(body as object),
+          }) as unknown as ApiSettings,
+      );
+
+    // No await between them: this is a slider moved and then a switch flipped.
+    const first = settingsService.save({ theme: 'atlas' });
+    const second = settingsService.save({ currency: 'EUR' });
+
+    await Promise.all([first, second]);
+
+    // The second request must have carried the first change with it.
+    expect(put).toHaveBeenLastCalledWith('/settings', { currency: 'EUR' });
+    expect(settingsService.getSettings().theme).toBe('atlas');
+    expect(settingsService.getSettings().currency).toBe('EUR');
+  });
+
+  it('shows the change immediately, before the server has answered', async () => {
+    let release: (value: ApiSettings) => void = () => {};
+    vi.spyOn(http, 'put').mockReturnValue(
+      new Promise<ApiSettings>((resolve) => {
+        release = resolve;
+      }) as ReturnType<typeof http.put>,
+    );
+
+    const pending = settingsService.save({ theme: 'console' });
+
+    expect(settingsService.getSettings().theme).toBe('console');
+
+    release({ ...DEFAULT_SETTINGS, theme: 'console' } as ApiSettings);
+    await pending;
+  });
+
+  it('puts the cache back when the save fails', async () => {
+    storageService.set(STORAGE_KEYS.settings, { ...DEFAULT_SETTINGS, theme: 'atlas' });
+    vi.spyOn(http, 'put').mockRejectedValue(new Error('offline'));
+
+    await expect(settingsService.save({ theme: 'console' })).rejects.toThrow();
+
+    // Nothing was stored, so nothing may be shown as stored.
+    expect(settingsService.getSettings().theme).toBe('atlas');
   });
 });

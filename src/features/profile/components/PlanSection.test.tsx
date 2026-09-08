@@ -8,6 +8,7 @@ import userEvent from '@testing-library/user-event';
 import { authService } from '../../../services/auth.service';
 import { authStore } from '../../../store/auth.store';
 import { PlanSection } from './PlanSection';
+import { DEFAULT_SETTINGS } from '../../../services/settings.service';
 
 /** The plan row on the profile: what it says, and the way back to free. */
 
@@ -27,6 +28,7 @@ function user(plan: 'free' | 'pro'): ApiUser {
       theme: 'sharpen',
       currency: 'USD',
       notifications: { tripReminders: true, priceAlerts: false },
+      travel: DEFAULT_SETTINGS.travel,
     },
   };
 }

@@ -11,6 +11,7 @@ import { setAccessToken } from '../../../services/http';
 import { authStore } from '../../../store/auth.store';
 import { LANDING_HERO } from '../landing.content';
 import { LandingPage } from './LandingPage';
+import { DEFAULT_SETTINGS } from '../../../services/settings.service';
 
 /**
  * The landing page is reachable in both states — by bookmark, by typed URL, or
@@ -32,6 +33,7 @@ const ADA: ApiUser = {
     theme: 'sharpen' as const,
     currency: 'USD',
     notifications: { tripReminders: true, priceAlerts: false },
+    travel: DEFAULT_SETTINGS.travel,
   },
 };
 

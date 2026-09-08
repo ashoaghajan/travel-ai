@@ -18,6 +18,9 @@ const SPAIN: Country = { name: 'Spain', code: 'ES' };
 const JAPAN: Country = { name: 'Japan', code: 'JP' };
 const COUNTRIES = [JAPAN, SPAIN];
 
+/** A fix, as `/reference/location` hands one back. */
+const TOKYO = { countryCode: 'JP', countryName: 'Japan', city: 'Tokyo' };
+
 function trip(id: string, fields: Partial<Trip> = {}): Trip {
   return {
     id,
@@ -233,6 +236,163 @@ describe('resolveSelection', () => {
         city: 'Osaka',
       }),
     ).toMatchObject({ countryCode: 'JP', city: 'Osaka', source: 'chosen' });
+  });
+});
+
+describe('resolveSelection, from the device', () => {
+  const NOWHERE = { country: null, city: null };
+
+  it('uses the device when there is neither a choice nor a trip', () => {
+    expect(exploreService.resolveSelection([], null, COUNTRIES, NOWHERE, TOKYO)).toEqual({
+      countryCode: 'JP',
+      countryName: 'Japan',
+      city: 'Tokyo',
+      source: 'device',
+    });
+  });
+
+  it('spells the country the way the list does', () => {
+    // The fix arrives with the endpoint's spelling, but the list is what the
+    // city lookup is keyed by — so the code decides and the name follows.
+    const fix = { countryCode: 'JP', countryName: 'Nippon', city: 'Tokyo' };
+
+    expect(
+      exploreService.resolveSelection([], null, COUNTRIES, NOWHERE, fix),
+    ).toMatchObject({ countryName: 'Japan' });
+  });
+
+  it('outranks the active trip', () => {
+    const trips = [trip('t1', { destinationCountry: 'Spain', destinationCity: 'Seville' })];
+
+    // The city around the reader is a fact; a trip they opened last week is a
+    // plan. The plan is not lost — the page offers it as a named alternative.
+    expect(exploreService.resolveSelection(trips, 't1', COUNTRIES, NOWHERE, TOKYO)).toMatchObject({
+      city: 'Tokyo',
+      source: 'device',
+    });
+  });
+
+  it('leaves the trip in charge when there is no fix', () => {
+    const trips = [trip('t1', { destinationCountry: 'Spain', destinationCity: 'Seville' })];
+
+    expect(exploreService.resolveSelection(trips, 't1', COUNTRIES, NOWHERE, null)).toMatchObject({
+      city: 'Seville',
+      source: 'trip',
+    });
+  });
+
+  it('falls through to the trip when the fix names no country', () => {
+    const trips = [trip('t1', { destinationCountry: 'Spain', destinationCity: 'Seville' })];
+    const atSea = { countryCode: null, countryName: null, city: null };
+
+    expect(exploreService.resolveSelection(trips, 't1', COUNTRIES, NOWHERE, atSea)).toMatchObject({
+      city: 'Seville',
+      source: 'trip',
+    });
+  });
+
+  it('loses to an explicit choice', () => {
+    exploreService.setCountry(SPAIN);
+
+    expect(exploreService.resolveSelection([], null, COUNTRIES, undefined, TOKYO)).toMatchObject({
+      countryCode: 'ES',
+      source: 'chosen',
+    });
+  });
+
+  it('is ignored when the fix names no country', () => {
+    const atSea = { countryCode: null, countryName: null, city: null };
+
+    expect(exploreService.resolveSelection([], null, COUNTRIES, NOWHERE, atSea).source).toBe(
+      'none',
+    );
+  });
+
+  it('keeps a country the list has never heard of', () => {
+    const fix = { countryCode: 'AQ', countryName: 'Antarctica', city: null };
+
+    expect(exploreService.resolveSelection([], null, COUNTRIES, NOWHERE, fix)).toMatchObject({
+      countryCode: 'AQ',
+      countryName: 'Antarctica',
+      city: null,
+      source: 'device',
+    });
+  });
+});
+
+describe('adoptPlace', () => {
+  it('turns a fix into the reader’s own choice', () => {
+    exploreService.adoptPlace(TOKYO, COUNTRIES);
+
+    // 'chosen', not 'device': a press of the button is as plain a statement as
+    // picking the country from the list would have been.
+    expect(exploreService.resolveSelection([], null, COUNTRIES)).toEqual({
+      countryCode: 'JP',
+      countryName: 'Japan',
+      city: 'Tokyo',
+      source: 'chosen',
+    });
+  });
+
+  it('outranks the trip it is adopted over', () => {
+    const trips = [trip('t1', { destinationCountry: 'Spain', destinationCity: 'Seville' })];
+    exploreService.adoptPlace(TOKYO, COUNTRIES);
+
+    expect(exploreService.resolveSelection(trips, 't1', COUNTRIES).source).toBe('chosen');
+  });
+
+  it('stores the country before the city, which setCountry would clear', () => {
+    exploreService.setCountry(SPAIN);
+    exploreService.setCity('Barcelona');
+    exploreService.adoptPlace(TOKYO, COUNTRIES);
+
+    expect(exploreService.resolveSelection([], null, COUNTRIES).city).toBe('Tokyo');
+  });
+
+  it('adopts a country the list does not know, using the fix’s own name', () => {
+    exploreService.adoptPlace(
+      { countryCode: 'AQ', countryName: 'Antarctica', city: 'McMurdo Station' },
+      COUNTRIES,
+    );
+
+    expect(exploreService.resolveSelection([], null, COUNTRIES)).toMatchObject({
+      countryCode: 'AQ',
+      countryName: 'Antarctica',
+      city: 'McMurdo Station',
+    });
+  });
+
+  it('adopts a country with no city, which is still half an answer', () => {
+    exploreService.adoptPlace({ countryCode: 'JP', countryName: 'Japan', city: null });
+
+    expect(exploreService.resolveSelection([], null, COUNTRIES)).toMatchObject({
+      countryCode: 'JP',
+      city: null,
+      source: 'chosen',
+    });
+  });
+
+  it('adopts nothing from a fix that names no country', () => {
+    exploreService.adoptPlace({ countryCode: null, countryName: null, city: 'Atlantis' });
+
+    expect(exploreService.resolveSelection([], null, COUNTRIES).source).toBe('none');
+  });
+
+  it('pins a trip’s destination, which is how the trip offer survives a reload', () => {
+    const trips = [trip('t1', { destinationCountry: 'Spain', destinationCity: 'Seville' })];
+    const offered = exploreService.resolveSelection(trips, 't1', COUNTRIES);
+
+    exploreService.adoptPlace(offered, COUNTRIES);
+
+    // A press is a press, whichever control made it: the trip's destination is
+    // stored exactly as a fix from the location button would be, so it now
+    // outranks the device that had displaced it.
+    expect(exploreService.resolveSelection(trips, 't1', COUNTRIES, undefined, TOKYO)).toEqual({
+      countryCode: 'ES',
+      countryName: 'Spain',
+      city: 'Seville',
+      source: 'chosen',
+    });
   });
 });
 

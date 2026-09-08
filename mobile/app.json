@@ -25,7 +25,9 @@
         "android.permission.FOREGROUND_SERVICE",
         "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK",
         "android.permission.READ_CALENDAR",
-        "android.permission.WRITE_CALENDAR"
+        "android.permission.WRITE_CALENDAR",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION"
       ]
     },
     "web": {
@@ -47,6 +49,15 @@
         "expo-calendar",
         {
           "calendarPermission": "AI Travel adds the days of a trip you have saved to your calendar, so your itinerary sits beside the rest of your week. Nothing is read or sent anywhere."
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "AI Travel uses your location to open the explorer on the city you are already in, instead of asking you to pick a country and a city first. It is read while you have the app open, and the coordinates are never stored.",
+          "isIosBackgroundLocationEnabled": false,
+          "isAndroidBackgroundLocationEnabled": false,
+          "isAndroidForegroundServiceEnabled": false
         }
       ]
     ],

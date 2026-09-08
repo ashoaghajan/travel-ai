@@ -104,6 +104,16 @@ export function CompassIcon(props: IconProps) {
   );
 }
 
+/** Map marker — and the explorer's "where am I". */
+export function MapPinIcon(props: IconProps) {
+  return (
+    <Svg {...useIcon(props)}>
+      <Path d="M12 21c4.2-4.4 6.3-7.7 6.3-10.2a6.3 6.3 0 1 0-12.6 0C5.7 13.3 7.8 16.6 12 21Z" />
+      <Circle cx="12" cy="10.6" r="2.4" />
+    </Svg>
+  );
+}
+
 /** Tab bar: Bookings. */
 export function TicketIcon(props: IconProps) {
   return (
@@ -138,6 +148,18 @@ export function SettingsIcon(props: IconProps) {
     <Svg {...useIcon(props)}>
       <Circle cx="12" cy="12" r="3.1" />
       <Path d="M19.6 12c0-.5-.1-.9-.2-1.4l1.9-1.4-1.9-3.3-2.2 1a7.4 7.4 0 0 0-2.4-1.4L14.5 3h-3.8l-.3 2.5a7.4 7.4 0 0 0-2.4 1.4l-2.2-1L3.9 9.2l1.9 1.4a7.6 7.6 0 0 0 0 2.8L3.9 14.8l1.9 3.3 2.2-1c.7.6 1.5 1.1 2.4 1.4l.3 2.5h3.8l.3-2.5c.9-.3 1.7-.8 2.4-1.4l2.2 1 1.9-3.3-1.9-1.4c.1-.5.2-.9.2-1.4Z" />
+    </Svg>
+  );
+}
+
+/** Delete a trip, from the trips list. */
+export function TrashIcon(props: IconProps) {
+  return (
+    <Svg {...useIcon(props)}>
+      <Path d="M4.6 6.6h14.8" />
+      <Path d="M9.2 6.6V5.2a1.4 1.4 0 0 1 1.4-1.4h2.8a1.4 1.4 0 0 1 1.4 1.4v1.4" />
+      <Path d="M6.4 6.6 7.2 19a1.4 1.4 0 0 0 1.4 1.3h6.8a1.4 1.4 0 0 0 1.4-1.3l.8-12.4" />
+      <Path d="M10.4 10.2v6M13.6 10.2v6" />
     </Svg>
   );
 }

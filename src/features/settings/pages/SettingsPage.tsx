@@ -5,6 +5,7 @@ import { settingsService } from '../../../services/settings.service';
 import { useTrips } from '../../../store/trip.store';
 import { formatBytes } from '../../../utils/bytes';
 import { APPEARANCES } from '../../../types/settings.types';
+import { PlanningSection } from '../components/PlanningSection';
 import { SettingsSection } from '../components/SettingsSection';
 import { useSettings } from '../useSettings';
 import styles from './SettingsPage.module.css';
@@ -38,7 +39,7 @@ const STORAGE_LABELS: Record<string, string> = {
 };
 
 export function SettingsPage() {
-  const { settings, error, update, setNotification } = useSettings();
+  const { settings, error, update, setNotification, setTravel } = useSettings();
 
   /*
    * Read off the document rather than from `matchMedia`, so the swatches agree
@@ -126,6 +127,13 @@ export function SettingsPage() {
         >
           <CurrencySelect variant="field" label="Show prices in" />
         </SettingsSection>
+
+        {/*
+          Above notifications, below currency: this is the section that changes
+          what the app produces rather than how it looks, and it is the one
+          somebody arrives here to find.
+        */}
+        <PlanningSection travel={settings.travel} onChange={setTravel} />
 
         <SettingsSection
           title="Notifications"

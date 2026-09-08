@@ -7,7 +7,7 @@ import { z } from 'zod';
 import { HttpError } from '../../errors';
 import { prisma } from '../../prisma';
 import { requireAuth, userIdOf } from '../auth/requireAuth';
-import { isConfigured, providerNotConfigured, streamChat, toHttpError } from './anthropic';
+import { plannerProvider } from './provider';
 
 /**
  * The planner conversation — `POST /api/planner/chat`.
@@ -135,9 +135,15 @@ plannerRouter.post('/planner/chat', chatRateLimit, requireAuth, async (request, 
     );
   }
 
+  /*
+   * Which model, decided here rather than imported: `PLANNER_PROVIDER` selects
+   * it, and nothing in this route knows whose model answered.
+   */
+  const provider = plannerProvider();
+
   // Before the stream opens, so this arrives as a normal envelope and the
-  // client can fall back to its offline planner on the code alone.
-  if (!isConfigured()) throw providerNotConfigured();
+  // client can fall back to its own engine on the code alone.
+  if (!provider.isConfigured()) throw provider.notConfigured();
 
   openStream(response);
 
@@ -147,11 +153,13 @@ plannerRouter.post('/planner/chat', chatRateLimit, requireAuth, async (request, 
   request.on('close', () => aborter.abort());
 
   try {
-    const stopReason = await streamChat(
+    const stopReason = await provider.streamChat(
       messages,
       {
         onText: (text) => send(response, { type: 'delta', text }),
-        onItinerary: (plan) => send(response, { type: 'itinerary', plan }),
+        // Constraints, not days: the client schedules the trip from this
+        // against the same catalogue the free tier uses.
+        onBrief: (brief) => send(response, { type: 'brief', brief }),
       },
       aborter.signal,
     );
@@ -163,7 +171,7 @@ plannerRouter.post('/planner/chat', chatRateLimit, requireAuth, async (request, 
       return;
     }
 
-    const error: HttpError = toHttpError(caught);
+    const error: HttpError = provider.toHttpError(caught);
     if (error.status >= 500) console.error('[planner]', caught);
 
     send(response, { type: 'error', code: error.code, message: error.message });

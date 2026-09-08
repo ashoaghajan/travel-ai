@@ -3,6 +3,7 @@ import { ERROR_CODES } from '@ai-travel/shared';
 import type { ApiUser } from '@ai-travel/shared';
 import { authService } from './auth.service';
 import { ApiError, getAccessToken, setAccessToken } from './http';
+import { DEFAULT_SETTINGS } from './settings.service';
 
 const ADA: ApiUser = {
   id: 'u_1',
@@ -19,6 +20,7 @@ const ADA: ApiUser = {
     theme: 'sharpen' as const,
     currency: 'USD',
     notifications: { tripReminders: true, priceAlerts: false },
+    travel: DEFAULT_SETTINGS.travel,
   },
 };
 

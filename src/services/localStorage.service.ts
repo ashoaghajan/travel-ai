@@ -38,6 +38,17 @@ export const STORAGE_KEYS = {
   /** Place name → coordinates for the trip map. Reference data, not user data. */
   geocodes: 'ai-travel-planner:geocodes',
   /**
+   * Where this device last found itself, as a country and a city.
+   *
+   * Device-scoped and not user data: it is an answer about the hardware, not
+   * about the person holding it, so it is neither archived on sign-out nor
+   * carried to another machine. Held at all so that opening the explorer twice
+   * in an afternoon does not mean two satellite fixes and two lookups — and so
+   * a refusal is remembered, which is the only way to ask once rather than on
+   * every visit.
+   */
+  deviceLocation: 'ai-travel-planner:deviceLocation',
+  /**
    * Place name → IANA time zone, for calendar export. Reference data.
    *
    * Separate from `geocodes` rather than another field on it: the two are

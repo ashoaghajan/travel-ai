@@ -64,6 +64,9 @@ const IDENTICAL: [string, string][] = [
     ],
   ),
   ['src/services/booking.migration.ts', 'mobile/src/core/services/booking.migration.ts'],
+  // Not a `.service.ts`: it makes no requests. The pool is fetched by its
+  // caller, which is what leaves this side pure and identical on both clients.
+  ['src/services/itinerary.planner.ts', 'mobile/src/core/services/itinerary.planner.ts'],
   ...[
     'createResource',
     'broadcast',
@@ -126,6 +129,11 @@ const ADAPTED: [string, string, string][] = [
     'src/services/speech.service.ts',
     'mobile/src/core/services/speech.service.ts',
     'takes a file URI, since a recording here is written to disk rather than held as a Blob',
+  ],
+  [
+    'src/services/location.service.ts',
+    'mobile/src/core/services/location.service.ts',
+    'expo-location rather than navigator.geolocation, and settings rather than the padlock',
   ],
   /*
    * The image files. Metro resolves an asset import to a module number rather

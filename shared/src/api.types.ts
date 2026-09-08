@@ -54,6 +54,35 @@ export type ApiSettings = {
     tripReminders: boolean;
     priceAlerts: boolean;
   };
+  /**
+   * How this account wants its days planned.
+   *
+   * Read by the itinerary scheduler, which is the engine behind every trip
+   * neither tier pays for: hours, the categories somebody actually wants, and
+   * what they will spend. Every field has a default, so an account that has
+   * never opened the settings screen still gets a complete record and a
+   * complete trip.
+   *
+   * The category weights are a partial map on the wire. A client that has not
+   * been updated for a seventh category must not have its silence read as a
+   * zero — zero means "never show me this", which is a preference nobody
+   * expressed by shipping an old bundle.
+   */
+  travel: ApiTravelPreferences;
+};
+
+export type ApiTravelPreferences = {
+  /** `HH:MM`. */
+  dayStart: string;
+  /** `HH:MM`. */
+  dayEnd: string;
+  pace: 'relaxed' | 'balanced' | 'packed';
+  categoryWeights: Record<string, number>;
+  /** USD per person, whole dollars. Null for no ceiling. */
+  maxActivityPrice: number | null;
+  /** USD per person across one day. Null for no limit. */
+  dailyActivityBudget: number | null;
+  meals: { lunch: boolean; dinner: boolean };
 };
 
 export type ApiUser = {

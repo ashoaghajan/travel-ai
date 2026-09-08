@@ -11,6 +11,7 @@ import { setAccessToken } from '../services/http';
 import { authStore } from '../store/auth.store';
 import { RedirectIfAuthenticated } from './RedirectIfAuthenticated';
 import { ROUTES } from './routes';
+import { DEFAULT_SETTINGS } from '../services/settings.service';
 
 /**
  * The anonymous-only boundary, mounted for real.
@@ -53,6 +54,7 @@ const ADA: ApiUser = {
     theme: 'sharpen' as const,
     currency: 'USD',
     notifications: { tripReminders: true, priceAlerts: false },
+    travel: DEFAULT_SETTINGS.travel,
   },
 };
 

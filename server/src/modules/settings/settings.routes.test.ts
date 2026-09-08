@@ -13,10 +13,28 @@ import { api, signUp } from '../../test/harness';
 
 const SETTINGS = '/api/settings';
 
+const DEFAULT_TRAVEL = {
+  dayStart: '09:30',
+  dayEnd: '18:00',
+  pace: 'balanced',
+  categoryWeights: {
+    food: 0.5,
+    nature: 0.5,
+    culture: 0.5,
+    adventure: 0.5,
+    relaxation: 0.5,
+    travel: 0,
+  },
+  maxActivityPrice: null,
+  dailyActivityBudget: null,
+  meals: { lunch: true, dinner: true },
+};
+
 const DEFAULTS = {
   theme: 'sharpen',
   currency: 'USD',
   notifications: { tripReminders: true, priceAlerts: false },
+  travel: DEFAULT_TRAVEL,
 };
 
 describe('authentication', () => {
@@ -169,6 +187,7 @@ describe('boot in one request', () => {
       theme: 'atlas',
       currency: 'AMD',
       notifications: { tripReminders: true, priceAlerts: false },
+      travel: DEFAULT_TRAVEL,
     });
   });
 
@@ -192,5 +211,160 @@ describe('boot in one request', () => {
     // Signing in must paint the right theme immediately, without a second
     // request to discover it.
     expect(login.body.user.settings.theme).toBe('atlas');
+  });
+});
+
+/**
+ * The planner's own preferences.
+ *
+ * These are the fields that decide what a trip actually contains — the hours,
+ * the categories and the budget the scheduler plans against — so the merge
+ * rules matter more here than anywhere else in this record. A weight reset by
+ * a patch that never mentioned it is a category silently dropped from
+ * somebody's holiday.
+ */
+describe('PUT /api/settings, travel preferences', () => {
+  it('saves the hours somebody keeps', async () => {
+    const { accessToken } = await signUp();
+
+    const response = await api()
+      .put(SETTINGS)
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({ travel: { dayStart: '11:00', dayEnd: '22:00' } })
+      .expect(200);
+
+    expect(response.body.travel.dayStart).toBe('11:00');
+    expect(response.body.travel.dayEnd).toBe('22:00');
+    // Untouched, and still the default rather than empty.
+    expect(response.body.travel.pace).toBe('balanced');
+  });
+
+  it('refuses a time that is not one', async () => {
+    const { accessToken } = await signUp();
+
+    await api()
+      .put(SETTINGS)
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({ travel: { dayStart: '25:00' } })
+      .expect(422);
+  });
+
+  it('merges category weights one at a time', async () => {
+    const { accessToken } = await signUp();
+    const auth = `Bearer ${accessToken}`;
+
+    await api().put(SETTINGS).set('Authorization', auth).send({
+      travel: { categoryWeights: { nature: 1 } },
+    });
+
+    const response = await api()
+      .put(SETTINGS)
+      .set('Authorization', auth)
+      .send({ travel: { categoryWeights: { culture: 0 } } })
+      .expect(200);
+
+    // The screen moves one slider at a time; the first must survive the second.
+    expect(response.body.travel.categoryWeights.nature).toBe(1);
+    expect(response.body.travel.categoryWeights.culture).toBe(0);
+    expect(response.body.travel.categoryWeights.food).toBe(0.5);
+  });
+
+  it('refuses a category it has never heard of', async () => {
+    const { accessToken } = await signUp();
+
+    await api()
+      .put(SETTINGS)
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({ travel: { categoryWeights: { nightlife: 1 } } })
+      .expect(422);
+  });
+
+  it('refuses a weight outside nought to one', async () => {
+    const { accessToken } = await signUp();
+
+    await api()
+      .put(SETTINGS)
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({ travel: { categoryWeights: { food: 4 } } })
+      .expect(422);
+  });
+
+  it('takes a budget and gives it back', async () => {
+    const { accessToken } = await signUp();
+
+    const response = await api()
+      .put(SETTINGS)
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({ travel: { maxActivityPrice: 40, dailyActivityBudget: 120 } })
+      .expect(200);
+
+    expect(response.body.travel.maxActivityPrice).toBe(40);
+    expect(response.body.travel.dailyActivityBudget).toBe(120);
+  });
+
+  it('lets a budget be cleared once it has been set', async () => {
+    const { accessToken } = await signUp();
+    const auth = `Bearer ${accessToken}`;
+
+    await api().put(SETTINGS).set('Authorization', auth).send({
+      travel: { maxActivityPrice: 40 },
+    });
+
+    // Null is a value here — "no ceiling" — and has to be reachable again.
+    const response = await api()
+      .put(SETTINGS)
+      .set('Authorization', auth)
+      .send({ travel: { maxActivityPrice: null } })
+      .expect(200);
+
+    expect(response.body.travel.maxActivityPrice).toBeNull();
+  });
+
+  it('leaves a budget alone when the patch does not mention it', async () => {
+    const { accessToken } = await signUp();
+    const auth = `Bearer ${accessToken}`;
+
+    await api().put(SETTINGS).set('Authorization', auth).send({
+      travel: { maxActivityPrice: 40 },
+    });
+
+    const response = await api()
+      .put(SETTINGS)
+      .set('Authorization', auth)
+      .send({ travel: { pace: 'packed' } })
+      .expect(200);
+
+    expect(response.body.travel.maxActivityPrice).toBe(40);
+    expect(response.body.travel.pace).toBe('packed');
+  });
+
+  it('leaves the meal slots as they were set', async () => {
+    const { accessToken } = await signUp();
+    const auth = `Bearer ${accessToken}`;
+
+    await api().put(SETTINGS).set('Authorization', auth).send({
+      travel: { meals: { dinner: false } },
+    });
+
+    const response = await api().get(SETTINGS).set('Authorization', auth).expect(200);
+
+    expect(response.body.travel.meals).toEqual({ lunch: true, dinner: false });
+  });
+
+  it('does not disturb the rest of the record', async () => {
+    const { accessToken } = await signUp();
+    const auth = `Bearer ${accessToken}`;
+
+    await api().put(SETTINGS).set('Authorization', auth).send({ theme: 'atlas', currency: 'EUR' });
+
+    const response = await api()
+      .put(SETTINGS)
+      .set('Authorization', auth)
+      .send({ travel: { pace: 'relaxed' } })
+      .expect(200);
+
+    expect(response.body.theme).toBe('atlas');
+    expect(response.body.currency).toBe('EUR');
+    expect(response.body.notifications).toEqual({ tripReminders: true, priceAlerts: false });
   });
 });

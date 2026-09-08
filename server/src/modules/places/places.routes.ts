@@ -105,7 +105,21 @@ placesRouter.get('/places/search', async (request: Request, response: Response) 
     minRate: query.rate,
   });
 
-  searches.set(key, places);
+  /*
+   * An empty answer is not cached, and this cache holds for a day.
+   *
+   * OpenTripMap answers a throttled request with `200` and an empty
+   * `FeatureCollection` rather than an error, so a burst of traffic can turn
+   * a city full of museums into a city with nothing in it — and storing that
+   * kept it that way for twenty-four hours. It is what put a template
+   * itinerary with stock photographs in front of somebody who asked for
+   * Tbilisi.
+   *
+   * The cost of not caching it is a repeated request for the genuinely empty
+   * places — a hamlet with no attractions in 60km. Those are rare, the request
+   * is cheap, and being wrong about a real city for a day is not.
+   */
+  if (places.length > 0) searches.set(key, places);
 
   cacheable(response);
   response.json(places);

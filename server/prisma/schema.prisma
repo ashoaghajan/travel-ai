@@ -127,6 +127,42 @@ model UserSettings {
   tripReminders Boolean @default(true)
   priceAlerts   Boolean @default(false)
 
+  /// `HH:MM`. The earliest an itinerary may schedule anything.
+  ///
+  /// A string rather than a time or a minute count, because that is what an
+  /// itinerary activity already carries — `ItineraryActivity.time` is `HH:MM`,
+  /// and a second representation of the same clock would need converting at
+  /// every boundary it crossed.
+  dayStart String @default("09:30")
+  /// `HH:MM`. Nothing new is started after this; see the planner on why dinner
+  /// is exempt.
+  dayEnd   String @default("18:00")
+
+  /// 'relaxed' | 'balanced' | 'packed' — how many stops fit in a day. A
+  /// string, not an enum, per this schema's own rule.
+  pace String @default("balanced")
+
+  /// How much each activity category is wanted, 0 to 1, keyed by category.
+  ///
+  /// `Json` and nullable rather than six columns: the categories are a union
+  /// that has changed before, and a seventh would otherwise be a migration
+  /// rather than an edit. Null means "never set", which reads as the planner's
+  /// own defaults — importantly *not* as zero, which means "never show me
+  /// this".
+  categoryWeights Json?
+
+  /// USD, per person. Null for no ceiling.
+  ///
+  /// Whole dollars: this is a limit somebody types, not a price anybody
+  /// quotes, and cents in a budget field are noise.
+  maxActivityPrice    Int?
+  /// USD, per person, across one day. Null for no limit.
+  dailyActivityBudget Int?
+
+  /// Whether the planner holds time open for a meal and looks for somewhere.
+  lunch  Boolean @default(true)
+  dinner Boolean @default(true)
+
   updatedAt DateTime @updatedAt
 }
 

@@ -13,6 +13,7 @@ import { Text } from '../../components/Text';
 import { useTheme } from '../../theme/useTheme';
 import { themeFor } from '../../theme/tokens';
 import { CurrencyPicker } from './CurrencyPicker';
+import { PlanningSection } from './PlanningSection';
 import { SettingsSection } from './SettingsSection';
 import { useSettings } from './useSettings';
 
@@ -194,7 +195,7 @@ function ToggleRow({
 export function SettingsScreen() {
   const theme = useTheme();
   const router = useRouter();
-  const { settings, error, update, setNotification } = useSettings();
+  const { settings, error, update, setNotification, setTravel } = useSettings();
   const currency = useDisplayCurrency();
   const trips = useTrips();
   const [pickingCurrency, setPickingCurrency] = useState(false);
@@ -263,6 +264,10 @@ export function SettingsScreen() {
           </Text>
         </Pressable>
       </SettingsSection>
+
+      {/* Above notifications, as on the web: this is the section that changes
+          what the app produces rather than how it looks. */}
+      <PlanningSection travel={settings.travel} onChange={setTravel} />
 
       <SettingsSection
         title="Notifications"

@@ -1,6 +1,7 @@
 import { useId, useMemo } from 'react';
 import type { FormEvent } from 'react';
 import { Button } from '../../../components/common/Button';
+import { MapPinIcon } from '../../../components/common/icons';
 import type { Country } from '../../../services/country.service';
 import { flagOf } from '../../../utils/flag';
 import styles from './DestinationSelector.module.css';
@@ -29,6 +30,14 @@ export type DestinationSelectorProps = {
   /** Offered when a trip suggests somewhere other than the current choice. */
   tripCity?: string | null;
   onFollowTrip?: () => void;
+  /** False where the browser has no geolocation at all — the button is hidden. */
+  canUseLocation?: boolean;
+  /** True while a fix is being taken, whether asked for or automatic. */
+  isLocating?: boolean;
+  /** True when what is in the fields came from the device rather than a choice. */
+  isFromLocation?: boolean;
+  locationError?: string | null;
+  onUseMyLocation?: () => void;
 };
 
 /**
@@ -56,6 +65,11 @@ export function DestinationSelector({
   isLoadingActivities = false,
   tripCity,
   onFollowTrip,
+  canUseLocation = false,
+  isLocating = false,
+  isFromLocation = false,
+  locationError,
+  onUseMyLocation,
 }: DestinationSelectorProps) {
   const countryId = useId();
   const cityId = useId();
@@ -133,6 +147,36 @@ export function DestinationSelector({
           {isLoadingActivities ? 'Exploring…' : 'Explore'}
         </Button>
       </div>
+
+      {/*
+        Outside `.fields`, so it does not compete with Explore for the row. It
+        is the shortcut past both selectors rather than a third one, and a
+        reader who has already been asked for permission — or refused — should
+        still be able to reach for it deliberately.
+      */}
+      {canUseLocation && onUseMyLocation ? (
+        <div className={styles.locate}>
+          <button
+            type="button"
+            className={styles.locateButton}
+            onClick={onUseMyLocation}
+            disabled={isLocating}
+          >
+            <MapPinIcon size={15} />
+            {isLocating ? 'Finding you…' : 'Use my location'}
+          </button>
+
+          {isFromLocation && !isLocating ? (
+            <span className={styles.locateNote}>Showing where this device is.</span>
+          ) : null}
+        </div>
+      ) : null}
+
+      {locationError ? (
+        <p className={styles.locateError} role="alert">
+          {locationError}
+        </p>
+      ) : null}
 
       {tripCity && onFollowTrip ? (
         <p className={styles.revert}>

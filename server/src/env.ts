@@ -165,13 +165,23 @@ const schema = z.object({
    * costs money per request, which is why `/api/planner/chat` sits behind both
    * a throttle and `requireAuth`.
    *
-   * Optional, on the same reasoning as `TRAVELPAYOUTS_TOKEN`. Without it the
-   * planner endpoint answers `PROVIDER_NOT_CONFIGURED` and the client falls
-   * back to its own rules engine — weather and location lookups still work, and
-   * trip requests still produce a template itinerary — so someone cloning this
-   * repo without an Anthropic account still gets a working planner.
+   * Optional, and less load-bearing than it was. Without it the planner
+   * endpoint answers `PROVIDER_NOT_CONFIGURED` and the client answers from its
+   * own engine — which since the scheduler landed builds the *same* days from
+   * the same catalogue of real places that a Pro trip is built from. What is
+   * missing without a key is the conversation around the trip, not the trip.
    */
   ANTHROPIC_API_KEY: z.string().min(1).optional(),
+
+  /**
+   * Which model provider the planner talks to — see `planner/provider.ts`.
+   *
+   * Only `anthropic` ships today, so this is here to be *found* rather than to
+   * be set: it is the thing to grep for when adding a second provider, and it
+   * documents that the choice is a configuration rather than an assumption
+   * baked through the module. An unknown value falls back to `anthropic`.
+   */
+  PLANNER_PROVIDER: z.string().min(1).optional(),
 
   /**
    * Groq — transcription for the phones the browser cannot serve.

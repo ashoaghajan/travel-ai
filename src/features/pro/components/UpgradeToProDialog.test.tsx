@@ -8,6 +8,7 @@ import userEvent from '@testing-library/user-event';
 import { authService } from '../../../services/auth.service';
 import { authStore } from '../../../store/auth.store';
 import { UpgradeToProDialog } from './UpgradeToProDialog';
+import { DEFAULT_SETTINGS } from '../../../services/settings.service';
 
 /**
  * The question, and the request behind it.
@@ -32,6 +33,7 @@ const PRO: ApiUser = {
     theme: 'sharpen',
     currency: 'USD',
     notifications: { tripReminders: true, priceAlerts: false },
+    travel: DEFAULT_SETTINGS.travel,
   },
 };
 

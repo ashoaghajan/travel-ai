@@ -33,6 +33,9 @@ describe('storage keys', () => {
       exchangeRates: 'ai-travel-planner:exchangeRates',
       migratedFor: 'ai-travel-planner:migratedFor',
       geocodes: 'ai-travel-planner:geocodes',
+      // Also reference data, and also about the device rather than the person:
+      // the country and city this hardware last found itself in.
+      deviceLocation: 'ai-travel-planner:deviceLocation',
       timezones: 'ai-travel-planner:timezones',
       ownerUserId: 'ai-travel-planner:ownerUserId',
     });

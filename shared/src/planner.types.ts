@@ -22,56 +22,70 @@ export type PlannerChatRequest = {
 };
 
 /**
- * A day the model proposed.
+ * What a conversation said about how the days should run.
  *
- * Deliberately not an `ItineraryDay`: no ids and no images, because the model
- * cannot know either. Ids come from the client's `createId`, and the photos are
- * Vite-bundled assets the server cannot reference by URL.
+ * Overrides, not a complete record: every field is optional because the model
+ * must only report what somebody actually said. The account's own saved
+ * preferences are the base, and the client merges these over them — so "we're
+ * late risers" moves `dayStart` for this trip and leaves the rest of somebody's
+ * settings alone, and a conversation that mentioned none of this changes
+ * nothing.
+ *
+ * The shape mirrors `ApiTravelPreferences`, one level deeper: `meals` is
+ * partial here too, because saying "no big dinners" is not a statement about
+ * lunch.
  */
-export type PlannerActivityPlan = {
-  /** 24-hour display time, e.g. "09:30". */
-  time: string;
-  title: string;
-  description: string;
-  category: 'food' | 'nature' | 'culture' | 'adventure' | 'relaxation' | 'travel';
-  /** Per person, in USD. Zero for anything free. */
-  priceEstimate?: number;
+export type PlannerPreferenceOverrides = {
+  /** `HH:MM`. */
+  dayStart?: string;
+  /** `HH:MM`. */
+  dayEnd?: string;
+  pace?: 'relaxed' | 'balanced' | 'packed';
+  /** 0 to 1 per category. Zero means never — see the planner. */
+  categoryWeights?: Record<string, number>;
+  /** USD per person. Null clears a ceiling the account had set. */
+  maxActivityPrice?: number | null;
+  dailyActivityBudget?: number | null;
+  meals?: { lunch?: boolean; dinner?: boolean };
 };
 
-export type PlannerDayPlan = {
-  /** Where this day is spent — a district or a nearby town, not the country. */
-  destination: string;
-  summary: string;
-  /**
-   * Where that district actually is, for the map.
-   *
-   * Asked of the model rather than geocoded afterwards, because `destination`
-   * is a label a person would write — "Grand Mosque & Al Bateen", "Mina &
-   * airport" — and the gazetteer behind our geocoder holds populated places.
-   * It answers NOT_FOUND for most districts, and worse, fuzzy-matches some of
-   * them to a real town in the wrong emirate. A model that can name the
-   * district knows where it is; asking costs nothing and lands the pin.
-   *
-   * Optional because a plan is still a plan without it, and every day that
-   * arrives without one falls back to geocoding exactly as before.
-   */
-  coordinates?: { lat: number; lng: number };
-  activities: PlannerActivityPlan[];
-};
-
-/** The validated `create_itinerary` tool input, passed through unchanged. */
-export type PlannerItineraryPlan = {
-  title: string;
+/**
+ * A trip stated as constraints — the validated `plan_trip` tool input.
+ *
+ * **The model no longer writes the days.** It used to: `create_itinerary` took
+ * a whole itinerary, every activity of it, and the app rendered what came
+ * back. That produced good prose and unreliable trips — a museum that closed in
+ * 2019, two things at once, a budget quietly ignored — because a language model
+ * is being asked to satisfy constraints, which is the one thing it cannot be
+ * made to do reliably.
+ *
+ * So the work is split at the seam it should always have had. The model reads
+ * a paragraph and fills this in, which is a language problem. The scheduler
+ * turns it into days from a catalogue of places that exist, which is an
+ * arithmetic problem. Neither is asked to do the other's job, and the same
+ * days come out for a free account, which never calls a model at all.
+ */
+export type PlannerTripBrief = {
+  /** Short and evocative. Falls back to "<destination> Trip" when absent. */
+  title?: string;
   /** The label shown on cards, e.g. "Kyoto". */
   destination: string;
   destinationCity?: string;
   destinationCountry?: string;
   /** ISO calendar date, `YYYY-MM-DD`. */
   startDate: string;
-  endDate: string;
+  /** Nights plus one — the number of dated days the trip covers. */
+  days: number;
   travellers: number;
-  days: PlannerDayPlan[];
-  /** Whole-trip totals in USD, as the model estimated them. */
+  preferences?: PlannerPreferenceOverrides;
+  /**
+   * Whole-trip travel and lodging, in USD, as the model estimated them.
+   *
+   * Kept from the old plan shape, and one of the few things the model is still
+   * better at than this app: it knows roughly what a flight to Osaka costs in
+   * March, where the scheduler has only a flat per-traveller constant. Absent
+   * on the free path, which falls back to that constant.
+   */
   flightsEstimate?: number;
   hotelsEstimate?: number;
 };
@@ -81,8 +95,13 @@ export type PlannerItineraryPlan = {
 /** One chunk of the reply. Many of these arrive per turn. */
 export type PlannerDeltaEvent = { type: 'delta'; text: string };
 
-/** The model proposed a trip. At most one per turn. */
-export type PlannerItineraryEvent = { type: 'itinerary'; plan: PlannerItineraryPlan };
+/**
+ * The model has understood the trip. At most one per turn.
+ *
+ * Not a trip yet — the client schedules it from this, which is why the event
+ * carries constraints rather than days.
+ */
+export type PlannerBriefEvent = { type: 'brief'; brief: PlannerTripBrief };
 
 /** The turn finished normally. Always last when it appears. */
 export type PlannerDoneEvent = { type: 'done'; stopReason: string | null };
@@ -98,6 +117,6 @@ export type PlannerErrorEvent = { type: 'error'; code: ErrorCode; message: strin
 
 export type PlannerStreamEvent =
   | PlannerDeltaEvent
-  | PlannerItineraryEvent
+  | PlannerBriefEvent
   | PlannerDoneEvent
   | PlannerErrorEvent;

@@ -5,7 +5,7 @@ import { Card } from '../../components/Card';
 import { ScreenHeader } from '../../components/ScreenHeader';
 import { Screen } from '../../components/Screen';
 import { Text } from '../../components/Text';
-import { CompassIcon } from '../../components/icons';
+import { CompassIcon, MapPinIcon } from '../../components/icons';
 import type { Activity } from '../../core/types/travel.types';
 import { flagOf } from '../../core/utils/flag';
 import { useTheme } from '../../theme/useTheme';
@@ -53,6 +53,9 @@ export function ExploreScreen() {
     selectionSource,
     tripCity,
     canFollowTrip,
+    canUseLocation,
+    isLocating,
+    locationError,
     activities,
     exploredCity,
     isLoadingCountries,
@@ -67,6 +70,7 @@ export function ExploreScreen() {
     selectCity,
     explore,
     followTrip,
+    useMyLocation,
     loadMore,
     filterCities,
   } = useExplore();
@@ -136,9 +140,13 @@ export function ExploreScreen() {
         <ScreenHeader
           title={exploredCity ? `Top Activities in ${exploredCity}` : 'Explore Activities'}
         />
-        {selectionSource === 'trip' && exploredCity ? (
+        {exploredCity && selectionSource === 'trip' ? (
           <Text variant="sm" tone="muted" leading="snug">
             Following your trip to {exploredCity}
+          </Text>
+        ) : exploredCity && selectionSource === 'device' ? (
+          <Text variant="sm" tone="muted" leading="snug">
+            Near you, in {exploredCity}
           </Text>
         ) : null}
       </View>
@@ -252,6 +260,52 @@ export function ExploreScreen() {
           >
             Explore
           </Button>
+
+          {/*
+            The shortcut past both selectors, and deliberately not a second
+            filled button: it does the same job as the two fields above it, so
+            it is written as a link rather than as another way to submit.
+          */}
+          {canUseLocation ? (
+            <Pressable
+              onPress={useMyLocation}
+              disabled={isLocating}
+              accessibilityRole="button"
+              accessibilityLabel="Use my location"
+              accessibilityState={{ disabled: isLocating }}
+              style={({ pressed }) => [
+                {
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: theme.space.xs,
+                  minHeight: 44,
+                },
+                pressed && { opacity: 0.7 },
+              ]}
+            >
+              <MapPinIcon
+                size={15}
+                color={isLocating ? theme.color.textMuted : theme.color.primary}
+              />
+              <Text
+                variant="xs"
+                weight="semibold"
+                tone={isLocating ? 'muted' : 'primary'}
+                leading="tight"
+              >
+                {isLocating ? 'Finding you…' : 'Use my location'}
+              </Text>
+            </Pressable>
+          ) : null}
+
+          {selectionSource === 'device' && !isLocating ? (
+            <Text variant="xs" tone="muted" leading="snug" style={{ textAlign: 'center' }}>
+              Showing where this device is.
+            </Text>
+          ) : null}
+
+          {locationError ? <Problem message={locationError} /> : null}
 
           {canFollowTrip && tripCity ? (
             <Text variant="xs" tone="muted" leading="snug">

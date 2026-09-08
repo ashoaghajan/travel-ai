@@ -65,7 +65,7 @@ export function PlanSection() {
               <Text variant="xs" tone="muted" leading="snug">
                 {isPro
                   ? 'The planner writes with Claude, and you can talk to it.'
-                  : 'The quick planner builds trips from templates, and answers weather and places.'}
+                  : 'The quick planner builds trips from real places, to your own hours and budget.'}
               </Text>
 
               {/* Only on Pro, and only when the server gave a date — an account

@@ -1,7 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk';
 import type { MessageParam, ToolResultBlockParam, ToolUnion } from '@anthropic-ai/sdk/resources/messages';
 import { ERROR_CODES } from '@ai-travel/shared';
-import type { PlannerChatMessage, PlannerItineraryPlan } from '@ai-travel/shared';
+import type { PlannerChatMessage, PlannerTripBrief } from '@ai-travel/shared';
 import { z } from 'zod';
 import { HttpError } from '../../errors';
 import { env } from '../../env';
@@ -12,7 +12,7 @@ import { PlaceNotFoundError, getWeather, MAX_FORECAST_DAYS } from './weather';
  *
  * This module owns everything Anthropic-shaped: the client, the prompt, the
  * tools, and the loop that runs them. It speaks in callbacks — `onText`,
- * `onItinerary` — and knows nothing about HTTP, so the route can decide how to
+ * `onBrief` — and knows nothing about HTTP, so the route can decide how to
  * put those on the wire and the tests can drive the loop without a socket.
  *
  * Like `travelpayouts.ts`, one reason it exists at all is that the key is a
@@ -26,9 +26,10 @@ const MODEL = 'claude-opus-5';
 /**
  * Deliberately not the maximum.
  *
- * A fourteen-day itinerary with adaptive thinking in front of it is the largest
- * thing this ever produces, and it fits comfortably. The ceiling exists so a
- * loop that goes wrong costs a bounded amount.
+ * Far more than a turn needs now that the model writes prose and a brief
+ * rather than fourteen days of activities. Left where it was: the ceiling
+ * exists so a loop that goes wrong costs a bounded amount, and it is not a
+ * budget to spend.
  */
 const MAX_TOKENS = 16_000;
 
@@ -50,7 +51,7 @@ const MAX_TURNS = 6;
  * mean paying full price for the prompt on every single message. Per-turn
  * context goes in the messages instead, where it belongs.
  */
-const SYSTEM_PROMPT = `You are the travel planner inside an app called AI Travel. You talk to people about where they might go, and when they want one, you build them a day-by-day itinerary.
+const SYSTEM_PROMPT = `You are the travel planner inside an app called AI Travel. You talk to people about where they might go, and when they want a trip, you hand the app what it needs to build one.
 
 ## Voice
 
@@ -62,7 +63,7 @@ Do not open with pleasantries ("Great question!", "I'd be happy to help!"). Answ
 
 - Answer any travel question: visas, seasons, safety, budgets, food, transport, what to pack, how long somewhere needs, whether two places fit in one trip.
 - Look up live weather with the \`get_weather\` tool.
-- Build an itinerary with the \`create_itinerary\` tool.
+- Plan a trip with the \`plan_trip\` tool.
 
 ## Weather
 
@@ -70,22 +71,22 @@ You know climates; you do not know today. Any question about current or upcoming
 
 If the tool cannot find the place, say so plainly and ask which place was meant. If it fails for another reason, say the lookup failed rather than inventing a figure.
 
-## Itineraries
+## Trips
 
-Call \`create_itinerary\` when someone asks you to plan, or names a place and a length, or agrees to a trip you offered. Do not call it for a general question — "is Rome expensive?" wants an answer, not a five-day plan.
+You do not write itineraries. The app does — it holds a catalogue of real attractions with real locations, and it schedules the days itself so that every stop exists, nothing overlaps, the walk between two places is accounted for, and the user's hours and budget are respected. Your job is to understand what they want and hand it over.
+
+Call \`plan_trip\` when someone asks you to plan, or names a place and a length, or agrees to a trip you offered. Do not call it for a general question — "is Rome expensive?" wants an answer, not a five-day plan.
 
 When you do call it:
 
-- The days must be about the actual place. Real neighbourhoods, real districts, real dishes, real transport. A day that would read the same for any city is a wasted day.
-- Two to four activities a day. Give each one a plausible clock time in 24-hour form, in a sensible order, with travel time between them accounted for.
-- The last day is a departure day: a slow morning and the transfer out, not a full programme.
-- Vary the pace. A day of ruins, then a day of beach. Nobody wants six museums.
-- Prices are per person in USD, and \`0\` is the right answer for anything free. Estimate honestly; a rough number beats no number.
-- If the user gave no dates, choose a sensible window a few weeks out and say which dates you assumed. If they gave no length, five days is a good default. If they gave no party size, assume two.
-- \`destination\` is the label the app puts on cards — "Kyoto", not "Kyoto, Japan, 5 days".
-- Every day needs \`coordinates\`: the centre of the district, island or town that day is spent in. This is what puts the day on the map, and you are the only one who can place it — the app's geocoder knows cities and towns, so a name like "Eastern Mangroves" or "Mina & airport" is one it will either miss or match to the wrong place entirely. Give the area you named, not the country and not the first activity's doorstep.
+- \`destination\` is one searchable place name — "Kyoto", not "Kyoto, Japan", not "Kyoto and Osaka". A two-city trip is two trips; ask which they want planned first.
+- If they gave no dates, choose a sensible window a few weeks out and say which dates you assumed. No length given, five days is a good default. No party size, assume two.
+- \`preferences\` carries only what this conversation actually said. They have settings of their own — hours, pace, budget, what they like — and anything you leave out keeps their setting. So an empty object is usually right. "We're not early risers" is a \`dayStart\`; "somewhere between museums" is not a preference at all. Never infer a budget from how someone writes.
+- A zero weight means never plan that category. Use it for a refusal — "no museums, please" — and never for mild disinterest, which is what the middle of the scale is for.
 
-The app renders the itinerary as a card the user can save with one tap. So after calling the tool, do not list the days again in text. One or two sentences on what shaped the plan — why that order, what you left out, what to watch for — is exactly right.
+**You will not know which places it chose.** The card appears after you have finished talking, and its contents are the app's, not yours. So do not name attractions, restaurants or neighbourhoods as though they are in the plan, and do not list days. What is worth saying instead: the shape of the trip, what the dates mean for the weather, what you assumed, and anything they should check before booking.
+
+If someone asks to change the trip — later mornings, more food, cheaper — call \`plan_trip\` again with the new preferences. It is rebuilt from scratch, which is cheap and exact.
 
 ## Honesty
 
@@ -120,73 +121,75 @@ const TOOLS: ToolUnion[] = [
     },
   },
   {
-    name: 'create_itinerary',
+    name: 'plan_trip',
     description:
-      'Show the user a day-by-day trip they can save. Call this once you have enough to plan with. The app renders it as a card — do not also write the days out in your reply.',
+      'Plan a trip for the user. You give the constraints — where, when, how long, for how many, and anything they said about how they like to travel. The app schedules the days itself from a catalogue of real places, respecting the hours and budget on their account. Call this once you know where and roughly when; do not write the days out yourself.',
     input_schema: {
       type: 'object',
       properties: {
         title: { type: 'string', description: 'Short and evocative, e.g. "Kyoto in Autumn".' },
         destination: {
           type: 'string',
-          description: 'The label shown on trip cards — just the place, e.g. "Kyoto".',
+          description:
+            'The place to search for attractions in, and the label on trip cards. One place name — "Kyoto", not "Kyoto, Japan" and not "Kyoto and Osaka".',
         },
         destinationCity: { type: 'string', description: 'The main city, for the explorer.' },
         destinationCountry: { type: 'string', description: 'The country, in English.' },
         startDate: { type: 'string', description: 'ISO calendar date, YYYY-MM-DD.' },
-        endDate: { type: 'string', description: 'ISO calendar date, YYYY-MM-DD.' },
-        travellers: { type: 'integer', minimum: 1, maximum: 12 },
         days: {
-          type: 'array',
-          description: 'One entry per day, in order. Must match the date range exactly.',
-          items: {
-            type: 'object',
-            properties: {
-              destination: {
-                type: 'string',
-                description: 'Where the day is spent — a district or nearby town.',
-              },
-              summary: { type: 'string', description: 'Six words or so, e.g. "Temples & Gion at dusk".' },
-              coordinates: {
-                type: 'object',
-                description:
-                  'Where that district is, so the map can pin the day. Give the centre of the area the day is spent in — the district, island or town you named, not the country and not the first activity. Our geocoder only knows populated places, so a day you do not place here usually cannot be placed at all.',
-                properties: {
-                  lat: { type: 'number', minimum: -90, maximum: 90 },
-                  lng: { type: 'number', minimum: -180, maximum: 180 },
-                },
-                required: ['lat', 'lng'],
-              },
-              activities: {
-                type: 'array',
-                items: {
-                  type: 'object',
-                  properties: {
-                    time: { type: 'string', description: '24-hour, e.g. "09:30".' },
-                    title: { type: 'string' },
-                    description: { type: 'string', description: 'One sentence. Concrete, not promotional.' },
-                    category: { type: 'string', enum: [...CATEGORIES] },
-                    priceEstimate: { type: 'number', minimum: 0, description: 'Per person, USD. 0 if free.' },
-                  },
-                  required: ['time', 'title', 'description', 'category'],
-                },
-              },
+          type: 'integer',
+          minimum: 1,
+          maximum: 21,
+          description: 'Dated days the trip covers — nights plus one.',
+        },
+        travellers: { type: 'integer', minimum: 1, maximum: 12 },
+        preferences: {
+          type: 'object',
+          description:
+            'Only what this conversation actually said. Anything you leave out keeps the value from their settings, so an empty object is the right answer when they said nothing about how they travel. Do not infer a budget from a tone, or hours from a season.',
+          properties: {
+            dayStart: { type: 'string', description: '24-hour HH:MM. Only if they said so.' },
+            dayEnd: {
+              type: 'string',
+              description:
+                '24-hour HH:MM, the hour after which nothing new starts. Dinner is planned regardless.',
             },
-            /*
-             * `coordinates` is required here and optional in the Zod schema
-             * below, and the asymmetry is deliberate. Required is how the
-             * model is told this matters, and it answers accordingly. Optional
-             * on the way in is what stops one missing pair of numbers from
-             * throwing away an entire itinerary the user waited on — that day
-             * simply goes back to being geocoded.
-             */
-            required: ['destination', 'summary', 'coordinates', 'activities'],
+            pace: {
+              type: 'string',
+              enum: ['relaxed', 'balanced', 'packed'],
+              description: 'Two, three or five things a day.',
+            },
+            categoryWeights: {
+              type: 'object',
+              description:
+                'How much they want each kind of thing, 0 to 1. Zero means never plan it — use that only for a clear refusal ("no museums"), never for mild disinterest.',
+              properties: Object.fromEntries(
+                CATEGORIES.filter((category) => category !== 'travel').map((category) => [
+                  category,
+                  { type: 'number', minimum: 0, maximum: 1 },
+                ]),
+              ),
+            },
+            maxActivityPrice: {
+              type: 'number',
+              minimum: 0,
+              description: 'Most per activity, per person, USD.',
+            },
+            dailyActivityBudget: {
+              type: 'number',
+              minimum: 0,
+              description: 'Most per day, per person, USD.',
+            },
+            meals: {
+              type: 'object',
+              properties: { lunch: { type: 'boolean' }, dinner: { type: 'boolean' } },
+            },
           },
         },
         flightsEstimate: { type: 'number', minimum: 0, description: 'Whole party, return, USD.' },
         hotelsEstimate: { type: 'number', minimum: 0, description: 'Whole stay, USD.' },
       },
-      required: ['title', 'destination', 'startDate', 'endDate', 'travellers', 'days'],
+      required: ['destination', 'startDate', 'days', 'travellers'],
     },
   },
 ];
@@ -196,61 +199,46 @@ const TOOLS: ToolUnion[] = [
 const ISO_DATE = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Use a YYYY-MM-DD date.');
 
 /**
- * The model's `create_itinerary` input, checked before it is trusted.
+ * The model's `plan_trip` input, checked before it is trusted.
  *
- * `strict: true` on the tool would let the API enforce most of this, but the
- * client turns whatever arrives into a `TripDraft` and renders it, so the
- * server checks anyway — a malformed plan should become a retry the model can
- * see, not a blank card in someone's chat.
+ * `strict: true` on the tool would let the API enforce the shape, but the
+ * client turns whatever arrives into a real trip, so the server checks anyway
+ * — and the checks here are narrower than a shape. A `dayStart` of "morning"
+ * is a valid string and an invalid time; a weight of 4 is a valid number and
+ * not a weight. Both are handed back to the model as a retry rather than
+ * thrown, because it can see what it got wrong and fix it.
+ *
+ * The bounds are the ones in `settings.schemas.ts`, deliberately: a preference
+ * the model proposes and a preference somebody types must be the same set of
+ * values, or the model could ask for a trip the settings screen cannot show.
  */
-const itinerarySchema = z.object({
-  title: z.string().trim().min(1).max(120),
+const TIME_OF_DAY = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Use a 24-hour time like 09:30.');
+
+const preferencesSchema = z.object({
+  dayStart: TIME_OF_DAY.optional(),
+  dayEnd: TIME_OF_DAY.optional(),
+  pace: z.enum(['relaxed', 'balanced', 'packed']).optional(),
+  categoryWeights: z.partialRecord(z.enum(CATEGORIES), z.number().min(0).max(1)).optional(),
+  maxActivityPrice: z.number().int().min(0).max(100_000).nullable().optional(),
+  dailyActivityBudget: z.number().int().min(0).max(100_000).nullable().optional(),
+  meals: z.object({ lunch: z.boolean().optional(), dinner: z.boolean().optional() }).optional(),
+});
+
+const briefSchema = z.object({
+  title: z.string().trim().min(1).max(120).optional(),
   destination: z.string().trim().min(1).max(120),
   destinationCity: z.string().trim().min(1).max(120).optional(),
   destinationCountry: z.string().trim().min(1).max(120).optional(),
   startDate: ISO_DATE,
-  endDate: ISO_DATE,
+  days: z.number().int().min(1).max(21),
   travellers: z.number().int().min(1).max(12),
-  days: z
-    .array(
-      z.object({
-        destination: z.string().trim().min(1).max(120),
-        summary: z.string().trim().min(1).max(200),
-        /*
-         * Bounded rather than merely typed: a number outside these ranges is
-         * not a place, and Leaflet draws it somewhere arbitrary rather than
-         * failing. A day whose coordinates are dropped here still renders —
-         * the map geocodes it as it always did.
-         */
-        coordinates: z
-          .object({
-            lat: z.number().min(-90).max(90),
-            lng: z.number().min(-180).max(180),
-          })
-          .optional()
-          /*
-           * Dropped rather than fatal. A pin is the least important thing on
-           * the page, and rejecting the whole plan over one would make the
-           * user re-ask for a trip that was otherwise perfectly good. The day
-           * goes back to being geocoded, which is where every day started.
-           */
-          .catch(undefined),
-        activities: z
-          .array(
-            z.object({
-              time: z.string().trim().min(1).max(10),
-              title: z.string().trim().min(1).max(160),
-              description: z.string().trim().min(1).max(400),
-              category: z.enum(CATEGORIES),
-              priceEstimate: z.number().min(0).max(100_000).optional(),
-            }),
-          )
-          .min(1)
-          .max(8),
-      }),
-    )
-    .min(1)
-    .max(21),
+  /*
+   * Dropped rather than fatal, unlike everything above it. A trip with the
+   * account's own preferences is a good trip; refusing to plan at all because
+   * one weight came back as 1.5 would cost the user the thing they asked for
+   * over a detail they never mentioned.
+   */
+  preferences: preferencesSchema.optional().catch(undefined),
   flightsEstimate: z.number().min(0).max(1_000_000).optional(),
   hotelsEstimate: z.number().min(0).max(1_000_000).optional(),
 });
@@ -321,8 +309,8 @@ function toMessages(history: PlannerChatMessage[]): MessageParam[] {
 export type ChatHandlers = {
   /** One chunk of the reply, as it is generated. */
   onText: (text: string) => void;
-  /** The model proposed a trip. Fires at most once per turn. */
-  onItinerary: (plan: PlannerItineraryPlan) => void;
+  /** The model has understood the trip. Fires at most once per turn. */
+  onBrief: (brief: PlannerTripBrief) => void;
 };
 
 /* ------------------------------------------------------------- tool results */
@@ -350,8 +338,8 @@ async function runWeather(input: unknown): Promise<string> {
  * A message, streamed, with the tools run in between.
  *
  * The loop is written out rather than delegated to the SDK's tool runner: one
- * of the two tools is terminal — `create_itinerary` executes nothing, it is
- * caught here and relayed to the browser — and the text has to be forwarded
+ * of the two tools is terminal — `plan_trip` executes nothing, it is caught
+ * here and relayed to the browser — and the text has to be forwarded
  * chunk by chunk as it arrives. That is enough custom control flow that owning
  * the loop is clearer than fitting it to somebody else's hooks.
  *
@@ -414,16 +402,16 @@ export async function streamChat(
         continue;
       }
 
-      if (call.name === 'create_itinerary') {
-        const parsed = itinerarySchema.safeParse(call.input);
+      if (call.name === 'plan_trip') {
+        const parsed = briefSchema.safeParse(call.input);
 
         if (!parsed.success) {
           // Handed back rather than thrown: the model can see what was wrong
-          // with its own plan and fix it on the next turn.
+          // with its own brief and fix it on the next turn.
           results.push(
             result(
               call.id,
-              `That itinerary was rejected: ${parsed.error.issues
+              `That brief was rejected: ${parsed.error.issues
                 .map((issue) => `${issue.path.join('.') || 'input'} — ${issue.message}`)
                 .join('; ')}. Correct it and call the tool again.`,
               true,
@@ -432,11 +420,11 @@ export async function streamChat(
           continue;
         }
 
-        handlers.onItinerary(parsed.data);
+        handlers.onBrief(parsed.data);
         results.push(
           result(
             call.id,
-            'The itinerary is now on screen as a card the user can save. Do not repeat the days in text — add a sentence or two about what shaped the plan.',
+            'The trip is being scheduled and will appear as a card the user can save. You do not know which places it picked, so do not name any — say a sentence or two about the shape of the trip and what to watch for.',
           ),
         );
         continue;

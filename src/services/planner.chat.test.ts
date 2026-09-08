@@ -1,8 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ERROR_CODES } from '@ai-travel/shared';
-import type { PlannerItineraryPlan } from '@ai-travel/shared';
+import type { PlannerTripBrief } from '@ai-travel/shared';
+import type { Activity } from '../types/travel.types';
+import { activityService } from './activity.service';
 import { setAccessToken } from './http';
-import { PlannerError, plannerService, toTripDraft } from './planner.service';
+import { DEFAULT_PREFERENCES } from './itinerary.planner';
+import { PlannerError, plannerService } from './planner.service';
 import { weatherService } from './weather.service';
 
 /**
@@ -15,41 +18,47 @@ import { weatherService } from './weather.service';
  * error, so a mid-stream failure stays a failure.
  */
 
-const PLAN: PlannerItineraryPlan = {
+const BRIEF: PlannerTripBrief = {
   title: 'Three Days in Kyoto',
   destination: 'Kyoto',
   destinationCity: 'Kyoto',
   destinationCountry: 'Japan',
   startDate: '2027-04-02',
-  endDate: '2027-04-04',
+  days: 3,
   travellers: 2,
-  days: [
-    {
-      destination: 'Higashiyama',
-      summary: 'Temples at dawn',
-      activities: [
-        { time: '09:00', title: 'Kiyomizu-dera', description: 'Quiet early.', category: 'culture', priceEstimate: 4 },
-        { time: '13:00', title: 'Nishiki lunch', description: 'Market stalls.', category: 'food', priceEstimate: 12 },
-      ],
-    },
-    {
-      destination: 'Arashiyama',
-      summary: 'Bamboo and the river',
-      activities: [
-        { time: '08:30', title: 'Bamboo grove', description: 'Before the coaches.', category: 'nature' },
-      ],
-    },
-    {
-      destination: 'Kyoto',
-      summary: 'Slow morning, then the airport',
-      activities: [
-        { time: '11:00', title: 'Transfer to KIX', description: 'The Haruka takes 80 minutes.', category: 'travel', priceEstimate: 25 },
-      ],
-    },
-  ],
   flightsEstimate: 1800,
   hotelsEstimate: 420,
 };
+
+/** What the attraction catalogue answers with, so a brief can be scheduled. */
+function attractions(count: number): Activity[] {
+  return Array.from(
+    { length: count },
+    (_, index) =>
+      ({
+        id: `kyoto-${index}`,
+        title: `Kyoto place ${index}`,
+        category: index % 3 === 0 ? 'food' : 'culture',
+        description: 'A real attraction',
+        price: 0,
+        rating: 4,
+        reviews: 50,
+        image: 'photo.jpg',
+        coordinates: { lat: 35.01, lng: 135.76 },
+        source: 'opentripmap',
+        sourceUrl: 'https://example.com',
+      }) as Activity,
+  );
+}
+
+function withAttractions(rows = attractions(30)) {
+  return vi.spyOn(activityService, 'getActivities').mockResolvedValue({
+    activities: rows,
+    hasMore: false,
+    source: 'network',
+    fetchedAt: '2027-04-01T00:00:00.000Z',
+  });
+}
 
 function sse(...events: unknown[]): Response {
   const body = events.map((event) => `data: ${JSON.stringify(event)}\n\n`).join('');
@@ -108,16 +117,146 @@ describe('chat', () => {
     expect(sink.reply).toBe('Kyoto in April is lovely.');
   });
 
-  it('turns a plan into a draft the rest of the app understands', async () => {
+  it('schedules the model’s brief into a trip the rest of the app understands', async () => {
+    withAttractions();
     fetchMock.mockResolvedValueOnce(
-      sse({ type: 'itinerary', plan: PLAN }, { type: 'done', stopReason: 'end_turn' }),
+      sse({ type: 'brief', brief: BRIEF }, { type: 'done', stopReason: 'end_turn' }),
     );
 
     const sink = handlers();
     await plannerService.chat(ASK, sink);
 
     expect(sink.trips).toHaveLength(1);
-    expect(sink.trips[0]).toMatchObject({ title: 'Three Days in Kyoto', destination: 'Kyoto' });
+    expect(sink.trips[0]).toMatchObject({
+      title: 'Three Days in Kyoto',
+      destination: 'Kyoto',
+      destinationCity: 'Kyoto',
+      destinationCountry: 'Japan',
+      travellers: 2,
+      // The model's own figures, which it is better at than the flat constant.
+      flightsEstimate: 1800,
+      hotelsEstimate: 420,
+    });
+  });
+
+  it('builds the days from the catalogue, not from the model', async () => {
+    withAttractions();
+    fetchMock.mockResolvedValueOnce(
+      sse({ type: 'brief', brief: BRIEF }, { type: 'done', stopReason: 'end_turn' }),
+    );
+
+    const sink = handlers();
+    await plannerService.chat(ASK, sink);
+
+    const trip = sink.trips[0] as { itinerary: { activities: { sourceActivityId?: string }[] }[] };
+    const entries = trip.itinerary.flatMap((day) => day.activities);
+
+    expect(trip.itinerary).toHaveLength(3);
+    expect(entries.length).toBeGreaterThan(0);
+    // Every stop traces back to a row that exists. This is the whole point of
+    // the split: the model can no longer invent a museum.
+    expect(entries.every((entry) => entry.sourceActivityId?.startsWith('kyoto-'))).toBe(true);
+  });
+
+  it('searches for the place the model named', async () => {
+    const spy = withAttractions();
+    fetchMock.mockResolvedValueOnce(
+      sse({ type: 'brief', brief: BRIEF }, { type: 'done', stopReason: 'end_turn' }),
+    );
+
+    await plannerService.chat(ASK, handlers());
+
+    expect(spy).toHaveBeenCalledWith(expect.objectContaining({ destination: 'Kyoto' }));
+  });
+
+  it('applies the account’s own preferences to a brief that overrides nothing', async () => {
+    withAttractions();
+    fetchMock.mockResolvedValueOnce(
+      sse({ type: 'brief', brief: BRIEF }, { type: 'done', stopReason: 'end_turn' }),
+    );
+
+    const sink = handlers();
+    await plannerService.chat(ASK, sink, {
+      preferences: { ...DEFAULT_PREFERENCES, dayStart: '11:00' },
+    });
+
+    const trip = sink.trips[0] as { itinerary: { activities: { time: string }[] }[] };
+    const times = trip.itinerary.flatMap((day) => day.activities.map((entry) => entry.time));
+
+    expect(times.length).toBeGreaterThan(0);
+    expect(times.every((time) => time >= '11:00')).toBe(true);
+  });
+
+  it('lets the conversation override one preference without disturbing the rest', async () => {
+    withAttractions();
+    fetchMock.mockResolvedValueOnce(
+      sse(
+        { type: 'brief', brief: { ...BRIEF, preferences: { pace: 'relaxed' } } },
+        { type: 'done', stopReason: 'end_turn' },
+      ),
+    );
+
+    const sink = handlers();
+    await plannerService.chat(ASK, sink, {
+      preferences: {
+        ...DEFAULT_PREFERENCES,
+        dayStart: '11:00',
+        meals: { lunch: false, dinner: false },
+      },
+    });
+
+    const trip = sink.trips[0] as { itinerary: { activities: { time: string }[] }[] };
+
+    // The pace came from the sentence; the hours are still the account's.
+    expect(trip.itinerary[0].activities).toHaveLength(2);
+    expect(trip.itinerary[0].activities[0].time >= '11:00').toBe(true);
+  });
+
+  it('falls back to a template when the catalogue has nothing for the place', async () => {
+    vi.spyOn(activityService, 'getActivities').mockRejectedValue(new Error('offline'));
+    fetchMock.mockResolvedValueOnce(
+      sse({ type: 'brief', brief: BRIEF }, { type: 'done', stopReason: 'end_turn' }),
+    );
+
+    const sink = handlers();
+    await plannerService.chat(ASK, sink);
+
+    // A trip regardless — the same degradation the free tier has. Losing the
+    // card entirely because one provider is down would be the worse answer.
+    const trip = sink.trips[0] as { itinerary: unknown[]; title: string };
+    expect(trip.itinerary.length).toBeGreaterThan(0);
+    expect(trip.title).toBe('Three Days in Kyoto');
+  });
+
+  it('lands the card after the words, not in the middle of them', async () => {
+    withAttractions();
+    fetchMock.mockResolvedValueOnce(
+      sse(
+        { type: 'delta', text: 'Three days is right for Kyoto. ' },
+        { type: 'brief', brief: BRIEF },
+        { type: 'delta', text: 'I put the temples early.' },
+        { type: 'done', stopReason: 'end_turn' },
+      ),
+    );
+
+    const order: string[] = [];
+    const sink = handlers();
+
+    await plannerService.chat(ASK, {
+      onText: (chunk) => {
+        order.push('text');
+        sink.onText(chunk);
+      },
+      onTrip: (trip) => {
+        order.push('trip');
+        sink.onTrip(trip);
+      },
+    });
+
+    // Fetching the attraction pool must not hold back the sentence somebody is
+    // already reading.
+    expect(order).toEqual(['text', 'text', 'trip']);
+    expect(sink.reply).toBe('Three days is right for Kyoto. I put the temples early.');
   });
 
   it('reports a mid-stream failure instead of silently answering differently', async () => {
@@ -196,50 +335,5 @@ describe('chat, on a server with no key', () => {
     fetchMock.mockResolvedValueOnce(envelope(ERROR_CODES.INTERNAL, 500));
 
     await expect(plannerService.chat(ASK, handlers())).rejects.toMatchObject({ status: 500 });
-  });
-});
-
-describe('toTripDraft', () => {
-  it('numbers and dates the days from the start, not from the model', () => {
-    const draft = toTripDraft(PLAN);
-
-    expect(draft.itinerary.map((day) => day.dayNumber)).toEqual([1, 2, 3]);
-    expect(draft.itinerary.map((day) => day.date)).toEqual(['2027-04-02', '2027-04-03', '2027-04-04']);
-  });
-
-  it('gives every day and activity an id, which the model cannot', () => {
-    const draft = toTripDraft(PLAN);
-    const ids = draft.itinerary.flatMap((day) => [day.id, ...day.activities.map((a) => a.id)]);
-
-    expect(ids.every(Boolean)).toBe(true);
-    expect(new Set(ids).size).toBe(ids.length);
-  });
-
-  it('gives every day a photograph', () => {
-    const draft = toTripDraft(PLAN);
-
-    expect(draft.itinerary.every((day) => Boolean(day.image))).toBe(true);
-    expect(draft.coverImage).toBeTruthy();
-  });
-
-  it('totals the activities for the whole party', () => {
-    // (4 + 12 + 0 + 25) per person, two travelling.
-    expect(toTripDraft(PLAN).activitiesEstimate).toBe(82);
-  });
-
-  it('trusts its own day count over an end date that disagrees', () => {
-    const draft = toTripDraft({ ...PLAN, endDate: '2027-04-20' });
-
-    expect(draft.endDate).toBe('2027-04-04');
-  });
-
-  it('keeps the model’s end date when the days do agree', () => {
-    expect(toTripDraft(PLAN).endDate).toBe('2027-04-04');
-  });
-
-  it('survives an unparseable date range', () => {
-    const draft = toTripDraft({ ...PLAN, startDate: '2027-04-02', endDate: 'not-a-date' });
-
-    expect(draft.itinerary).toHaveLength(3);
   });
 });

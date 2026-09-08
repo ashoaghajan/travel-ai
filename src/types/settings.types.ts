@@ -1,6 +1,7 @@
 /** Device-local preferences, persisted under `ai-travel-planner:settings`. */
 
 import type { CurrencyCode } from '@ai-travel/shared';
+import type { TravelPreferences } from './planner.types';
 
 /**
  * Which of the three looks the app wears.
@@ -79,4 +80,14 @@ export type AppSettings = {
    */
   currency: CurrencyCode;
   notifications: NotificationSettings;
+  /**
+   * How this reader wants their days planned.
+   *
+   * Read by `itinerary.planner.ts` on every generated trip. It lives with the
+   * other preferences rather than in the planner's own state because it is a
+   * standing answer, not a per-prompt one — somebody who never starts before
+   * eleven never starts before eleven, and being asked again on every trip
+   * would be the same question with the same answer.
+   */
+  travel: TravelPreferences;
 };

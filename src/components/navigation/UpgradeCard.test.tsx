@@ -8,6 +8,7 @@ import userEvent from '@testing-library/user-event';
 import { authService } from '../../services/auth.service';
 import { authStore } from '../../store/auth.store';
 import { UpgradeCard } from './UpgradeCard';
+import { DEFAULT_SETTINGS } from '../../services/settings.service';
 
 /**
  * The sidebar offer.
@@ -33,6 +34,7 @@ function user(plan: 'free' | 'pro'): ApiUser {
       theme: 'sharpen',
       currency: 'USD',
       notifications: { tripReminders: true, priceAlerts: false },
+      travel: DEFAULT_SETTINGS.travel,
     },
   };
 }

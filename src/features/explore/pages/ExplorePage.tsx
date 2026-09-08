@@ -17,6 +17,7 @@ import {
   isActivityFilter,
 } from '../activity.filters';
 import type { ActivityFilterId } from '../activity.filters';
+import type { SelectionSource } from '../../../services/explore.service';
 import { ROUTES } from '../../../app/routes';
 import { useExplore } from '../useExplore';
 import { useInfiniteScroll } from '../useInfiniteScroll';
@@ -38,6 +39,9 @@ export function ExplorePage() {
     selectionSource,
     tripCity,
     canFollowTrip,
+    canUseLocation,
+    isLocating,
+    locationError,
     activities,
     exploredCity,
     isLoadingCountries,
@@ -52,6 +56,7 @@ export function ExplorePage() {
     selectCity,
     explore,
     followTrip,
+    useMyLocation,
     loadMore,
     filterCities,
   } = useExplore();
@@ -115,11 +120,7 @@ export function ExplorePage() {
     <div className={styles.page}>
       <PageHeader
         title={exploredCity ? `Top Activities in ${exploredCity}` : 'Explore Activities'}
-        subtitle={
-          selectionSource === 'trip' && exploredCity
-            ? `Following your trip to ${exploredCity}`
-            : undefined
-        }
+        subtitle={headerSubtitle(selectionSource, exploredCity)}
       />
 
       <div className={styles.content}>
@@ -138,6 +139,11 @@ export function ExplorePage() {
           isLoadingActivities={isLoadingActivities}
           tripCity={canFollowTrip ? tripCity : null}
           onFollowTrip={followTrip}
+          canUseLocation={canUseLocation}
+          isLocating={isLocating}
+          isFromLocation={selectionSource === 'device'}
+          locationError={locationError}
+          onUseMyLocation={useMyLocation}
         />
 
         {countriesError ? (
@@ -245,6 +251,15 @@ export function ExplorePage() {
       </div>
     </div>
   );
+}
+
+/** Says where the destination in the fields came from, when nobody typed it. */
+function headerSubtitle(source: SelectionSource, exploredCity: string | null): string | undefined {
+  if (!exploredCity) return undefined;
+  if (source === 'trip') return `Following your trip to ${exploredCity}`;
+  if (source === 'device') return `Near you, in ${exploredCity}`;
+
+  return undefined;
 }
 
 /** The prompt walks the reader through whichever step they have not done. */

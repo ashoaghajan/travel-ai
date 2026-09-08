@@ -11,6 +11,7 @@ import { chatService } from '../../services/chat.service';
 import { authService } from '../../services/auth.service';
 import { authStore } from '../../store/auth.store';
 import { usePlanner } from './usePlanner';
+import { DEFAULT_SETTINGS } from '../../services/settings.service';
 
 /**
  * A reply that arrives a few words at a time.
@@ -67,6 +68,7 @@ const PRO_USER: ApiUser = {
     theme: 'sharpen',
     currency: 'USD',
     notifications: { tripReminders: true, priceAlerts: false },
+    travel: DEFAULT_SETTINGS.travel,
   },
 };
 

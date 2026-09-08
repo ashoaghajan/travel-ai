@@ -8,6 +8,7 @@ import { plannerService } from '../../services/planner.service';
 import { authService } from '../../services/auth.service';
 import { authStore } from '../../store/auth.store';
 import { usePlanner } from './usePlanner';
+import { DEFAULT_SETTINGS } from '../../services/settings.service';
 
 /**
  * Which planner answers, and why it is decided here rather than by the server.
@@ -34,6 +35,7 @@ function user(plan: 'free' | 'pro'): ApiUser {
       theme: 'sharpen',
       currency: 'USD',
       notifications: { tripReminders: true, priceAlerts: false },
+      travel: DEFAULT_SETTINGS.travel,
     },
   };
 }

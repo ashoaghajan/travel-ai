@@ -6,6 +6,7 @@
   "scripts": {
     "postinstall": "prisma generate",
     "dev": "NODE_OPTIONS=--use-system-ca tsx watch --env-file-if-exists=.env src/main.ts",
+    "prestart": "prisma migrate deploy",
     "start": "tsx --env-file-if-exists=.env src/main.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",

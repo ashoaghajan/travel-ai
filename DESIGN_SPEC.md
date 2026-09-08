@@ -1195,10 +1195,13 @@ A microphone in the planner's composer, left of the send button.
 
 ## Surface 13: Free and Pro — **built**
 
-Two planners behind one composer. Free builds trips from templates and answers
-weather and place questions; Pro writes the trip with Claude and can be talked
-to. The design problem is not the gate — it is saying which one is answering
-without making the free one feel broken.
+One planner behind one composer, and a model on top of it for Pro. Both tiers
+get the same days: the scheduler builds every trip from real attractions,
+against the hours, pace and budget on the account. What Pro adds is the
+conversation — Claude reads a paragraph into those constraints and talks about
+the result. The design problem is not the gate, it is saying which one is
+answering without making the free one feel broken, and that got easier when
+the trips themselves stopped differing.
 
 - **A quiet line above the composer, for free accounts only.** Not a modal, not
   a toast, not a badge on every reply: a fact about the tool, in the place the

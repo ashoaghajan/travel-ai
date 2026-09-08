@@ -238,7 +238,8 @@ export function PlannerScreen() {
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.space.xs }}>
             <CrownIcon size={13} color={theme.color.primary} />
             <Text variant="xs" tone="muted" leading="snug" style={{ flex: 1 }}>
-              Quick planner — builds trips from templates. Pro writes them with Claude.
+              Quick planner — builds trips from real places, to your own hours and budget. Pro
+              writes them with Claude.
             </Text>
             <TouchableOpacity onPress={() => setAsking(true)} accessibilityRole="button">
               <Text variant="xs" tone="primary" weight="semibold">

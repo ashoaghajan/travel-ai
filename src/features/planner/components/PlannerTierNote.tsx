@@ -20,8 +20,9 @@ export function PlannerTierNote() {
     <p className={styles.note}>
       <CrownIcon size={14} className={styles.icon} />
       <span>
-        <strong className={styles.strong}>Quick planner.</strong> Builds trips from templates, and
-        answers weather and places. Pro writes them with Claude, and you can talk to it.
+        <strong className={styles.strong}>Quick planner.</strong> Builds trips from real places,
+        to the hours and budget in your settings, and answers weather and places. Pro writes them
+        with Claude, and you can talk to it.
       </span>
       <Link to="/profile" className={styles.link}>
         Upgrade

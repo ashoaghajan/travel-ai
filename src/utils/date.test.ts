@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   addDays,
+  findDates,
   findMonthStart,
   formatDateRange,
   formatLongDate,
@@ -176,5 +177,109 @@ describe('formatLongDate', () => {
     // So a caller can render it bare and get nothing rather than "Invalid Date".
     expect(formatLongDate('not a date')).toBe('');
     expect(formatLongDate('')).toBe('');
+  });
+});
+
+/**
+ * Dates in a sentence.
+ *
+ * Written after a browser found the gap: "plan a new trip from 14 to 18
+ * september" produced the first of September. The planner knew months and did
+ * not know dates, so a trip somebody had stated exactly came back in the wrong
+ * week — the one kind of wrong answer that looks entirely deliberate.
+ */
+describe('findDates', () => {
+  // A Tuesday, mid-September, so both "later this month" and "already gone"
+  // are reachable from one fixed today.
+  const TODAY = new Date(2026, 8, 8);
+
+  const parse = (text: string) => {
+    const found = findDates(text, TODAY);
+
+    return found ? { start: toIsoDate(found.start), days: found.days } : null;
+  };
+
+  it('reads a range that shares its month', () => {
+    expect(parse('plan a new trip from 14 to 18 september in Tbilisi')).toEqual({
+      start: '2026-09-14',
+      days: 5,
+    });
+  });
+
+  it('reads the same range written with a dash', () => {
+    expect(parse('Tbilisi 14-18 Sept')).toEqual({ start: '2026-09-14', days: 5 });
+    expect(parse('Tbilisi 14–18 September')).toEqual({ start: '2026-09-14', days: 5 });
+  });
+
+  it('reads a range with the month in front', () => {
+    expect(parse('September 14 to 18 in Tbilisi')).toEqual({ start: '2026-09-14', days: 5 });
+  });
+
+  it('reads a range with both ends named', () => {
+    expect(parse('14 September to 18 September')).toEqual({ start: '2026-09-14', days: 5 });
+    expect(parse('Sep 14 until Sep 18')).toEqual({ start: '2026-09-14', days: 5 });
+  });
+
+  it('reads an ISO range, which is the only form carrying its own year', () => {
+    expect(parse('2027-04-02 to 2027-04-06')).toEqual({ start: '2027-04-02', days: 5 });
+  });
+
+  it('drops the ordinal somebody typed', () => {
+    expect(parse('14th to 18th September')).toEqual({ start: '2026-09-14', days: 5 });
+  });
+
+  it('gives no length for a single date, so the sentence can still say one', () => {
+    expect(parse('a trip on 14 September')).toEqual({ start: '2026-09-14', days: null });
+    expect(parse('September 14')).toEqual({ start: '2026-09-14', days: null });
+  });
+
+  it('rolls a date that has already gone into next year', () => {
+    // Rolling on the day rather than the month is what tells "the 14th, in six
+    // days" from "the 5th, next year" — both are September from here.
+    expect(parse('5 September')).toEqual({ start: '2027-09-05', days: null });
+    expect(parse('5 March')).toEqual({ start: '2027-03-05', days: null });
+  });
+
+  it('keeps today itself', () => {
+    expect(parse('8 September')).toEqual({ start: '2026-09-08', days: null });
+  });
+
+  it('says nothing about a month with no day in it', () => {
+    // That is `findMonthStart`'s job, and the first of the month is the right
+    // reading there — it is the wrong one for a date.
+    expect(parse('a week in June')).toBeNull();
+  });
+
+  it('refuses a day the month does not have', () => {
+    // Left to `Date`, "31 September" becomes the 1st of October, which is a
+    // real date and not the one that was asked for.
+    expect(parse('31 September')).toBeNull();
+    expect(parse('30 February')).toBeNull();
+  });
+
+  it('treats a backwards range as a single date rather than guessing', () => {
+    // "28 to 2 September" probably crosses into October, and a planner that
+    // picked one reading would be wrong about it half the time.
+    const parsed = parse('28 to 2 September');
+
+    expect(parsed?.start).toBe('2026-09-28');
+    expect(parsed?.days).toBeNull();
+  });
+
+  it('finds nothing in a sentence with no date in it', () => {
+    expect(parse('plan me something nice')).toBeNull();
+    expect(parse('somewhere warm for a week')).toBeNull();
+  });
+});
+
+describe('findDates, across the turn of a year', () => {
+  const TODAY = new Date(2026, 8, 8);
+
+  it('reads a range that crosses into January', () => {
+    const found = findDates('28 December to 3 January', TODAY);
+
+    // The end is resolved against its own start, so January is the next one.
+    expect(found && toIsoDate(found.start)).toBe('2026-12-28');
+    expect(found?.days).toBe(7);
   });
 });

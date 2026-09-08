@@ -3,6 +3,7 @@ import type { PlannerMessage, PlannerStatus } from '../../core/types/planner.typ
 import type { TripDraft } from '../../core/types/trip.types';
 import { PlannerError, plannerService } from '../../core/services/planner.service';
 import { chatService } from '../../core/services/chat.service';
+import { settingsService } from '../../core/services/settings.service';
 import { tripStore, useTrips } from '../../core/store/trip.store';
 import { bookingStore } from '../../core/store/booking.store';
 import { SEED_CONVERSATION } from '../../core/mock/planner';
@@ -192,9 +193,25 @@ export function usePlanner() {
                 .slice(-HISTORY_LIMIT)
                 .map(({ author, content: text }) => ({ author, content: text })),
               handlers,
-              { signal: controller.signal },
+              {
+                signal: controller.signal,
+                // The same preferences the free engine gets. The model may
+                // override one for this trip; the scheduler builds the days
+                // either way, so a Pro trip keeps the reader's own hours.
+                preferences: settingsService.getSettings().travel,
+              },
             )
-          : plannerService.answerLocally(trimmed, handlers, { signal: controller.signal }));
+          : plannerService.answerLocally(trimmed, handlers, {
+              signal: controller.signal,
+              /*
+               * Read at send time from the cache rather than held in state.
+               * `settingsService` is synchronous and always current — a
+               * preference changed in the settings screen a moment ago applies
+               * to this prompt, without this hook subscribing to a store it
+               * otherwise has no use for.
+               */
+              preferences: settingsService.getSettings().travel,
+            }));
 
         // A turn that produced neither words nor a trip has nothing to show,
         // and an empty bubble is worse than saying so.

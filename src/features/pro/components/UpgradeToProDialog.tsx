@@ -87,8 +87,8 @@ export function UpgradeToProDialog({ onClose, onUpgraded }: UpgradeToProDialogPr
         </h2>
 
         <p className={styles.lead}>
-          The planner starts writing trips with Claude instead of building them from templates,
-          and you can talk to it — ask for changes, and it rewrites the days.
+          The planner starts writing trips with Claude instead of scheduling them itself, and you
+          can talk to it — ask for changes, and it rewrites the days.
         </p>
 
         {/* What is *not* being taken away, said plainly. Somebody deciding

@@ -648,16 +648,37 @@ export const activityService = {
     try {
       const activities = await fetchActivitiesOnce(destination, countryCode);
 
-      if (activities.length === 0 && cached) {
+      if (activities.length === 0) {
         // An empty result is more likely a bad query than a place with nothing
         // to do — keep showing what we had.
-        return page(
-          cached,
-          offset,
-          limit,
-          'stale-cache',
-          `We could not refresh activities for ${destination}. Showing the last saved copy.`,
-        );
+        if (cached) {
+          return page(
+            cached,
+            offset,
+            limit,
+            'stale-cache',
+            `We could not refresh activities for ${destination}. Showing the last saved copy.`,
+          );
+        }
+
+        /*
+         * Nothing held, and nothing worth holding.
+         *
+         * Returned without writing the cache, which is the whole point: the
+         * provider answers a throttled request with an empty list rather than
+         * an error, and storing that made a real city look empty for the next
+         * five minutes — long enough for the planner to give up on it and
+         * build a trip from templates instead.
+         *
+         * The cost is a repeated request for the genuinely empty places. Those
+         * are rare, and the request is cheaper than being wrong about a city.
+         */
+        return {
+          activities: [],
+          hasMore: false,
+          source: 'network',
+          fetchedAt: new Date().toISOString(),
+        };
       }
 
       const fresh: ActivitiesCache = {

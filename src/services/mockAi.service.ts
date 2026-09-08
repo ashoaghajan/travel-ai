@@ -1,4 +1,4 @@
-import type { GeneratedItinerary } from '../types/planner.types';
+import type { GeneratedItinerary, TravelPreferences, TripBrief } from '../types/planner.types';
 import type { ItineraryActivity, ItineraryDay, TripDraft } from '../types/trip.types';
 import {
   DESTINATION_TEMPLATES,
@@ -6,16 +6,36 @@ import {
   type DayTemplate,
   type DestinationTemplate,
 } from '../mock/destinations';
-import { addDays, findMonthStart, toIsoDate } from '../utils/date';
+import type { Activity } from '../types/travel.types';
+import { addDays, findDates, findMonthStart, fromIsoDate, toIsoDate } from '../utils/date';
 import { createId } from '../utils/id';
+import { coverImage } from '../utils/itineraryImages';
+import { activityService } from './activity.service';
+import { DEFAULT_PREFERENCES, planItinerary } from './itinerary.planner';
 
 /**
- * Stage 1 stand-in for the AI planner.
+ * The planner that needs no model.
  *
- * It reads a few things out of the prompt (destination, length, party size,
- * month) and assembles an itinerary from the mock templates. Stage 2 replaces
- * this module with a call to the real provider — `planner.service.ts` is the
- * seam, so nothing outside imports this file.
+ * It reads a few things out of the prompt — destination, length, party size,
+ * month — and then builds the days two ways, in this order:
+ *
+ * 1. **From real places.** `activity.service` supplies the same pool the
+ *    explorer browses, and `itinerary.planner` schedules it against the
+ *    reader's own preferences: their hours, the categories they want, what
+ *    they will spend on one activity and on one day. Nothing about those days
+ *    is written in advance, so this is where a precise, personal trip comes
+ *    from.
+ *
+ * 2. **From the templates**, when the first cannot answer — no attraction key
+ *    on the server, an unreachable provider, a destination the catalogue has
+ *    nothing for, or preferences so narrow that nothing survives them. The
+ *    templates in `mock/destinations.ts` are unchanged and still produce a
+ *    real trip; they are simply no longer the only thing this module can do.
+ *
+ * The fallback is the reason this module did not become a thin wrapper. A
+ * planner that returns nothing when a provider is down is worse than one that
+ * returns a generic week, and somebody typing into the chat has asked for a
+ * trip rather than for an explanation of why there is not one.
  */
 
 /** Deliberate delay so the UI's loading state is exercised (DESIGN_SPEC rule 17). */
@@ -181,8 +201,39 @@ function resolveDestination(prompt: string): {
   return { template: GENERIC_DESTINATION, name: parseDestinationName(prompt) };
 }
 
-function resolveStartDate(prompt: string): Date {
-  return findMonthStart(prompt) ?? addDays(new Date(), DEFAULT_LEAD_DAYS);
+/**
+ * When the trip starts and how long it runs.
+ *
+ * Three sources, in the order that respects what was actually said:
+ *
+ * 1. **Dates in the sentence.** "from 14 to 18 September" is a start *and* a
+ *    length, and both come from here. This used to be missed entirely — the
+ *    parser knew months and not dates, so that sentence produced the first of
+ *    September for five days: the right length, in the wrong week, for a trip
+ *    somebody had stated exactly.
+ * 2. **A month.** "a week in June" still means the first of June, which is the
+ *    honest reading of a month with no day in it.
+ * 3. **A default.** Far enough out to be bookable.
+ *
+ * A stated range beats a stated length when they disagree — "a 3-day trip from
+ * 14 to 18 September" is five days, because the dates are the specific claim
+ * and the length is the round one.
+ */
+function resolveSchedule(prompt: string): { startDate: Date; days: number } {
+  const spoken = parseDays(prompt);
+  const dates = findDates(prompt);
+
+  if (dates) {
+    return {
+      startDate: dates.start,
+      days: dates.days === null ? spoken : clamp(dates.days, 1, MAX_DAYS),
+    };
+  }
+
+  return {
+    startDate: findMonthStart(prompt) ?? addDays(new Date(), DEFAULT_LEAD_DAYS),
+    days: spoken,
+  };
 }
 
 /** Body days cycle; the last day is always the departure template. */
@@ -274,22 +325,171 @@ export function buildTripDraft({
   };
 }
 
-export const mockAiService = {
-  async generateItinerary(prompt: string): Promise<GeneratedItinerary> {
-    await delay(GENERATION_DELAY_MS);
+/** How many places to pull for a trip — more than the longest trip can use. */
+const POOL_SIZE = 80;
 
-    const { template, name } = resolveDestination(prompt);
-    const days = parseDays(prompt);
+/**
+ * A scheduled trip, or null when this destination cannot be scheduled.
+ *
+ * Null covers every reason at once on purpose: no key, no network, a place the
+ * catalogue has never heard of, or a set of preferences that rules out
+ * everything it does have. The caller does the same thing in all four cases —
+ * falls back to a template — and distinguishing them here would only produce a
+ * distinction it then had to discard.
+ */
+async function planFromRealPlaces(
+  brief: TripBrief,
+  template: DestinationTemplate,
+  extras: TripExtras = {},
+): Promise<TripDraft | null> {
+  let pool: Activity[];
 
-    const trip = buildTripDraft({
-      template,
-      // Falls back to a neutral label when the prompt names no place.
-      destinationName: name ?? GENERIC_DESTINATION.name,
-      days,
-      travellers: parseTravellers(prompt),
-      startDate: resolveStartDate(prompt),
-      title: name === null ? 'Your Next Trip' : undefined,
+  try {
+    const result = await activityService.getActivities({
+      destination: brief.destination,
+      limit: POOL_SIZE,
     });
+    pool = result.activities;
+  } catch {
+    return null;
+  }
+
+  const itinerary = planItinerary(brief, pool);
+  if (itinerary.length === 0) return null;
+
+  // A trip whose days are all empty is not a trip. It happens when the pool
+  // holds a handful of rows and every one of them is in a category the reader
+  // ruled out — the templates say more than a week of blank days would.
+  if (itinerary.every((day) => day.activities.length === 0)) return null;
+
+  const categories = itinerary.flatMap((day) => day.activities.map((entry) => entry.category));
+  const nights = Math.max(0, brief.days - 1);
+  const startDate = fromIsoDate(brief.startDate);
+
+  return {
+    draftId: createId('draft'),
+    title: extras.title?.trim() || `${brief.destination} Trip`,
+    destination: brief.destination,
+    destinationCity: extras.destinationCity,
+    destinationCountry: extras.destinationCountry,
+    startDate: brief.startDate,
+    endDate: toIsoDate(addDays(startDate, nights)),
+    travellers: brief.travellers,
+    // The template's cover only fits when the template is what was built; a
+    // scheduled trip is described by what is actually in it.
+    coverImage: categories.length > 0 ? coverImage(categories) : template.coverImage,
+    itinerary,
+    /*
+     * The model's estimates when there are any, this app's constants when
+     * there are not.
+     *
+     * These are the one part of a trip a model is still better at: it knows
+     * roughly what a March flight to Osaka costs, where the constant below
+     * charges the same for every destination on earth. The days themselves are
+     * never taken from it.
+     */
+    flightsEstimate: extras.flightsEstimate ?? FLIGHT_PRICE_PER_TRAVELLER * brief.travellers,
+    hotelsEstimate: extras.hotelsEstimate ?? HOTEL_PRICE_PER_NIGHT * nights,
+    activitiesEstimate: sumActivityPrices(itinerary) * brief.travellers,
+  };
+}
+
+/**
+ * What a caller knows about a trip that the scheduler cannot work out.
+ *
+ * All optional, all from the model: a title with some character in it, the
+ * city and country the explorer and the flight search need, and the two
+ * whole-trip estimates. A free trip has none of them and is a trip regardless.
+ */
+export type TripExtras = {
+  title?: string;
+  destinationCity?: string;
+  destinationCountry?: string;
+  flightsEstimate?: number;
+  hotelsEstimate?: number;
+};
+
+/**
+ * A trip for a brief, scheduled if it can be and templated if it cannot.
+ *
+ * The one entry point both engines use. A free account reaches it through
+ * `generateItinerary` with a brief parsed out of a sentence; a Pro account
+ * reaches it from `planner.service` with a brief the model filled in. What
+ * happens after that point is identical, which is the whole design: the days
+ * are the scheduler's either way, and the model's contribution is knowing what
+ * to ask for and what to say about it.
+ */
+export async function tripForBrief(brief: TripBrief, extras: TripExtras = {}): Promise<TripDraft> {
+  const { template } = resolveDestination(brief.destination);
+
+  return (
+    (await planFromRealPlaces(brief, template, extras)) ??
+    buildTripDraft({
+      template,
+      destinationName: brief.destination,
+      days: brief.days,
+      travellers: brief.travellers,
+      startDate: fromIsoDate(brief.startDate),
+      title: extras.title,
+    })
+  );
+}
+
+export const mockAiService = {
+  /**
+   * `preferences` is how the days become somebody's rather than anybody's.
+   *
+   * Optional, and defaulted, because this must answer for a reader who has
+   * never opened the settings screen — and because the planner screens call it
+   * before the account's own preferences have necessarily loaded.
+   */
+  async generateItinerary(
+    prompt: string,
+    preferences: TravelPreferences = DEFAULT_PREFERENCES,
+  ): Promise<GeneratedItinerary> {
+    const { template, name } = resolveDestination(prompt);
+    const { startDate, days } = resolveSchedule(prompt);
+    const travellers = parseTravellers(prompt);
+
+    /*
+     * Only a named destination can be scheduled: the pool is fetched by name,
+     * and "somewhere warm" is not a name. That prompt still gets the generic
+     * template, which is what it got before.
+     */
+    const scheduled = name
+      ? await planFromRealPlaces(
+          {
+            destination: name,
+            startDate: toIsoDate(startDate),
+            days,
+            travellers,
+            preferences,
+          },
+          template,
+        )
+      : null;
+
+    /*
+     * The delay is only for the template path now.
+     *
+     * It exists so the loading state is exercised (DESIGN_SPEC rule 17), and a
+     * real search already takes longer than it. Adding it on top would be a
+     * second of nothing on every generated trip, spent proving a spinner that
+     * the network had already proved.
+     */
+    if (!scheduled) await delay(GENERATION_DELAY_MS);
+
+    const trip =
+      scheduled ??
+      buildTripDraft({
+        template,
+        // Falls back to a neutral label when the prompt names no place.
+        destinationName: name ?? GENERIC_DESTINATION.name,
+        days,
+        travellers,
+        startDate,
+        title: name === null ? 'Your Next Trip' : undefined,
+      });
 
     return {
       reply: name

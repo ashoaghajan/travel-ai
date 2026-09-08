@@ -156,30 +156,14 @@ async function freeToken(): Promise<string> {
   return accessToken;
 }
 
-const PLAN = {
+const BRIEF = {
   title: 'Three Days in Kyoto',
   destination: 'Kyoto',
   destinationCity: 'Kyoto',
   destinationCountry: 'Japan',
   startDate: '2027-04-02',
-  endDate: '2027-04-04',
+  days: 3,
   travellers: 2,
-  days: [
-    {
-      destination: 'Higashiyama',
-      summary: 'Temples and the old streets',
-      coordinates: { lat: 34.9948, lng: 135.7817 },
-      activities: [
-        {
-          time: '09:00',
-          title: 'Kiyomizu-dera before the crowds',
-          description: 'The hillside temple is quiet for the first hour it is open.',
-          category: 'culture',
-          priceEstimate: 4,
-        },
-      ],
-    },
-  ],
   flightsEstimate: 1800,
   hotelsEstimate: 420,
 };
@@ -298,11 +282,11 @@ describe('POST /api/planner/chat', () => {
     expect(response.text).not.toContain('sk-ant-test-key');
   });
 
-  it('turns a proposed trip into its own event', async () => {
+  it('turns a brief into its own event', async () => {
     vi.stubGlobal(
       'fetch',
       modelSays(
-        turn([{ type: 'tool_use', id: 'toolu_1', name: 'create_itinerary', input: PLAN }], 'tool_use'),
+        turn([{ type: 'tool_use', id: 'toolu_1', name: 'plan_trip', input: BRIEF }], 'tool_use'),
         turn([{ type: 'text', text: 'I kept the mornings early.' }], 'end_turn'),
       ),
     );
@@ -312,49 +296,29 @@ describe('POST /api/planner/chat', () => {
       .set('Authorization', `Bearer ${await token()}`)
       .send(PROMPT);
 
-    const itinerary = events(response.text).find((event) => event.type === 'itinerary');
-    expect(itinerary?.plan.destination).toBe('Kyoto');
-    expect(itinerary?.plan.days).toHaveLength(1);
+    const event = events(response.text).find((entry) => entry.type === 'brief');
+
+    // Constraints, not days. The client schedules from this against the same
+    // catalogue of real places a free account uses.
+    expect(event?.brief.destination).toBe('Kyoto');
+    expect(event?.brief.days).toBe(3);
+    expect(event?.brief.travellers).toBe(2);
 
     // The second turn's text still streams — the tool call is not the end.
     expect(replyText(response.text)).toContain('I kept the mornings early.');
   });
 
-  it("keeps the day's own coordinates, which are what put it on the map", async () => {
-    vi.stubGlobal(
-      'fetch',
-      modelSays(
-        turn([{ type: 'tool_use', id: 'toolu_1', name: 'create_itinerary', input: PLAN }], 'tool_use'),
-        turn([{ type: 'text', text: 'Done.' }], 'end_turn'),
-      ),
-    );
-
-    const response = await api()
-      .post(CHAT)
-      .set('Authorization', `Bearer ${await token()}`)
-      .send(PROMPT);
-
-    const itinerary = events(response.text).find((event) => event.type === 'itinerary');
-
-    // Asked of the model rather than geocoded afterwards: a day named for a
-    // district is one the gazetteer either misses or matches to the wrong town.
-    expect(itinerary?.plan.days[0].coordinates).toEqual({ lat: 34.9948, lng: 135.7817 });
-  });
-
-  it('still takes a day that arrives without coordinates', async () => {
-    const unplaced = {
-      ...PLAN,
-      days: [{ ...PLAN.days[0], coordinates: undefined }],
+  it('carries the preferences the conversation stated, and nothing else', async () => {
+    const said = {
+      ...BRIEF,
+      preferences: { dayStart: '11:00', categoryWeights: { culture: 0 } },
     };
 
     vi.stubGlobal(
       'fetch',
       modelSays(
-        turn(
-          [{ type: 'tool_use', id: 'toolu_1', name: 'create_itinerary', input: unplaced }],
-          'tool_use',
-        ),
-        turn([{ type: 'text', text: 'Done.' }], 'end_turn'),
+        turn([{ type: 'tool_use', id: 'toolu_1', name: 'plan_trip', input: said }], 'tool_use'),
+        turn([{ type: 'text', text: 'Late starts it is.' }], 'end_turn'),
       ),
     );
 
@@ -363,26 +327,24 @@ describe('POST /api/planner/chat', () => {
       .set('Authorization', `Bearer ${await token()}`)
       .send(PROMPT);
 
-    // One missing pair of numbers must not cost somebody the whole itinerary —
-    // that day falls back to being geocoded, as every day was before.
-    const itinerary = events(response.text).find((event) => event.type === 'itinerary');
-    expect(itinerary?.plan.days).toHaveLength(1);
-    expect(itinerary?.plan.days[0].coordinates).toBeUndefined();
+    const event = events(response.text).find((entry) => entry.type === 'brief');
+
+    expect(event?.brief.preferences).toEqual({
+      dayStart: '11:00',
+      categoryWeights: { culture: 0 },
+    });
   });
 
-  it('drops coordinates that are not on the earth, and keeps the day', async () => {
-    const offWorld = {
-      ...PLAN,
-      days: [{ ...PLAN.days[0], coordinates: { lat: 91, lng: 0 } }],
+  it('plans the trip anyway when one preference is not a preference', async () => {
+    const nonsense = {
+      ...BRIEF,
+      preferences: { dayStart: 'morning', categoryWeights: { culture: 4 } },
     };
 
     vi.stubGlobal(
       'fetch',
       modelSays(
-        turn(
-          [{ type: 'tool_use', id: 'toolu_1', name: 'create_itinerary', input: offWorld }],
-          'tool_use',
-        ),
+        turn([{ type: 'tool_use', id: 'toolu_1', name: 'plan_trip', input: nonsense }], 'tool_use'),
         turn([{ type: 'text', text: 'Done.' }], 'end_turn'),
       ),
     );
@@ -392,21 +354,21 @@ describe('POST /api/planner/chat', () => {
       .set('Authorization', `Bearer ${await token()}`)
       .send(PROMPT);
 
-    // Leaflet draws an impossible latitude somewhere arbitrary rather than
-    // refusing, so a wrong pin would look exactly like a right one. But a bad
-    // pin is not worth the whole trip: the day survives, unplaced.
-    const itinerary = events(response.text).find((event) => event.type === 'itinerary');
-    expect(itinerary?.plan.days).toHaveLength(1);
-    expect(itinerary?.plan.days[0].coordinates).toBeUndefined();
+    const event = events(response.text).find((entry) => entry.type === 'brief');
+
+    // The trip survives and falls back to the account's own settings. Refusing
+    // to plan at all over a detail nobody mentioned would be the worse answer.
+    expect(event?.brief.destination).toBe('Kyoto');
+    expect(event?.brief.preferences).toBeUndefined();
   });
 
-  it('hands a malformed plan back to the model instead of showing it', async () => {
-    const broken = { ...PLAN, startDate: 'next April', days: [] };
+  it('hands a malformed brief back to the model instead of showing it', async () => {
+    const broken = { ...BRIEF, startDate: 'next April', days: 0 };
 
     vi.stubGlobal(
       'fetch',
       modelSays(
-        turn([{ type: 'tool_use', id: 'toolu_1', name: 'create_itinerary', input: broken }], 'tool_use'),
+        turn([{ type: 'tool_use', id: 'toolu_1', name: 'plan_trip', input: broken }], 'tool_use'),
         turn([{ type: 'text', text: 'Let me try that again.' }], 'end_turn'),
       ),
     );
@@ -416,7 +378,7 @@ describe('POST /api/planner/chat', () => {
       .set('Authorization', `Bearer ${await token()}`)
       .send(PROMPT);
 
-    expect(events(response.text).some((event) => event.type === 'itinerary')).toBe(false);
+    expect(events(response.text).some((event) => event.type === 'brief')).toBe(false);
     expect(events(response.text).at(-1)?.type).toBe('done');
   });
 

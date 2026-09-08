@@ -766,6 +766,29 @@ describe('when OpenTripMap is unavailable', () => {
     expect(result.activities).toEqual([]);
     expect(result.source).toBe('network');
   });
+
+  it('does not store that emptiness, so the next ask reaches the provider', async () => {
+    vi.spyOn(openTripMapService, 'findDestination').mockResolvedValue({
+      name: 'Bali',
+      lat: 0,
+      lon: 0,
+    });
+    const search = vi.spyOn(openTripMapService, 'searchPlaces').mockResolvedValue([]);
+    stubNoPhotographs();
+
+    await activityService.getActivities({ destination: 'Bali' });
+    const before = search.mock.calls.length;
+
+    await activityService.getActivities({ destination: 'Bali' });
+
+    /*
+     * The provider answers a throttled request with an empty list rather than
+     * an error. Cached, that made a real city look empty for five minutes —
+     * long enough for the planner to give up and build from templates, which
+     * is what put stock photographs on somebody's Tbilisi trip.
+     */
+    expect(search.mock.calls.length).toBeGreaterThan(before);
+  });
 });
 
 /* ------------------------------------------------------------ one attraction */

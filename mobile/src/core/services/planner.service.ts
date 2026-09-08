@@ -1,13 +1,11 @@
 import { ERROR_CODES } from '@ai-travel/shared';
-import type { PlannerChatMessage, PlannerItineraryPlan, PlannerStreamEvent } from '@ai-travel/shared';
-import type { GeneratedItinerary } from '../types/planner.types';
-import type { ActivityCategory, ItineraryDay, TripDraft } from '../types/trip.types';
+import type { PlannerChatMessage, PlannerStreamEvent, PlannerTripBrief } from '@ai-travel/shared';
+import type { GeneratedItinerary, TravelPreferences, TripBrief } from '../types/planner.types';
+import type { ActivityCategory, TripDraft } from '../types/trip.types';
 import { classifyPrompt } from '../utils/intent';
-import { addDays, toIsoDate } from '../utils/date';
-import { createId } from '../utils/id';
-import { coverImage, dayImage } from '../utils/itineraryImages';
 import { ApiError, stream } from './http';
-import { mockAiService } from './mockAi.service';
+import { DEFAULT_PREFERENCES } from './itinerary.planner';
+import { mockAiService, tripForBrief } from './mockAi.service';
 import { PlaceNotFoundError, weatherService } from './weather.service';
 
 /**
@@ -108,92 +106,40 @@ async function answerLocation(place: string | null, proHint = ''): Promise<Gener
 
 /* ------------------------------------------------------- the model's answer */
 
-/** Whole days between two ISO dates, inclusive of both ends. */
-function spanInDays(startDate: string, endDate: string): number {
-  const from = Date.parse(`${startDate}T00:00:00Z`);
-  const to = Date.parse(`${endDate}T00:00:00Z`);
-
-  if (Number.isNaN(from) || Number.isNaN(to)) return 1;
-
-  return Math.max(1, Math.round((to - from) / 86_400_000) + 1);
-}
-
-function toDay(
-  day: PlannerItineraryPlan['days'][number],
-  index: number,
-  startDate: Date,
-): ItineraryDay {
-  const activities = day.activities.map((activity) => ({
-    id: createId('activity'),
-    time: activity.time,
-    title: activity.title,
-    description: activity.description,
-    category: activity.category,
-    priceEstimate: activity.priceEstimate,
-  }));
-
-  return {
-    id: createId('day'),
-    dayNumber: index + 1,
-    // Derived from the start date rather than trusted from the model: the days
-    // are an ordered list, and a plan whose dates skipped one would put a gap
-    // in the timeline for no reason a reader could see.
-    date: toIsoDate(addDays(startDate, index)),
-    destination: day.destination,
-    summary: day.summary,
-    /*
-     * Straight through when the model gave one. This is what the map prefers
-     * over geocoding the destination name, and it is the difference between a
-     * six-day trip drawing six pins and drawing two — most day names are
-     * districts, and the geocoder behind the map only knows towns.
-     */
-    coordinates: day.coordinates,
-    image: dayImage(activities.map((activity) => activity.category)),
-    activities,
-  };
-}
-
-function sumActivityPrices(itinerary: ItineraryDay[]): number {
-  return itinerary.reduce(
-    (total, day) =>
-      total + day.activities.reduce((dayTotal, a) => dayTotal + (a.priceEstimate ?? 0), 0),
-    0,
-  );
-}
-
 /**
- * The model's plan, as a draft the rest of the app already understands.
+ * The model's brief, merged with the account's own preferences.
  *
- * Ids and photographs are added here rather than asked for: `createId` is the
- * client's, and the images are Vite-bundled assets the server cannot name. That
- * split is the whole reason the endpoint returns a plan instead of a `TripDraft`.
+ * The account is the base and the conversation is the override, which is the
+ * only order that makes sense: settings are a standing answer and a sentence
+ * is about this trip. Somebody who set a $40 ceiling in March and says nothing
+ * about money in June still has a $40 ceiling.
+ *
+ * Absent means "not mentioned"; `null` on a budget means "no ceiling", said
+ * out loud. The spread gets both right for free — a key the model omitted is
+ * not spread at all, and a null one is.
  */
-export function toTripDraft(plan: PlannerItineraryPlan): TripDraft {
-  const startDate = new Date(`${plan.startDate}T00:00:00`);
-  const days = spanInDays(plan.startDate, plan.endDate);
-  const itinerary = plan.days.map((day, index) => toDay(day, index, startDate));
+function toTripBrief(brief: PlannerTripBrief, base: TravelPreferences): TripBrief {
+  const overrides = brief.preferences ?? {};
 
-  const categories: ActivityCategory[] = itinerary.flatMap((day) =>
-    day.activities.map((activity) => activity.category),
-  );
+  const categoryWeights = { ...base.categoryWeights };
+  for (const [category, weight] of Object.entries(overrides.categoryWeights ?? {})) {
+    // Only the categories this app has. The tool schema offers exactly these,
+    // so anything else is a model inventing a taxonomy, and a weight the
+    // planner will never read is not worth carrying into a trip.
+    if (category in categoryWeights) categoryWeights[category as ActivityCategory] = weight;
+  }
 
   return {
-    draftId: createId('draft'),
-    title: plan.title,
-    destination: plan.destination,
-    destinationCity: plan.destinationCity,
-    destinationCountry: plan.destinationCountry,
-    startDate: plan.startDate,
-    // The model's own end date is only used when it agrees with the days it
-    // actually wrote; otherwise the itinerary is the truth.
-    endDate:
-      itinerary.length === days ? plan.endDate : toIsoDate(addDays(startDate, itinerary.length - 1)),
-    travellers: plan.travellers,
-    coverImage: coverImage(categories),
-    itinerary,
-    flightsEstimate: plan.flightsEstimate,
-    hotelsEstimate: plan.hotelsEstimate,
-    activitiesEstimate: sumActivityPrices(itinerary) * plan.travellers,
+    destination: brief.destination,
+    startDate: brief.startDate,
+    days: brief.days,
+    travellers: brief.travellers,
+    preferences: {
+      ...base,
+      ...overrides,
+      categoryWeights,
+      meals: { ...base.meals, ...overrides.meals },
+    },
   };
 }
 
@@ -221,7 +167,7 @@ export class PlannerError extends Error {
  */
 async function answerOffline(
   prompt: string,
-  { proHint = '' }: { proHint?: string } = {},
+  { proHint = '', preferences }: { proHint?: string; preferences?: TravelPreferences } = {},
 ): Promise<GeneratedItinerary> {
   const intent = classifyPrompt(prompt);
 
@@ -234,7 +180,7 @@ async function answerOffline(
       return { reply: [CANNOT_ANSWER, proHint].filter(Boolean).join(' ') };
     case 'trip':
     default:
-      return withDestinationFacts(await mockAiService.generateItinerary(prompt));
+      return withDestinationFacts(await mockAiService.generateItinerary(prompt, preferences));
   }
 }
 
@@ -311,10 +257,23 @@ export const plannerService = {
   async chat(
     history: PlannerChatMessage[],
     handlers: PlannerHandlers,
-    { signal }: { signal?: AbortSignal } = {},
+    {
+      signal,
+      preferences = DEFAULT_PREFERENCES,
+    }: { signal?: AbortSignal; preferences?: TravelPreferences } = {},
   ): Promise<void> {
     const prompt = history.at(-1)?.content ?? '';
     let started = false;
+
+    /*
+     * Started when the brief arrives, awaited after the stream closes.
+     *
+     * Scheduling means fetching the attraction pool, and the model is still
+     * talking at that point — it narrates *after* calling the tool. Awaiting
+     * inline would hold back the rest of the sentence somebody is reading for
+     * the sake of a card that appears at the end either way.
+     */
+    let scheduling: Promise<TripDraft> | null = null;
 
     try {
       for await (const event of stream<PlannerStreamEvent>('/planner/chat', {
@@ -326,9 +285,17 @@ export const plannerService = {
             started = true;
             handlers.onText(event.text);
             break;
-          case 'itinerary':
+          case 'brief':
             started = true;
-            handlers.onTrip(toTripDraft(event.plan));
+            scheduling = tripForBrief(toTripBrief(event.brief, preferences), {
+              title: event.brief.title,
+              // Straight from the model, and the reason this path needs no
+              // geocoding: it named the city and the country itself.
+              destinationCity: event.brief.destinationCity,
+              destinationCountry: event.brief.destinationCountry,
+              flightsEstimate: event.brief.flightsEstimate,
+              hotelsEstimate: event.brief.hotelsEstimate,
+            });
             break;
           case 'error':
             // Mid-stream failures arrive here rather than as a rejection: by
@@ -339,6 +306,10 @@ export const plannerService = {
             break;
         }
       }
+
+      // After the words, because that is the order it happens in: the model
+      // calls the tool, talks about the trip, and the card lands under it.
+      if (scheduling) handlers.onTrip(await scheduling);
     } catch (caught) {
       if (started || caught instanceof PlannerError) throw caught;
       if (!isUnconfigured(caught)) throw caught;
@@ -378,9 +349,12 @@ export const plannerService = {
   async answerLocally(
     prompt: string,
     handlers: PlannerHandlers,
-    { signal }: { signal?: AbortSignal } = {},
+    {
+      signal,
+      preferences,
+    }: { signal?: AbortSignal; preferences?: TravelPreferences } = {},
   ): Promise<void> {
-    const { reply, trip } = await answerOffline(prompt, { proHint: PRO_HINT });
+    const { reply, trip } = await answerOffline(prompt, { proHint: PRO_HINT, preferences });
 
     if (signal?.aborted) return;
 
@@ -394,7 +368,10 @@ export const plannerService = {
    * The offline path, exposed for the seeded conversation and for anything that
    * cannot render a growing message. `chat` is what the planner screen uses.
    */
-  generateItinerary(prompt: string): Promise<GeneratedItinerary> {
-    return answerOffline(prompt);
+  generateItinerary(
+    prompt: string,
+    preferences?: TravelPreferences,
+  ): Promise<GeneratedItinerary> {
+    return answerOffline(prompt, { preferences });
   },
 };

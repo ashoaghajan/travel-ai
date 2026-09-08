@@ -841,22 +841,44 @@ per call, which is what section 11 is about.
 ### 4. AI Integration — **built**
 
 **Claude, through the Anthropic API** — not OpenAI or Azure, as this section
-guessed before there was a decision. The planner is a tool-use loop:
-`create_itinerary` for a plan and `get_weather` for a forecast, with the
-model's tool input validated against a Zod schema before anything is trusted.
+guessed before there was a decision — but **behind an interface**, which is the
+part worth knowing. `planner/provider.ts` defines what a planner model owes
+this app: a conversation in, prose and a `PlannerTripBrief` out. `anthropic.ts`
+is one implementation of it, selected by `PLANNER_PROVIDER`. A second — an
+OpenAI-compatible endpoint, or a model running locally through Ollama — is a
+new file rather than a refactor.
 
-The flow the section sketched still holds, with one correction — the trip is
-**not** saved on the way through:
+**The model does not write the days.** It used to: a `create_itinerary` tool
+took a whole itinerary, activity by activity, and the app rendered what came
+back. That produced good prose and unreliable trips — places that had closed,
+two things at once, a budget quietly ignored — because satisfying constraints
+is the one thing a language model cannot be made to do reliably. So the work is
+split at the seam it should always have had:
+
+- **`plan_trip`** — the model reads the conversation into constraints: where,
+  when, how long, for how many, and anything said about hours, pace or money.
+  That is a language problem.
+- **`itinerary.planner.ts`** — the client schedules those constraints into days
+  from the attraction catalogue: scored against the reader's preferences,
+  packed into a timeline that respects their hours, stopped at their budget.
+  That is an arithmetic problem, it is deterministic, and it is the same code a
+  free account runs.
+- **`get_weather`** — unchanged, and still a real lookup.
+
+Tool input is validated against a Zod schema before anything is trusted, and a
+rejection is handed back to the model as a retry rather than thrown.
 
 ```txt
 User prompt
 Frontend
 Backend API
-Claude (tool use)
-Structured itinerary event
-Frontend render
+Model (tool use)          ← constraints, not days
+Brief event
+Frontend: attraction search → scheduler → trip card
 Database save — only if the reader taps Save
 ```
+
+The trip is **not** saved on the way through.
 
 A generated itinerary is a suggestion until somebody keeps it. Writing every
 draft to the database would fill an account with trips nobody asked for; see
@@ -1233,9 +1255,15 @@ chat endpoint at all — being told 403 in order to learn what the client alread
 knew would put a round trip in front of every free reply:
 
 ```ts
-await (isPro ? plannerService.chat(history, handlers, { signal })
-             : plannerService.answerLocally(prompt, handlers, { signal }));
+const preferences = settingsService.getSettings().travel;
+
+await (isPro ? plannerService.chat(history, handlers, { signal, preferences })
+             : plannerService.answerLocally(prompt, handlers, { signal, preferences }));
 ```
+
+Both calls carry the same preferences, and that is the shape of the whole
+design: the tiers differ in who reads the sentence, never in who builds the
+days.
 
 **The server checks anyway**, reading the row rather than trusting the token —
 so an upgrade lands on the next prompt instead of waiting for the token to
@@ -1243,9 +1271,11 @@ expire, and a gate the client alone enforces stays a gate. `plan` rides
 `ApiUser` for the same reason `settings` does: the planner must know which
 engine to run before the first prompt.
 
-`chat` keeps its own fallback to the same rule engine for a Pro account on a
-server with no `ANTHROPIC_API_KEY`. Two ways to reach one implementation, not
-two implementations.
+`chat` keeps its own fallback to the same local engine for a Pro account on a
+server with no model configured. Two ways to reach one implementation, not two
+implementations — and since the scheduler landed, the trip that fallback
+produces is the same trip Pro would have got, missing only the conversation
+around it.
 
 **Every existing account starts free**, including the ones already using this
 app. Grandfathering would have left the free planner untested by the only
@@ -1282,6 +1312,14 @@ button that undoes it is the one that replaces it.
 **Recorded consequence: two engines is two behaviours to keep working.** The
 rule engine had been dead weight in the bundle since the API arrived. It is
 back in the product, and its tests are load-bearing again.
+
+**Superseded, 2026-09-08.** There are no longer two engines. `itinerary.planner.ts`
+schedules every trip on both tiers, and the model's job shrank to reading a
+paragraph into a brief and talking about the result — so the "two behaviours"
+are now one set of days and two ways of arriving at the constraints. The
+templates in `mock/destinations.ts` survive as the fallback for a destination
+the attraction catalogue does not know, which is the one case neither engine
+can schedule.
 
 ---
 

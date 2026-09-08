@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import type { TravelPreferences } from '../../types/planner.types';
 import type { AppSettings, NotificationSettings } from '../../types/settings.types';
 import { settingsService } from '../../services/settings.service';
 
@@ -57,5 +58,29 @@ export function useSettings() {
     [update],
   );
 
-  return { settings, error, update, setNotification };
+  /**
+   * One planning preference, merged over the rest.
+   *
+   * Sent whole rather than as the single changed field, and that is
+   * deliberate: the two budgets are clearable, so the server distinguishes an
+   * absent key from a null one. Sending the merged object means a null in it
+   * always means "no ceiling" and never "I forgot to mention this".
+   */
+  const setTravel = useCallback(
+    (patch: Partial<TravelPreferences>) => {
+      const current = settingsService.getSettings().travel;
+
+      void update({
+        travel: {
+          ...current,
+          ...patch,
+          categoryWeights: { ...current.categoryWeights, ...patch.categoryWeights },
+          meals: { ...current.meals, ...patch.meals },
+        },
+      });
+    },
+    [update],
+  );
+
+  return { settings, error, update, setNotification, setTravel };
 }

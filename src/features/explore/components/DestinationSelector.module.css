@@ -82,3 +82,50 @@
     flex: 1;
   }
 }
+
+/*
+ * The location shortcut, on its own row under the fields.
+ *
+ * A quiet link rather than a second button: it does the same job as the two
+ * selectors above it, and a filled control beside Explore would read as a
+ * second way to submit the form.
+ */
+.locate {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.locateButton {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--color-primary);
+  font: inherit;
+  font-size: var(--font-xs);
+  font-weight: var(--font-weight-semibold);
+  cursor: pointer;
+}
+
+.locateButton:hover:not(:disabled) {
+  text-decoration: underline;
+}
+
+.locateButton:disabled {
+  color: var(--color-text-muted);
+  cursor: progress;
+}
+
+.locateNote {
+  font-size: var(--font-xs);
+  color: var(--color-text-muted);
+}
+
+.locateError {
+  font-size: var(--font-xs);
+  color: var(--color-danger);
+}
