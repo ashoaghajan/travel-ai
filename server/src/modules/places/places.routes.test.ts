@@ -19,6 +19,7 @@ import { resetPlacesCache } from './places.routes';
 
 const GEONAME = '/api/places/geoname';
 const SEARCH = '/api/places/search';
+const METRO = '/api/places/metro';
 
 /** Declares `fetch`'s parameters so the call log stays typed — several tests
  *  assert on the URL the provider was given. */
@@ -245,5 +246,118 @@ describe('GET /api/places/detail/:xid', () => {
     await api().get(`/api/places/detail/${encodeURIComponent('W311/676978')}`).expect(200);
 
     expect(String(provider.mock.calls[0][0])).toContain('W311%2F676978');
+  });
+});
+
+/**
+ * `GET /api/places/metro` — Overpass, behind the same door as the rest.
+ *
+ * Two upstreams in one request: the destination is geocoded by OpenTripMap and
+ * the stations come from Overpass. What is being pinned down here is that
+ * **every failure of either is an empty list rather than an error**, because
+ * the client turns the rule off for an empty list and would otherwise have to
+ * decide what a 502 means about somebody's preferences.
+ */
+describe('GET /api/places/metro', () => {
+  /** Answers the geocode first, then the Overpass query. */
+  function upstreams(stations: unknown[], geocodeStatus = 200) {
+    return vi.fn(async (url: URL | string) => {
+      const href = String(url);
+
+      if (href.includes('overpass')) {
+        return new Response(JSON.stringify({ elements: stations }), { status: 200 });
+      }
+
+      return new Response(JSON.stringify({ name: 'Tbilisi', lat: 41.7151, lon: 44.7833 }), {
+        status: geocodeStatus,
+      });
+    });
+  }
+
+  it('answers with the stations it found', async () => {
+    vi.stubGlobal(
+      'fetch',
+      upstreams([
+        { lat: 41.72, lon: 44.79, tags: { name: 'Rustaveli' } },
+        { center: { lat: 41.73, lon: 44.8 }, tags: { name: 'Marjanishvili' } },
+      ]),
+    );
+
+    const response = await api().get(METRO).query({ name: 'Tbilisi' }).expect(200);
+
+    expect(response.body.stations).toEqual([
+      { lat: 41.72, lng: 44.79, name: 'Rustaveli' },
+      { lat: 41.73, lng: 44.8, name: 'Marjanishvili' },
+    ]);
+  });
+
+  it('reduces a station mapped as an area to its centre', async () => {
+    vi.stubGlobal('fetch', upstreams([{ center: { lat: 41.73, lon: 44.8 }, tags: {} }]));
+
+    const response = await api().get(METRO).query({ name: 'Tbilisi' }).expect(200);
+
+    expect(response.body.stations).toEqual([{ lat: 41.73, lng: 44.8, name: '' }]);
+  });
+
+  it('drops an element with no point at all', async () => {
+    vi.stubGlobal('fetch', upstreams([{ tags: { name: 'Nowhere' } }]));
+
+    const response = await api().get(METRO).query({ name: 'Tbilisi' }).expect(200);
+
+    expect(response.body.stations).toEqual([]);
+  });
+
+  /* A city with no metro. Not an error, and not distinguishable from one. */
+  it('answers with an empty list rather than a 404', async () => {
+    vi.stubGlobal('fetch', upstreams([]));
+
+    const response = await api().get(METRO).query({ name: 'Batumi' }).expect(200);
+
+    expect(response.body).toEqual({ stations: [] });
+  });
+
+  it('answers with an empty list when the place cannot be geocoded', async () => {
+    vi.stubGlobal('fetch', upstreams([], 404));
+
+    const response = await api().get(METRO).query({ name: 'Nowhere' }).expect(200);
+
+    expect(response.body).toEqual({ stations: [] });
+  });
+
+  it('answers with an empty list when Overpass is down', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: URL | string) => {
+        if (String(url).includes('overpass')) return new Response('', { status: 504 });
+
+        return new Response(JSON.stringify({ name: 'Tbilisi', lat: 41.7151, lon: 44.7833 }), {
+          status: 200,
+        });
+      }),
+    );
+
+    const response = await api().get(METRO).query({ name: 'Tbilisi' }).expect(200);
+
+    expect(response.body).toEqual({ stations: [] });
+  });
+
+  it('asks Overpass once per city', async () => {
+    const provider = upstreams([{ lat: 41.72, lon: 44.79, tags: { name: 'Rustaveli' } }]);
+    vi.stubGlobal('fetch', provider);
+
+    await api().get(METRO).query({ name: 'Tbilisi' }).expect(200);
+    await api().get(METRO).query({ name: 'tbilisi' }).expect(200);
+
+    // Overpass is volunteer-run and keyless. One query per city per day is the
+    // difference between polite use of it and abuse of it.
+    const overpassCalls = provider.mock.calls.filter(([url]) => String(url).includes('overpass'));
+
+    expect(overpassCalls).toHaveLength(1);
+  });
+
+  it('needs a place to look up', async () => {
+    // 422, like every other unparseable query on this server — the schema
+    // refuses it before the route runs.
+    await api().get(METRO).expect(422);
   });
 });

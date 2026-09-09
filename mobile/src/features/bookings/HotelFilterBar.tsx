@@ -1,4 +1,4 @@
-import { Pressable, View } from 'react-native';
+import { Pressable, TextInput, View } from 'react-native';
 import {
   EMPTY_HOTEL_FILTERS,
   HOTEL_SORTS,
@@ -107,6 +107,45 @@ export function HotelFilterBar({
 
   return (
     <View style={{ gap: theme.space.md }}>
+      {/*
+        First and always shown, where the price and rating rows come and go
+        with the results: a stay has a name whether or not anybody has priced
+        or rated it, so this is the one control an unpriced `listing` result
+        still gives the reader.
+
+        It narrows what is already on screen rather than asking the provider
+        again — the catalogue is searched by city and dates, and cannot be
+        asked for a property by name. The label says "these results" for that
+        reason: a name that finds nothing here has not been ruled out of
+        existence, only out of this page.
+      */}
+      <View style={{ gap: theme.space.xs }}>
+        <Text variant="xs" tone="muted" leading="tight">
+          Hotel name
+        </Text>
+        <TextInput
+          value={filters.name ?? ''}
+          onChangeText={(next) => onFiltersChange({ ...filters, name: next === '' ? null : next })}
+          placeholder="Search these results"
+          placeholderTextColor={theme.color.textMuted}
+          autoCorrect={false}
+          autoCapitalize="none"
+          returnKeyType="search"
+          clearButtonMode="while-editing"
+          accessibilityLabel="Search these results by hotel name"
+          style={{
+            borderWidth: 1,
+            borderColor: theme.color.border,
+            borderRadius: theme.radius.md,
+            paddingVertical: theme.space.sm,
+            paddingHorizontal: theme.space.md,
+            color: theme.color.textMain,
+            backgroundColor: theme.color.surface,
+            fontSize: 15,
+          }}
+        />
+      </View>
+
       <ChipRow label="Sort by">
         {HOTEL_SORTS.map((option) => (
           <Chip

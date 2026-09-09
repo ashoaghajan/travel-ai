@@ -32,21 +32,35 @@ export function HotelFilterPanel({
   ratingOptions,
 }: HotelFilterPanelProps) {
   const hasFilters = countActiveFilters(filters) > 0;
-
-  // Neither: an unpriced, unrated list, which is every `listing` result. Said
-  // out loud, because an empty panel reads as a component that failed to load.
-  if (!priceBounds && ratingOptions.length === 0) {
-    return (
-      <Card id={id} padding="lg" elevation="soft" className={styles.panel}>
-        <p className={styles.note}>
-          Nothing to filter on here — these listings carry no prices or ratings of their own.
-        </p>
-      </Card>
-    );
-  }
+  // An unpriced, unrated list — every `listing` result. The name box still
+  // works there, so the panel is no longer empty and no longer returns early.
+  const hasRanges = Boolean(priceBounds) || ratingOptions.length > 0;
 
   return (
     <Card id={id} padding="lg" elevation="soft" className={styles.panel}>
+      {/*
+        First, because it is the one control that always has something to work
+        on: a stay has a name whether or not anybody has priced or rated it.
+
+        `type="search"` for the clear affordance the platform draws itself.
+        Narrowing what is already on screen rather than asking the provider
+        again — the catalogue is searched by city and dates and cannot be asked
+        for a property by name — which is what the hint under it has to say, or
+        an empty result reads as "this hotel does not exist".
+      */}
+      <label className={styles.field}>
+        <span className={styles.label}>Hotel name</span>
+        <input
+          type="search"
+          className={styles.control}
+          placeholder="Search these results"
+          value={filters.name ?? ''}
+          onChange={(event) =>
+            onChange({ ...filters, name: event.target.value === '' ? null : event.target.value })
+          }
+        />
+      </label>
+
       {priceBounds ? (
         <PriceRangeSlider
           bounds={priceBounds}
@@ -86,6 +100,13 @@ export function HotelFilterPanel({
           </select>
         </label>
       ) : null}
+
+      {hasRanges ? null : (
+        <p className={styles.note}>
+          These listings carry no prices or ratings of their own, so the name is all there is to
+          filter on.
+        </p>
+      )}
 
       <div className={styles.actions}>
         <Button

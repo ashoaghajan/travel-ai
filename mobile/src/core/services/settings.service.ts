@@ -39,6 +39,44 @@ export const DEFAULT_SETTINGS: AppSettings = {
   travel: DEFAULT_PREFERENCES,
 };
 
+/**
+ * `HH:MM`, 24-hour — the same times `updateSettingsSchema` will accept.
+ *
+ * The regex is duplicated from the schema rather than imported, because that
+ * module is zod and server-only; this is the one rule of it a client has to
+ * know, and it is three characters of the day.
+ */
+function isTimeOfDay(value: unknown): value is string {
+  return typeof value === 'string' && /^([01]\d|2[0-3]):[0-5]\d$/.test(value);
+}
+
+/**
+ * A budget the API will accept: whole dollars, nothing over a hundred
+ * thousand, or `null` for no ceiling at all.
+ *
+ * Anything else falls back to no ceiling rather than to a number nobody
+ * chose — that is what an unset budget already means, so it is the one answer
+ * here that cannot invent a limit somebody has to discover and undo.
+ */
+function toStoredBudget(value: unknown): number | null {
+  return typeof value === 'number' && Number.isInteger(value) && value >= 0 && value <= 100_000
+    ? value
+    : null;
+}
+
+/**
+ * A radius the API will accept: whole kilometres, 1 to 100, or no limit.
+ *
+ * Zero is not a smaller radius, it is an empty trip, so it is not a value this
+ * cache may hold either — the ladder in the settings screen does not offer it
+ * and the schema refuses it.
+ */
+function toStoredDistanceKm(value: unknown): number | null {
+  return typeof value === 'number' && Number.isInteger(value) && value >= 1 && value <= 100
+    ? value
+    : null;
+}
+
 /** Merges stored values over the defaults so a partial or older record still loads. */
 function withDefaults(stored: Partial<AppSettings> | null): AppSettings {
   return {
@@ -72,6 +110,30 @@ function withDefaults(stored: Partial<AppSettings> | null): AppSettings {
     travel: {
       ...DEFAULT_SETTINGS.travel,
       ...(stored?.travel ?? {}),
+      /*
+       * The two times are validated rather than merged, for the reason the
+       * theme is: a value the API will refuse must not be able to live here.
+       *
+       * This cache is not only written from a server response. `save` writes
+       * the optimistic value before the request, and `setTravel` builds every
+       * later patch by merging over what it reads back — so one rejected time
+       * used to poison the whole `travel` object, and every planning
+       * preference touched afterwards was refused for carrying it. A pace that
+       * would not stay chosen was this, not the pace.
+       */
+      dayStart: isTimeOfDay(stored?.travel?.dayStart)
+        ? stored.travel.dayStart
+        : DEFAULT_SETTINGS.travel.dayStart,
+      dayEnd: isTimeOfDay(stored?.travel?.dayEnd)
+        ? stored.travel.dayEnd
+        : DEFAULT_SETTINGS.travel.dayEnd,
+      // The same guard, on the other two fields a person types freely into.
+      maxActivityPrice: toStoredBudget(stored?.travel?.maxActivityPrice),
+      dailyActivityBudget: toStoredBudget(stored?.travel?.dailyActivityBudget),
+      // And on the two location rules, so neither can strand the section the
+      // way an invalid time once did.
+      maxDistanceFromHotelKm: toStoredDistanceKm(stored?.travel?.maxDistanceFromHotelKm),
+      nearMetroOnly: stored?.travel?.nearMetroOnly === true,
       categoryWeights: {
         ...DEFAULT_SETTINGS.travel.categoryWeights,
         ...(stored?.travel?.categoryWeights ?? {}),

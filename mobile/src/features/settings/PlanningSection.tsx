@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Pressable, Switch, TextInput, View } from 'react-native';
 import type { TravelPreferences } from '../../core/types/planner.types';
 import type { ActivityCategory } from '../../core/types/trip.types';
@@ -38,6 +39,22 @@ const WEIGHTS = [
   { value: 1, label: 'Lots' },
 ];
 
+/**
+ * The radii offered, in whole kilometres, with "no limit" as the first stop.
+ *
+ * Chips rather than a typed number, for the reason `TimeField` exists: the
+ * server accepts 1–100, and anything a box can hold that the server will not
+ * take is a preference that appears to revert. A row of chips cannot be wrong.
+ */
+const DISTANCES: { value: number | null; label: string }[] = [
+  { value: null, label: 'No limit' },
+  { value: 1, label: '1 km' },
+  { value: 2, label: '2 km' },
+  { value: 3, label: '3 km' },
+  { value: 5, label: '5 km' },
+  { value: 10, label: '10 km' },
+];
+
 const PACES: { id: TravelPreferences['pace']; label: string; hint: string }[] = [
   { id: 'relaxed', label: 'Relaxed', hint: 'Two things a day' },
   { id: 'balanced', label: 'Balanced', hint: 'Three things a day' },
@@ -49,12 +66,20 @@ function isTime(value: string): boolean {
   return /^([01]\d|2[0-3]):[0-5]\d$/.test(value);
 }
 
+/** The largest budget the API will store — a typo, past here, is not a budget. */
+const MAX_BUDGET = 100_000;
+
 /**
  * An empty field means "no ceiling", which is null on the wire.
  *
  * Zero is a different and valid answer — free things only — so an empty string
  * must not be coerced with `Number`, which would turn "no limit" into "nothing
  * over $0" and empty the itinerary.
+ *
+ * Held to the ceiling the schema enforces, for the reason `TimeField` holds
+ * the times to theirs: six digits fit in this box and the server refuses
+ * anything over a hundred thousand, so an unclamped one is a 422 that takes
+ * the pace and the weights down with it.
  */
 function toBudget(value: string): number | null {
   const digits = value.replace(/[^0-9]/g, '');
@@ -62,7 +87,7 @@ function toBudget(value: string): number | null {
 
   const parsed = Number.parseInt(digits, 10);
 
-  return Number.isFinite(parsed) ? parsed : null;
+  return Number.isFinite(parsed) ? Math.min(parsed, MAX_BUDGET) : null;
 }
 
 function Field({
@@ -112,6 +137,66 @@ function Field({
   );
 }
 
+/**
+ * A time somebody is part-way through typing.
+ *
+ * The draft is what the box shows; only a complete `HH:MM` is handed up. The
+ * comment below the header has always promised this, and the code did the
+ * opposite — it wrote every keystroke back — which made both time fields
+ * impossible to edit and took the rest of this section down with them.
+ *
+ * The server validates `dayStart` and `dayEnd` against the same regex `isTime`
+ * uses, so every prefix of a time is a 422: "0", "09", "09:" and "09:3" are
+ * all refused. `useSettings` treats a refusal as "this preference was never
+ * stored" and puts the old value back, so the first keystroke bounced. With
+ * `maxLength` at 5 the field cannot be typed into at all — a change has to
+ * start with a deletion, and the deletion is what got rejected.
+ *
+ * And it did not stop at the two boxes. `setTravel` sends the *whole* travel
+ * object, read from a cache that `settingsService.save` writes to before the
+ * request rather than after, so a half-typed hour sat in the cache while its
+ * request was in flight and rode along with whatever was touched next. That is
+ * why choosing a pace came back as refused too: nothing was wrong with the
+ * pace, it was travelling with an invalid time.
+ *
+ * A new `value` from above is adopted — a save landing, or the account's
+ * settings arriving — but it cannot interrupt typing, because while the draft
+ * is not a time nothing has been sent and so nothing can come back.
+ */
+function TimeField({
+  label,
+  value,
+  onCommit,
+}: {
+  label: string;
+  value: string;
+  onCommit: (next: string) => void;
+}) {
+  const [draft, setDraft] = useState(value);
+  const [adopted, setAdopted] = useState(value);
+
+  // Adjusted during render rather than in an effect: an effect would paint the
+  // stale value for a frame first, which on a field somebody is typing into
+  // reads as the keystroke being undone and then redone.
+  if (value !== adopted) {
+    setAdopted(value);
+    setDraft(value);
+  }
+
+  return (
+    <Field
+      label={label}
+      value={draft}
+      maxLength={5}
+      invalid={!isTime(draft)}
+      onChangeText={(next) => {
+        setDraft(next);
+        if (isTime(next)) onCommit(next);
+      }}
+    />
+  );
+}
+
 export function PlanningSection({
   travel,
   onChange,
@@ -131,21 +216,17 @@ export function PlanningSection({
           Written back only when it is a real time, so a half-typed "1" does
           not become the start of somebody's day. The field itself shows what
           was typed either way — rejecting the keystroke would make the box
-          impossible to edit.
+          impossible to edit. See `TimeField`, which is where that happens.
         */}
-        <Field
+        <TimeField
           label="Days start at"
           value={travel.dayStart}
-          maxLength={5}
-          invalid={!isTime(travel.dayStart)}
-          onChangeText={(next) => onChange({ dayStart: next })}
+          onCommit={(next) => onChange({ dayStart: next })}
         />
-        <Field
+        <TimeField
           label="Nothing new after"
           value={travel.dayEnd}
-          maxLength={5}
-          invalid={!isTime(travel.dayEnd)}
-          onChangeText={(next) => onChange({ dayEnd: next })}
+          onCommit={(next) => onChange({ dayEnd: next })}
         />
       </View>
 
@@ -279,6 +360,72 @@ export function PlanningSection({
         In US dollars, per person. Places with no published price are never excluded by a budget —
         most attractions do not publish one.
       </Text>
+
+      <View style={{ gap: theme.space.sm }}>
+        <Text variant="sm" weight="medium">
+          Distance from your hotel
+        </Text>
+
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: theme.space.sm }}>
+          {DISTANCES.map((option) => {
+            const isSelected = travel.maxDistanceFromHotelKm === option.value;
+
+            return (
+              <Pressable
+                key={option.label}
+                onPress={() => onChange({ maxDistanceFromHotelKm: option.value })}
+                accessibilityRole="radio"
+                accessibilityState={{ selected: isSelected }}
+                accessibilityLabel={option.label}
+                style={{
+                  paddingVertical: theme.space.sm,
+                  paddingHorizontal: theme.space.lg,
+                  borderRadius: theme.radius.pill,
+                  borderWidth: 1,
+                  borderColor: isSelected ? theme.color.accent : theme.color.border,
+                  backgroundColor: isSelected ? theme.color.primarySoft : 'transparent',
+                }}
+              >
+                <Text
+                  variant="xs"
+                  weight={isSelected ? 'semibold' : 'regular'}
+                  tone={isSelected ? 'primary' : 'muted'}
+                >
+                  {option.label}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+
+        {/*
+          Which point the radius runs from, said out loud. The planner runs
+          before anything is booked, so this is usually the middle of the city
+          rather than a hotel — and those are different promises.
+        */}
+        <Text variant="xs" tone="muted" leading="snug">
+          Measured from your hotel when you have one booked and not yet attached to a trip, and from
+          the middle of the destination when you do not. Straight-line distance.
+        </Text>
+      </View>
+
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.space.md }}>
+        <View style={{ flex: 1, gap: 2 }}>
+          <Text variant="sm" weight="medium" leading="tight">
+            Only near a metro station
+          </Text>
+          <Text variant="xs" tone="muted" leading="snug">
+            Nothing more than a ten-minute walk from the metro. Ignored where there is no metro,
+            rather than emptying the trip.
+          </Text>
+        </View>
+        <Switch
+          value={travel.nearMetroOnly}
+          onValueChange={(checked) => onChange({ nearMetroOnly: checked })}
+          accessibilityLabel="Only near a metro station"
+          trackColor={{ false: theme.color.surfaceMuted, true: theme.color.primary }}
+        />
+      </View>
 
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.space.md }}>
         <View style={{ flex: 1, gap: 2 }}>

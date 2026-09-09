@@ -5,6 +5,7 @@ import {
   HOTEL_SORTS,
   applyHotelFilters,
   countActiveFilters,
+  matchesHotelName,
   priceBounds,
   priceHandle,
   ratingFilterOptions,
@@ -48,7 +49,7 @@ describe('applyHotelFilters', () => {
   });
 
   it('keeps stays at or under the price cap', () => {
-    const filtered = applyHotelFilters(STAYS, { minPrice: null, maxPrice: 200, minRating: null });
+    const filtered = applyHotelFilters(STAYS, { minPrice: null, maxPrice: 200, minRating: null, name: null });
 
     expect(filtered.every((h) => h.pricePerNight !== null && h.pricePerNight <= 200)).toBe(true);
     expect(names(filtered)).toEqual(['Alaya', 'Ubud Village', 'Element']);
@@ -59,57 +60,58 @@ describe('applyHotelFilters', () => {
       minPrice: null,
       maxPrice: 200,
       minRating: null,
+      name: null,
     });
 
     expect(filtered).toHaveLength(1);
   });
 
   it('drops the stays under a price floor', () => {
-    const filtered = applyHotelFilters(STAYS, { minPrice: 190, maxPrice: null, minRating: null });
+    const filtered = applyHotelFilters(STAYS, { minPrice: 190, maxPrice: null, minRating: null, name: null });
 
     expect(names(filtered)).toEqual(['Komaneka', 'Alaya']);
   });
 
   it('keeps only what falls inside both ends of the range', () => {
-    const filtered = applyHotelFilters(STAYS, { minPrice: 150, maxPrice: 200, minRating: null });
+    const filtered = applyHotelFilters(STAYS, { minPrice: 150, maxPrice: 200, minRating: null, name: null });
 
     expect(names(filtered)).toEqual(['Alaya', 'Ubud Village']);
   });
 
   it('keeps an unpriced stay inside any range', () => {
-    const filtered = applyHotelFilters(LISTINGS, { minPrice: null, maxPrice: 100, minRating: null });
+    const filtered = applyHotelFilters(LISTINGS, { minPrice: null, maxPrice: 100, minRating: null, name: null });
 
     expect(filtered).toHaveLength(2);
   });
 
   it('keeps stays at or above the rating floor', () => {
-    const filtered = applyHotelFilters(STAYS, { minPrice: null, maxPrice: null, minRating: 4.5 });
+    const filtered = applyHotelFilters(STAYS, { minPrice: null, maxPrice: null, minRating: 4.5, name: null });
 
     expect(filtered.every((h) => h.rating >= 4.5)).toBe(true);
     expect(filtered).toHaveLength(3);
   });
 
   it('drops an unrated stay under a rating floor', () => {
-    expect(applyHotelFilters(LISTINGS, { minPrice: null, maxPrice: null, minRating: 3.5 })).toEqual([]);
+    expect(applyHotelFilters(LISTINGS, { minPrice: null, maxPrice: null, minRating: 3.5, name: null })).toEqual([]);
   });
 
   it('applies both filters together', () => {
-    const filtered = applyHotelFilters(STAYS, { minPrice: null, maxPrice: 200, minRating: 4.5 });
+    const filtered = applyHotelFilters(STAYS, { minPrice: null, maxPrice: 200, minRating: 4.5, name: null });
 
     expect(names(filtered)).toEqual(['Alaya', 'Ubud Village']);
   });
 
   it('can filter everything out', () => {
-    expect(applyHotelFilters(STAYS, { minPrice: null, maxPrice: 50, minRating: 4.9 })).toEqual([]);
+    expect(applyHotelFilters(STAYS, { minPrice: null, maxPrice: 50, minRating: 4.9, name: null })).toEqual([]);
   });
 
   it('handles an empty list', () => {
-    expect(applyHotelFilters([], { minPrice: null, maxPrice: 100, minRating: 4 })).toEqual([]);
+    expect(applyHotelFilters([], { minPrice: null, maxPrice: 100, minRating: 4, name: null })).toEqual([]);
   });
 
   it('does not mutate the input', () => {
     const input = [...STAYS];
-    applyHotelFilters(input, { minPrice: null, maxPrice: 150, minRating: null });
+    applyHotelFilters(input, { minPrice: null, maxPrice: 150, minRating: null, name: null });
 
     expect(input).toEqual(STAYS);
   });
@@ -167,6 +169,7 @@ describe('priceBounds', () => {
       minPrice: bounds!.min,
       maxPrice: bounds!.max,
       minRating: null,
+      name: null,
     });
 
     // Handles parked at the ends must not exclude the stays they were drawn
@@ -231,14 +234,24 @@ describe('countActiveFilters', () => {
   });
 
   it('counts each set filter', () => {
-    expect(countActiveFilters({ minPrice: null, maxPrice: 200, minRating: null })).toBe(1);
-    expect(countActiveFilters({ minPrice: null, maxPrice: 200, minRating: 4.5 })).toBe(2);
+    expect(countActiveFilters({ minPrice: null, maxPrice: 200, minRating: null, name: null })).toBe(1);
+    expect(countActiveFilters({ minPrice: null, maxPrice: 200, minRating: 4.5, name: null })).toBe(2);
+  });
+
+  it('counts a name only when it would narrow anything', () => {
+    const filters = { ...EMPTY_HOTEL_FILTERS, name: 'komaneka' };
+
+    expect(countActiveFilters(filters)).toBe(1);
+    // A box holding nothing but what the space bar put there is not a filter,
+    // and badging the toolbar for one would be a count the list cannot explain.
+    expect(countActiveFilters({ ...EMPTY_HOTEL_FILTERS, name: '   ' })).toBe(0);
+    expect(countActiveFilters({ ...EMPTY_HOTEL_FILTERS, name: '' })).toBe(0);
   });
 
   /* One slider, however many of its handles have moved. */
   it('counts a price range once, not once per handle', () => {
-    expect(countActiveFilters({ minPrice: 150, maxPrice: 250, minRating: null })).toBe(1);
-    expect(countActiveFilters({ minPrice: 150, maxPrice: null, minRating: null })).toBe(1);
+    expect(countActiveFilters({ minPrice: 150, maxPrice: 250, minRating: null, name: null })).toBe(1);
+    expect(countActiveFilters({ minPrice: 150, maxPrice: null, minRating: null, name: null })).toBe(1);
   });
 });
 
@@ -250,5 +263,74 @@ describe('sort options', () => {
       'price-high',
       'rating',
     ]);
+  });
+});
+
+/**
+ * Searching the page by name.
+ *
+ * The provider is asked for a city and dates and cannot be asked for a
+ * property, so this narrows the results already in hand — which is why it has
+ * to be forgiving about how a half-remembered name gets typed.
+ */
+describe('matchesHotelName', () => {
+  it('matches part of a name, in any case', () => {
+    expect(matchesHotelName(hotel({ name: 'Komaneka at Bisma' }), 'komaneka')).toBe(true);
+    expect(matchesHotelName(hotel({ name: 'Komaneka at Bisma' }), 'BISMA')).toBe(true);
+    expect(matchesHotelName(hotel({ name: 'Komaneka at Bisma' }), 'alaya')).toBe(false);
+  });
+
+  it('matches words in any order, not one run of characters', () => {
+    // The ordering people actually type when they half remember a name.
+    expect(matchesHotelName(hotel({ name: 'Grand Hotel Tbilisi' }), 'grand tbilisi')).toBe(true);
+    expect(matchesHotelName(hotel({ name: 'Grand Hotel Tbilisi' }), 'tbilisi grand')).toBe(true);
+    expect(matchesHotelName(hotel({ name: 'Grand Hotel Tbilisi' }), 'grand batumi')).toBe(false);
+  });
+
+  it('ignores accents in either direction', () => {
+    expect(matchesHotelName(hotel({ name: 'Hôtel Café Royal' }), 'hotel cafe')).toBe(true);
+    expect(matchesHotelName(hotel({ name: 'Hotel Cafe Royal' }), 'hôtel café')).toBe(true);
+  });
+
+  it('matches everything when nothing was typed', () => {
+    expect(matchesHotelName(hotel(), '')).toBe(true);
+    expect(matchesHotelName(hotel(), '   ')).toBe(true);
+  });
+
+  it('does not match the neighbourhood line under the name', () => {
+    // Offered as "search by name": a box that quietly also matched addresses
+    // returns rows the reader cannot account for.
+    expect(matchesHotelName(hotel({ name: 'Alaya', location: 'Ubud' }), 'ubud')).toBe(false);
+  });
+});
+
+describe('applyHotelFilters, by name', () => {
+  it('keeps only the stays whose names match', () => {
+    const kept = applyHotelFilters(STAYS, { ...EMPTY_HOTEL_FILTERS, name: 'ubud' });
+
+    expect(kept.map((stay) => stay.id)).toEqual(['c']);
+  });
+
+  it('narrows an unpriced listing, which no other filter can', () => {
+    const kept = applyHotelFilters(LISTINGS, { ...EMPTY_HOTEL_FILTERS, name: 'villa' });
+
+    expect(kept.map((stay) => stay.id)).toEqual(['f']);
+  });
+
+  it('leaves the list alone for a blank term', () => {
+    expect(applyHotelFilters(STAYS, { ...EMPTY_HOTEL_FILTERS, name: '  ' })).toHaveLength(
+      STAYS.length,
+    );
+  });
+
+  it('applies alongside the price and rating filters', () => {
+    const kept = applyHotelFilters(STAYS, {
+      ...EMPTY_HOTEL_FILTERS,
+      maxPrice: 200,
+      name: 'a',
+    });
+
+    // Alaya and Ubud Village both hold an "a" and both sit under $200.
+    expect(kept.map((stay) => stay.id)).toEqual(['b', 'c']);
   });
 });

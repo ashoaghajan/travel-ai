@@ -28,6 +28,8 @@ const DEFAULT_TRAVEL = {
   maxActivityPrice: null,
   dailyActivityBudget: null,
   meals: { lunch: true, dinner: true },
+  maxDistanceFromHotelKm: null,
+  nearMetroOnly: false,
 };
 
 const DEFAULTS = {

@@ -163,6 +163,21 @@ model UserSettings {
   lunch  Boolean @default(true)
   dinner Boolean @default(true)
 
+  /// Whole kilometres from where the trip is based. Null for no limit.
+  ///
+  /// The base is the stay booked on the trip, or the destination's centre when
+  /// nothing is booked yet — which is the ordinary case, since the planner
+  /// runs before anybody has booked. Whole kilometres for the same reason the
+  /// budgets are whole dollars: it is a limit somebody picks, not a measurement.
+  maxDistanceFromHotelKm Int?
+
+  /// Whether to plan only places within walking distance of a metro station.
+  ///
+  /// Has no effect in a city whose metro the map does not know, rather than
+  /// emptying the trip — the planner treats "no stations found" as "cannot
+  /// judge" and not as "nothing qualifies".
+  nearMetroOnly Boolean @default(false)
+
   updatedAt DateTime @updatedAt
 }
 

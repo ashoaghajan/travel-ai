@@ -83,6 +83,25 @@ export type ApiTravelPreferences = {
   /** USD per person across one day. Null for no limit. */
   dailyActivityBudget: number | null;
   meals: { lunch: boolean; dinner: boolean };
+  /**
+   * Whole kilometres from where the trip is based. Null for no limit.
+   *
+   * "Based" is the stay booked on the trip when there is one, and the
+   * destination's own centre when there is not — the planner usually runs
+   * before anything is booked, and a rule that did nothing until it was would
+   * be a setting with no effect on the screen that offers it. Which of the two
+   * was used is reported back, because "3 km from your hotel" and "3 km from
+   * the middle of Tbilisi" are different promises.
+   */
+  maxDistanceFromHotelKm: number | null;
+  /**
+   * Whether to plan only places within walking distance of a metro station.
+   *
+   * Ignored in a city with no metro, rather than emptying the trip — see the
+   * planner. A reader who leaves this on and visits somewhere without a metro
+   * has not asked for a trip with nothing in it.
+   */
+  nearMetroOnly: boolean;
 };
 
 export type ApiUser = {

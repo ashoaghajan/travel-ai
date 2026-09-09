@@ -40,6 +40,8 @@ export const DEFAULT_TRAVEL_PREFERENCES: ApiTravelPreferences = {
   maxActivityPrice: null,
   dailyActivityBudget: null,
   meals: { lunch: true, dinner: true },
+  maxDistanceFromHotelKm: null,
+  nearMetroOnly: false,
 };
 
 export const DEFAULT_SETTINGS: ApiSettings = {
@@ -123,6 +125,8 @@ export function toApiSettings(row: UserSettings | null): ApiSettings {
       maxActivityPrice: row.maxActivityPrice,
       dailyActivityBudget: row.dailyActivityBudget,
       meals: { lunch: row.lunch, dinner: row.dinner },
+      maxDistanceFromHotelKm: row.maxDistanceFromHotelKm,
+      nearMetroOnly: row.nearMetroOnly,
     },
   };
 }
@@ -181,6 +185,12 @@ export async function updateSettings(
         lunch: patch.travel?.meals?.lunch ?? current.travel.meals.lunch,
         dinner: patch.travel?.meals?.dinner ?? current.travel.meals.dinner,
       },
+      // Clearable, so it reads presence rather than `??` — see the budgets.
+      maxDistanceFromHotelKm:
+        patch.travel && 'maxDistanceFromHotelKm' in patch.travel
+          ? (patch.travel.maxDistanceFromHotelKm ?? null)
+          : current.travel.maxDistanceFromHotelKm,
+      nearMetroOnly: patch.travel?.nearMetroOnly ?? current.travel.nearMetroOnly,
     },
   };
 
@@ -197,6 +207,8 @@ export async function updateSettings(
     dailyActivityBudget: next.travel.dailyActivityBudget,
     lunch: next.travel.meals.lunch,
     dinner: next.travel.meals.dinner,
+    maxDistanceFromHotelKm: next.travel.maxDistanceFromHotelKm,
+    nearMetroOnly: next.travel.nearMetroOnly,
   };
 
   const row = await prisma.userSettings.upsert({

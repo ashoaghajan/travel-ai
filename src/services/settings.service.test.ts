@@ -302,6 +302,66 @@ describe('travel preferences', () => {
 
     expect(settingsService.getSettings().travel.meals).toEqual({ lunch: true, dinner: false });
   });
+
+  /**
+   * A time the API would refuse must not survive a read.
+   *
+   * The cache holds optimistic values, written before the request that has to
+   * agree with them — so a half-typed "09:" could get in. Every later planning
+   * patch is built by merging over what this returns, and the whole `travel`
+   * object goes up, so leaving one in place meant the next preference touched
+   * was refused for carrying it. That is a pace that will not stay chosen, and
+   * nothing about the pace explains it.
+   */
+  it.each(['', '9:30', '25:00', '09:3', '09:60', null, 42])(
+    'discards a stored day start of %j',
+    (dayStart) => {
+      storageService.set(STORAGE_KEYS.settings, {
+        travel: { ...DEFAULT_SETTINGS.travel, dayStart },
+      });
+
+      expect(settingsService.getSettings().travel.dayStart).toBe(DEFAULT_SETTINGS.travel.dayStart);
+    },
+  );
+
+  it('discards a stored day end that is not a time', () => {
+    storageService.set(STORAGE_KEYS.settings, {
+      travel: { ...DEFAULT_SETTINGS.travel, dayEnd: '18:' },
+    });
+
+    expect(settingsService.getSettings().travel.dayEnd).toBe(DEFAULT_SETTINGS.travel.dayEnd);
+  });
+
+  // Six digits fit in the phone's box and the schema stops at a hundred
+  // thousand, so this one is reachable by typing rather than only by a corrupt
+  // record — and it strands the section in the same way a bad time did.
+  it.each([100_001, -5, 12.5, '250'])('reads a budget of %j as no ceiling', (budget) => {
+    storageService.set(STORAGE_KEYS.settings, {
+      travel: { ...DEFAULT_SETTINGS.travel, maxActivityPrice: budget },
+    });
+
+    expect(settingsService.getSettings().travel.maxActivityPrice).toBeNull();
+  });
+
+  it('keeps a budget the API would accept, zero included', () => {
+    storageService.set(STORAGE_KEYS.settings, {
+      travel: { ...DEFAULT_SETTINGS.travel, maxActivityPrice: 0, dailyActivityBudget: 100_000 },
+    });
+
+    const { maxActivityPrice, dailyActivityBudget } = settingsService.getSettings().travel;
+
+    expect([maxActivityPrice, dailyActivityBudget]).toEqual([0, 100_000]);
+  });
+
+  it('keeps the times somebody actually chose', () => {
+    storageService.set(STORAGE_KEYS.settings, {
+      travel: { ...DEFAULT_SETTINGS.travel, dayStart: '07:00', dayEnd: '23:59' },
+    });
+
+    const { dayStart, dayEnd } = settingsService.getSettings().travel;
+
+    expect([dayStart, dayEnd]).toEqual(['07:00', '23:59']);
+  });
 });
 
 /**

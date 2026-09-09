@@ -51,7 +51,7 @@
   }
 }
 
-/* Said in place of the controls when a listing carries neither figure. */
+/* Said under the name box when a listing carries neither figure. */
 .note {
   margin: 0;
   font-size: var(--font-sm);

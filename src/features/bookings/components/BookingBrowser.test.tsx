@@ -401,10 +401,14 @@ describe('BookingBrowser stays', () => {
 
   /*
    * An unpriced, unrated `listing` result — the ordinary state for a city the
-   * rate provider has never heard of. Neither filter can divide it, so neither
-   * is offered rather than both being offered and doing nothing.
+   * rate provider has never heard of. Neither figure can divide it, so neither
+   * control is offered rather than both being offered and doing nothing.
+   *
+   * The name box is the exception and always stands: a stay has a name whether
+   * or not anybody priced it, so this is the one result where searching by
+   * name is the only way to narrow anything at all.
    */
-  it('offers no filter controls for listings that carry no figures', async () => {
+  it('offers only the name search for listings that carry no figures', async () => {
     renderStays([
       stay('l1', 'Guest house Umbrella', null, 0),
       stay('l2', 'Hotel Villa Tiflisi', null, 0),
@@ -416,6 +420,22 @@ describe('BookingBrowser stays', () => {
 
     expect(screen.queryByRole('slider', { name: /price per night/i })).not.toBeInTheDocument();
     expect(screen.queryByRole('combobox', { name: /minimum rating/i })).not.toBeInTheDocument();
-    expect(screen.getByText(/nothing to filter on here/i)).toBeInTheDocument();
+    expect(screen.getByRole('searchbox', { name: /hotel name/i })).toBeInTheDocument();
+    expect(screen.getByText(/no prices or ratings of their own/i)).toBeInTheDocument();
+  });
+
+  it('narrows the stays to the one whose name was typed', async () => {
+    renderStays([
+      stay('l1', 'Guest house Umbrella', null, 0),
+      stay('l2', 'Hotel Villa Tiflisi', null, 0),
+    ]);
+
+    await screen.findByText('Guest house Umbrella');
+    await userEvent.click(screen.getByRole('button', { name: /filter/i }));
+
+    await userEvent.type(screen.getByRole('searchbox', { name: /hotel name/i }), 'villa');
+
+    expect(screen.getByText('Hotel Villa Tiflisi')).toBeInTheDocument();
+    expect(screen.queryByText('Guest house Umbrella')).not.toBeInTheDocument();
   });
 });

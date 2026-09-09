@@ -46,6 +46,25 @@ function weightLabel(weight: number): string {
   return WEIGHT_LABELS[Math.round(weight * 4)] ?? WEIGHT_LABELS[2];
 }
 
+/**
+ * The radii offered, in whole kilometres, plus "no limit" as the first stop.
+ *
+ * A ladder rather than a typed number, and that is a considered choice: the
+ * server takes 1–100, so a typed box has a rejectable range, and a rejected
+ * value here is a preference that silently reverts. A ladder cannot be wrong.
+ *
+ * The stops are the distances somebody would actually mean — a 20-minute walk,
+ * a short ride, most of a city — rather than an even scale.
+ */
+const DISTANCE_OPTIONS: { value: number | null; label: string }[] = [
+  { value: null, label: 'No limit' },
+  { value: 1, label: '1 km' },
+  { value: 2, label: '2 km' },
+  { value: 3, label: '3 km' },
+  { value: 5, label: '5 km' },
+  { value: 10, label: '10 km' },
+];
+
 const PACES: { id: TravelPreferences['pace']; label: string; hint: string }[] = [
   { id: 'relaxed', label: 'Relaxed', hint: 'Two things a day' },
   { id: 'balanced', label: 'Balanced', hint: 'Three things a day' },
@@ -212,6 +231,49 @@ export function PlanningSection({ travel, onChange }: PlanningSectionProps) {
         In US dollars, per person. Places with no published price are never excluded by a budget —
         most attractions do not publish one.
       </p>
+
+      <fieldset className={styles.fieldset}>
+        <legend className={styles.fieldLabel}>Distance from your hotel</legend>
+        <div className={styles.segmented}>
+          {DISTANCE_OPTIONS.map((option) => (
+            <label
+              key={option.label}
+              className={styles.segment}
+              data-checked={travel.maxDistanceFromHotelKm === option.value}
+            >
+              <input
+                type="radio"
+                name="maxDistanceFromHotelKm"
+                className="visually-hidden"
+                value={option.value ?? ''}
+                checked={travel.maxDistanceFromHotelKm === option.value}
+                onChange={() => onChange({ maxDistanceFromHotelKm: option.value })}
+              />
+              <span className={styles.segmentLabel}>{option.label}</span>
+            </label>
+          ))}
+        </div>
+      </fieldset>
+
+      {/*
+        Which point the radius is measured from, said out loud.
+        
+        The planner runs before anything is booked, so most of the time this is
+        the middle of the city rather than a hotel — and "3 km from your hotel"
+        and "3 km from the middle of Tbilisi" are different promises. A reader
+        who is not told which one they got cannot make sense of what came back.
+      */}
+      <p className={styles.note}>
+        Measured from your hotel when you have one booked and not yet attached to a trip, and from
+        the middle of the destination when you do not. Straight-line distance.
+      </p>
+
+      <Switch
+        label="Only near a metro station"
+        description="Plan nothing more than a ten-minute walk from the metro. Ignored where there is no metro, rather than emptying the trip."
+        checked={travel.nearMetroOnly}
+        onChange={(checked) => onChange({ nearMetroOnly: checked })}
+      />
 
       <Switch
         label="Plan a lunch"

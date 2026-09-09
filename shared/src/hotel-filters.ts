@@ -45,12 +45,26 @@ export type HotelFilters = {
   maxPrice: number | null;
   /** Minimum rating out of 5, or null for any. */
   minRating: number | null;
+  /**
+   * Part of a stay's name, or null for no name filter.
+   *
+   * A view of the page already fetched, like every other filter here — not a
+   * new search. The provider searches by city and dates and cannot be asked
+   * for a property by name, so this narrows what came back. That is worth
+   * saying on screen, because a reader who cannot find their hotel needs to
+   * know whether it is absent from the list or absent from the catalogue.
+   *
+   * Null and "   " mean the same thing to every function below. The box is
+   * allowed to hold a space somebody is in the middle of typing.
+   */
+  name: string | null;
 };
 
 export const EMPTY_HOTEL_FILTERS: HotelFilters = {
   minPrice: null,
   maxPrice: null,
   minRating: null,
+  name: null,
 };
 
 /**
@@ -72,8 +86,46 @@ export const MIN_RATING_OPTIONS = [3.5, 4, 4.5] as const;
 export function countActiveFilters(filters: HotelFilters): number {
   const price = filters.minPrice !== null || filters.maxPrice !== null ? 1 : 0;
   const rating = filters.minRating !== null ? 1 : 0;
+  // Whitespace narrows nothing, so it does not count as a filter either.
+  const name = filters.name?.trim() ? 1 : 0;
 
-  return price + rating;
+  return price + rating + name;
+}
+
+/**
+ * A name, folded for comparison.
+ *
+ * Lowercased and stripped of diacritics: somebody typing "cafe" means the
+ * "Café" in the list and somebody typing "Estacio" means "Estació". Splitting
+ * with `NFD` and deleting the combining marks does that without a table of
+ * substitutions to keep up to date.
+ */
+function fold(value: string): string {
+  return value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
+}
+
+/**
+ * Every word typed, somewhere in the name, in any order.
+ *
+ * Tokens rather than one substring, because that is how a half-remembered
+ * name gets typed: "grand tbilisi" should find "Grand Hotel Tbilisi", and as
+ * one substring it finds nothing. The name only — not the neighbourhood line
+ * under it — since this is offered as "search by name" and a box that quietly
+ * also matched addresses would return rows the reader cannot account for.
+ *
+ * An empty or whitespace-only term matches everything, which is what makes
+ * clearing the box identical to never having typed in it.
+ */
+export function matchesHotelName(hotel: Hotel, term: string): boolean {
+  const tokens = fold(term).split(/\s+/).filter(Boolean);
+  if (tokens.length === 0) return true;
+
+  const name = fold(hotel.name);
+
+  return tokens.every((token) => name.includes(token));
 }
 
 /**
@@ -190,6 +242,9 @@ export function applyHotelFilters(hotels: Hotel[], filters: HotelFilters): Hotel
       if (filters.maxPrice !== null && pricePerNight > filters.maxPrice) return false;
     }
     if (filters.minRating !== null && hotel.rating < filters.minRating) return false;
+    // Truthiness rather than a null check: an empty box is not a filter, and
+    // neither is a record written before this field existed.
+    if (filters.name && !matchesHotelName(hotel, filters.name)) return false;
 
     return true;
   });

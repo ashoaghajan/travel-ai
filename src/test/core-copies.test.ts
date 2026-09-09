@@ -55,6 +55,7 @@ const IDENTICAL: [string, string][] = [
     'flight',
     'hotel',
     'settings',
+    'metro',
     'rates',
     'timezone',
     'currentCityAirport',
@@ -65,6 +66,9 @@ const IDENTICAL: [string, string][] = [
     ],
   ),
   ['src/services/booking.migration.ts', 'mobile/src/core/services/booking.migration.ts'],
+  // The impure half of the two location rules: which hotel, and where the
+  // metro is. Platform-free — it composes three services and no UI.
+  ['src/services/planning.context.ts', 'mobile/src/core/services/planning.context.ts'],
   // Not a `.service.ts`: it makes no requests. The pool is fetched by its
   // caller, which is what leaves this side pure and identical on both clients.
   ['src/services/itinerary.planner.ts', 'mobile/src/core/services/itinerary.planner.ts'],

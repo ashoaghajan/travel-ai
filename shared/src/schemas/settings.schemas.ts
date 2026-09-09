@@ -88,6 +88,16 @@ export const updateSettingsSchema = z.object({
       meals: z
         .object({ lunch: z.boolean().optional(), dinner: z.boolean().optional() })
         .optional(),
+      /*
+       * Whole kilometres, and clearable for the same reason the budgets are:
+       * "no limit" is a state somebody chooses after setting one.
+       *
+       * Floored at 1 rather than 0. A zero-kilometre radius admits nothing but
+       * the hotel itself, so it is not a narrower preference than one — it is
+       * an empty trip, and no control offers it.
+       */
+      maxDistanceFromHotelKm: z.number().int().min(1).max(100).nullable().optional(),
+      nearMetroOnly: z.boolean().optional(),
     })
     .optional(),
 });

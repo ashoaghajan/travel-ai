@@ -487,3 +487,144 @@ describe('planItinerary', () => {
     expect(days[0].summary).toMatch(/ and 3 more$/);
   });
 });
+
+/**
+ * The two location rules.
+ *
+ * Both are filters that remove places, and both are written to stop applying
+ * whenever they cannot judge — a missing base, a missing station list, a place
+ * with no coordinates. These are the tests of that stance, because the failure
+ * it prevents is silent: a rule that excludes on an absence produces an empty
+ * pool, and an empty pool is a template trip that honours no preference at all.
+ */
+describe('planItinerary, by distance from the base', () => {
+  /** Roughly 4 km north of `CENTRE` — 0.036° of latitude is about 4 km. */
+  const FAR = { lat: 38.746, lng: -9.14 };
+
+  const near = pool(4, { category: 'culture' });
+  const far = pool(4, { category: 'nature' }).map((place) => ({ ...place, coordinates: FAR }));
+
+  function dayTitles(days: ReturnType<typeof planItinerary>): string[] {
+    return days.flatMap((day) => day.activities.map((entry) => entry.title));
+  }
+
+  it('drops the places outside the radius', () => {
+    const days = planItinerary(
+      brief({ preferences: preferences({ maxDistanceFromHotelKm: 2 }) }),
+      [...near, ...far],
+      { base: { coordinates: CENTRE, source: 'centre' } },
+    );
+
+    const titles = dayTitles(days);
+
+    expect(titles.length).toBeGreaterThan(0);
+    expect(titles.every((title) => title.startsWith('Place culture'))).toBe(true);
+  });
+
+  it('keeps them when the radius reaches', () => {
+    const days = planItinerary(
+      brief({ preferences: preferences({ maxDistanceFromHotelKm: 10 }) }),
+      far,
+      { base: { coordinates: CENTRE, source: 'centre' } },
+    );
+
+    expect(dayTitles(days).length).toBeGreaterThan(0);
+  });
+
+  /* A base that could not be resolved is not evidence that anything is far. */
+  it('does nothing when no base was found', () => {
+    const days = planItinerary(
+      brief({ preferences: preferences({ maxDistanceFromHotelKm: 1 }) }),
+      far,
+      {},
+    );
+
+    expect(dayTitles(days).length).toBeGreaterThan(0);
+  });
+
+  it('keeps a place the catalogue gave no point for', () => {
+    const unplaced = pool(4, { category: 'culture' }).map((place) => ({
+      ...place,
+      coordinates: undefined,
+    }));
+
+    const days = planItinerary(
+      brief({ preferences: preferences({ maxDistanceFromHotelKm: 1 }) }),
+      unplaced,
+      { base: { coordinates: CENTRE, source: 'centre' } },
+    );
+
+    expect(dayTitles(days).length).toBeGreaterThan(0);
+  });
+
+  it('is off when no radius was set, however far away things are', () => {
+    const days = planItinerary(brief(), far, {
+      base: { coordinates: CENTRE, source: 'centre' },
+    });
+
+    expect(dayTitles(days).length).toBeGreaterThan(0);
+  });
+});
+
+describe('planItinerary, near a metro station', () => {
+  /** About 300 m from `CENTRE`: inside the ten-minute walk. */
+  const STATION = { lat: 38.7127, lng: -9.14 };
+  /** About 4 km away: outside it. */
+  const FAR_STATION = { lat: 38.746, lng: -9.14 };
+
+  function dayTitles(days: ReturnType<typeof planItinerary>): string[] {
+    return days.flatMap((day) => day.activities.map((entry) => entry.title));
+  }
+
+  it('keeps what is within walking distance of a station', () => {
+    const days = planItinerary(
+      brief({ preferences: preferences({ nearMetroOnly: true }) }),
+      pool(4),
+      { metroStations: [STATION] },
+    );
+
+    expect(dayTitles(days).length).toBeGreaterThan(0);
+  });
+
+  it('drops what is not', () => {
+    const days = planItinerary(
+      brief({ preferences: preferences({ nearMetroOnly: true }) }),
+      pool(4),
+      { metroStations: [FAR_STATION] },
+    );
+
+    expect(dayTitles(days)).toEqual([]);
+  });
+
+  /*
+   * The important one. An empty list is a city with no metro, a city whose
+   * metro is unmapped, and a request that failed — and reading any of those as
+   * "nothing here qualifies" would hand back an empty trip for a preference
+   * about convenience.
+   */
+  it('does not apply when there are no stations to measure against', () => {
+    const days = planItinerary(
+      brief({ preferences: preferences({ nearMetroOnly: true }) }),
+      pool(4),
+      { metroStations: [] },
+    );
+
+    expect(dayTitles(days).length).toBeGreaterThan(0);
+  });
+
+  it('does not apply when the lookup was never made', () => {
+    const days = planItinerary(
+      brief({ preferences: preferences({ nearMetroOnly: true }) }),
+      pool(4),
+      {},
+    );
+
+    expect(dayTitles(days).length).toBeGreaterThan(0);
+  });
+
+  it('is off unless the preference is on', () => {
+    const days = planItinerary(brief(), pool(4), { metroStations: [FAR_STATION] });
+
+    expect(dayTitles(days).length).toBeGreaterThan(0);
+  });
+});

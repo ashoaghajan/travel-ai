@@ -12,6 +12,7 @@ import { createId } from '../utils/id';
 import { coverImage } from '../utils/itineraryImages';
 import { activityService } from './activity.service';
 import { DEFAULT_PREFERENCES, planItinerary } from './itinerary.planner';
+import { resolvePlanningContext } from './planning.context';
 
 /**
  * The planner that needs no model.
@@ -354,7 +355,12 @@ async function planFromRealPlaces(
     return null;
   }
 
-  const itinerary = planItinerary(brief, pool);
+  /*
+   * The two location rules need looking up before the scheduler can apply
+   * them — where the trip is based, and where the metro stops. Both are no-ops
+   * and cost nothing when their preference is off, which is the default.
+   */
+  const itinerary = planItinerary(brief, pool, await resolvePlanningContext(brief));
   if (itinerary.length === 0) return null;
 
   // A trip whose days are all empty is not a trip. It happens when the pool

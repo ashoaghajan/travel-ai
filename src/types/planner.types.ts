@@ -81,6 +81,29 @@ export type TravelPreferences = {
   dailyActivityBudget: number | null;
   /** Whether to hold time open for a meal, and look for somewhere to eat. */
   meals: { lunch: boolean; dinner: boolean };
+  /**
+   * How far from the trip's base a place may be, in whole kilometres. Null for
+   * no limit.
+   *
+   * **The base is the hotel when there is one and the city centre when there
+   * is not**, which is the case the planner usually runs in — a trip is
+   * generated before anything is booked. The setting is offered in the
+   * reader's terms ("from your hotel") and the screen says which of the two it
+   * will measure from, because those are two different promises.
+   *
+   * Straight-line, not walking distance. The scheduler already measures its
+   * transfers that way (`distanceKm`), and a rule that disagreed with the
+   * timings beside it would be the more confusing of the two.
+   */
+  maxDistanceFromHotelKm: number | null;
+  /**
+   * Whether to plan only places within walking distance of a metro station.
+   *
+   * Inert where there is no metro to be near — see `isNearMetro`. Somebody who
+   * leaves this on and goes to a city without a metro has not asked for an
+   * empty trip.
+   */
+  nearMetroOnly: boolean;
 };
 
 /**

@@ -61,7 +61,47 @@ export const DEFAULT_PREFERENCES: TravelPreferences = {
   maxActivityPrice: null,
   dailyActivityBudget: null,
   meals: { lunch: true, dinner: true },
+  maxDistanceFromHotelKm: null,
+  nearMetroOnly: false,
 };
+
+/**
+ * What the trip is being planned *around*, beyond the brief.
+ *
+ * Separate from `TripBrief` because none of it is a constraint somebody
+ * stated: it is what the caller managed to look up. Both fields are optional
+ * and both absences mean the same thing — the rule that needs it cannot be
+ * applied, so it is not applied. That is deliberate throughout this file: a
+ * lookup that failed must not quietly become a preference that excludes.
+ */
+export type PlanningContext = {
+  /**
+   * Where the trip is based, and which of the two it turned out to be.
+   *
+   * `stay` when a booked hotel was found and placed, `centre` when the
+   * destination's own coordinates stood in for one. The caller resolves it,
+   * because it involves the bookings and the geocoder and this file is pure.
+   */
+  base?: { coordinates: LatLng; source: 'stay' | 'centre' };
+  /**
+   * Metro and subway stations near the destination.
+   *
+   * Empty for a city with no metro, and empty when the lookup failed — which
+   * this file cannot tell apart and does not try to. Either way there is
+   * nothing to measure against, so `nearMetroOnly` stops applying.
+   */
+  metroStations?: LatLng[];
+};
+
+/**
+ * How far somebody will walk to a metro station, in kilometres.
+ *
+ * 800 m is the figure transit planning uses for the catchment of a station,
+ * and it is about ten minutes on foot. Straight-line, like every other
+ * distance here, so it is a little generous against the street grid — which is
+ * the right direction to be wrong in for a filter that removes things.
+ */
+const METRO_WALK_KM = 0.8;
 
 /** Sightseeing stops per day, meals excluded — they are held open separately. */
 const PACE_STOPS: Record<TravelPreferences['pace'], number> = {
@@ -172,6 +212,49 @@ function isAffordable(activity: Activity, preferences: TravelPreferences): boole
   if (price === null || preferences.maxActivityPrice === null) return true;
 
   return price <= preferences.maxActivityPrice;
+}
+
+/**
+ * Close enough to where the trip is based.
+ *
+ * Three ways to pass, and all three are the same rule as `isAffordable`'s: a
+ * filter only judges the rows it can judge. No ceiling set, no base found, or
+ * a place the catalogue gave no point for — none of those is evidence that
+ * this place is too far, and excluding on an absence is how a preference turns
+ * into an empty screen nobody can account for.
+ */
+function isNearBase(
+  activity: Activity,
+  preferences: TravelPreferences,
+  base: PlanningContext['base'],
+): boolean {
+  const limit = preferences.maxDistanceFromHotelKm;
+
+  if (limit === null || !base || !activity.coordinates) return true;
+
+  return distanceKm(base.coordinates, activity.coordinates) <= limit;
+}
+
+/**
+ * Within walking distance of a station.
+ *
+ * **An empty station list turns the rule off rather than emptying the trip**,
+ * and that is the important line here. The list is empty for a city with no
+ * metro and for a lookup that failed, and this file cannot tell those apart —
+ * but the answer is the same for both, because "we could not find any
+ * stations" is not the same statement as "nothing here is near one", and only
+ * the second would justify returning nothing.
+ */
+function isNearMetro(
+  activity: Activity,
+  preferences: TravelPreferences,
+  stations: LatLng[],
+): boolean {
+  if (!preferences.nearMetroOnly || stations.length === 0 || !activity.coordinates) return true;
+
+  const point = activity.coordinates;
+
+  return stations.some((station) => distanceKm(station, point) <= METRO_WALK_KM);
 }
 
 /**
@@ -421,25 +504,47 @@ function summarise(entries: ItineraryActivity[], destination: string): string {
  * Days for a brief, drawn from a pool of real places.
  *
  * Returns an empty array when nothing in the pool survives the preferences —
- * a destination the attraction API knows nothing about, or a reader who has
- * ruled out every category. The caller decides what that means; `mockAi`
- * treats it as "fall back to the templates", which is the honest answer,
- * because a trip with no days in it is not a trip.
+ * a destination the attraction API knows nothing about, a reader who has ruled
+ * out every category, or a radius with nothing inside it. The caller decides
+ * what that means; `mockAi` treats it as "fall back to the templates", which
+ * is the honest answer, because a trip with no days in it is not a trip.
+ *
+ * That fallback is worth knowing about when reading the two location rules: a
+ * radius nothing falls inside does not produce a short trip, it produces a
+ * template one, which is a trip that honours none of these preferences. It is
+ * the behaviour every over-narrow preference has always had here, and the
+ * reason both rules are written to stop applying rather than to exclude
+ * whenever they are unsure.
  *
  * No place is used twice across the trip. That is the one global constraint
  * here, and it is why days get quieter as a short pool runs out rather than
  * repeating Tuesday on Thursday.
  */
-export function planItinerary(brief: TripBrief, pool: Activity[]): ItineraryDay[] {
+export function planItinerary(
+  brief: TripBrief,
+  pool: Activity[],
+  context: PlanningContext = {},
+): ItineraryDay[] {
   const preferences = brief.preferences;
   const start = fromIsoDate(brief.startDate);
   const days = Math.max(1, Math.floor(brief.days));
+  const stations = context.metroStations ?? [];
 
   if (minutesOf(preferences.dayEnd) <= minutesOf(preferences.dayStart)) return [];
 
   const candidates: Candidate[] = pool
     .filter((activity) => (preferences.categoryWeights[activity.category] ?? 0) > 0)
     .filter((activity) => isAffordable(activity, preferences))
+    /*
+     * The two location rules, before scoring rather than as a penalty inside
+     * it. Both are things somebody said they will not do — walk four
+     * kilometres, or reach a place without a metro — and a weight can always
+     * be outvoted by a good rating, which is exactly what a stated limit must
+     * not be. `isAffordable` draws its cliff in the same place and for the
+     * same reason.
+     */
+    .filter((activity) => isNearBase(activity, preferences, context.base))
+    .filter((activity) => isNearMetro(activity, preferences, stations))
     .map((activity) => ({ activity, score: scoreActivity(activity, preferences) }))
     .sort(byScoreThenId);
 
