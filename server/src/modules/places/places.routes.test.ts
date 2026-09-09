@@ -274,6 +274,17 @@ describe('GET /api/places/metro', () => {
     });
   }
 
+  /** Every Overpass instance refusing, with the geocode still working. */
+  function downEverywhere() {
+    return vi.fn(async (url: URL | string) => {
+      if (String(url).includes('overpass')) return new Response('', { status: 504 });
+
+      return new Response(JSON.stringify({ name: 'Tbilisi', lat: 41.7151, lon: 44.7833 }), {
+        status: 200,
+      });
+    });
+  }
+
   it('answers with the stations it found', async () => {
     vi.stubGlobal(
       'fetch',
@@ -324,21 +335,37 @@ describe('GET /api/places/metro', () => {
     expect(response.body).toEqual({ stations: [] });
   });
 
-  it('answers with an empty list when Overpass is down', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(async (url: URL | string) => {
-        if (String(url).includes('overpass')) return new Response('', { status: 504 });
-
-        return new Response(JSON.stringify({ name: 'Tbilisi', lat: 41.7151, lon: 44.7833 }), {
-          status: 200,
-        });
-      }),
-    );
+  it('answers with an empty list when every Overpass instance is down', async () => {
+    vi.stubGlobal('fetch', downEverywhere());
 
     const response = await api().get(METRO).query({ name: 'Tbilisi' }).expect(200);
 
     expect(response.body).toEqual({ stations: [] });
+  });
+
+  /*
+   * The regression this exists for, found in production rather than here.
+   * Overpass declines requests from cloud addresses, so the first deploy
+   * answered `[]` for Paris — and the 24-hour cache then made that answer
+   * permanent until the process restarted. A failure is not a fact about a
+   * city and must not be stored as one.
+   */
+  it('does not cache a failure', async () => {
+    vi.stubGlobal('fetch', downEverywhere());
+    await api().get(METRO).query({ name: 'Tbilisi' }).expect(200);
+
+    vi.stubGlobal('fetch', upstreams([{ lat: 41.72, lon: 44.79, tags: { name: 'Rustaveli' } }]));
+    const response = await api().get(METRO).query({ name: 'Tbilisi' }).expect(200);
+
+    expect(response.body.stations).toHaveLength(1);
+  });
+
+  it('does not let a browser hold a failure either', async () => {
+    vi.stubGlobal('fetch', downEverywhere());
+
+    const response = await api().get(METRO).query({ name: 'Tbilisi' }).expect(200);
+
+    expect(response.headers['cache-control']).toBe('no-store');
   });
 
   it('asks Overpass once per city', async () => {

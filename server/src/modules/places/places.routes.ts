@@ -197,14 +197,31 @@ placesRouter.get('/places/metro', async (request: Request, response: Response) =
    * anybody, and there is no useful difference between "we do not know where
    * that is" and "we found no stations there" at the point where the answer
    * is used.
+   *
+   * `null` is the third case and the one that must not be flattened into the
+   * other two: nobody could be asked. It reaches the caller as an empty list
+   * all the same — the rule fails open either way — but it is not written to
+   * the cache, and it is not offered to a browser to hold.
    */
-  let stations: MetroStation[] = [];
+  let stations: MetroStation[] | null = null;
 
   try {
     const place = await findDestination(query.name, query.country);
     stations = await fetchMetroStations(place.lat, place.lon);
   } catch {
-    stations = [];
+    stations = null;
+  }
+
+  /*
+   * Caching a failure here would be a day of a preference silently doing
+   * nothing, which is precisely what the first deploy of this did: Overpass
+   * declines requests from cloud addresses, every city answered `[]`, and a
+   * 24-hour cache made each of those answers permanent until a restart.
+   */
+  if (stations === null) {
+    response.set('Cache-Control', 'no-store');
+    response.json({ stations: [] });
+    return;
   }
 
   metros.set(key, stations);

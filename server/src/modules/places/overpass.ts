@@ -17,13 +17,31 @@
  * What it costs is care about traffic. Overpass is volunteer-run and its usage
  * policy asks for modest, identified use, so this is server-side, behind a
  * long cache, asked once per city rather than once per trip, and given a
- * timeout it will actually honour. A failure here is never fatal: the caller
- * gets an empty list, and an empty list is what turns the rule off.
+ * timeout it will actually honour. A failure here is never fatal: it comes
+ * back as `null`, which the route declines to cache and the planner reads as
+ * "cannot judge" — see `fetchMetroStations`.
  *
  * API: https://wiki.openstreetmap.org/wiki/Overpass_API
  */
 
-const BASE_URL = 'https://overpass-api.de/api/interpreter';
+/**
+ * One instance, and the mirrors are deliberately not here.
+ *
+ * They were added when this answered nothing from Render and everything from
+ * a laptop, on the theory that the main instance blocks cloud addresses. Then
+ * they were measured, and the theory did not survive the measurement:
+ * `overpass.kumi.systems` answers in **74 seconds** off data six weeks stale,
+ * and `overpass.private.coffee` answers 504. Against a 20-second budget
+ * neither can ever win, so a fallback list only spends another 40 seconds of
+ * somebody's trip before failing anyway.
+ *
+ * `overpass-api.de` itself answers the same query in **1.2 seconds** with
+ * current data. So the fix for a failure here is not a second address; it is
+ * finding out what the first one said, which is why `null` now travels all the
+ * way out as `Cache-Control: no-store` — a failing lookup is visible from
+ * outside instead of looking like a city with no metro.
+ */
+const INSTANCE = 'https://overpass-api.de/api/interpreter';
 
 /**
  * Longer than the other providers get, because Overpass is genuinely slower:
@@ -114,21 +132,20 @@ function pointOf(element: OverpassElement): { lat: number; lng: number } | null 
 }
 
 /**
- * Metro stations within reach of a point.
+ * Asked once.
  *
- * **Never throws.** Every failure — the network, a timeout, a rate limit, a
- * body that is not what was expected — comes back as an empty array, because
- * the one thing this must not do is turn "we could not ask" into "there are
- * none", which the planner would read as "nothing qualifies" and answer with
- * an empty trip. The caller cannot tell a city with no metro from a request
- * that failed, and deliberately does not need to.
+ * `null` means the question could not be put — a refusal, a timeout, a body
+ * that made no sense. `[]` means it was put and answered with nothing, which
+ * is a real fact about a city. Keeping those apart is the whole point of this
+ * function, and the bug that produced it: a first deploy that could not reach
+ * Overpass at all reported every city as having no metro.
  */
-export async function fetchMetroStations(lat: number, lon: number): Promise<MetroStation[]> {
+async function askOverpass(lat: number, lon: number): Promise<MetroStation[] | null> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 
   try {
-    const response = await fetch(BASE_URL, {
+    const response = await fetch(INSTANCE, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
@@ -138,14 +155,14 @@ export async function fetchMetroStations(lat: number, lon: number): Promise<Metr
       signal: controller.signal,
     });
 
-    if (!response.ok) return [];
+    if (!response.ok) return null;
 
     const body = (await response.json()) as { elements?: OverpassElement[] };
-    const elements = Array.isArray(body.elements) ? body.elements : [];
+    if (!Array.isArray(body.elements)) return null;
 
     const stations: MetroStation[] = [];
 
-    for (const element of elements) {
+    for (const element of body.elements) {
       const point = pointOf(element);
       if (!point) continue;
 
@@ -155,8 +172,29 @@ export async function fetchMetroStations(lat: number, lon: number): Promise<Metr
 
     return stations;
   } catch {
-    return [];
+    return null;
   } finally {
     clearTimeout(timer);
   }
+}
+
+/**
+ * Metro stations within reach of a point.
+ *
+ * **Never throws, and never conflates its two empty answers.** `[]` is a city
+ * that has no metro, or none that anyone has mapped. `null` is every instance
+ * declining to answer — and the caller must cache those differently, because
+ * a day-long cache of a failure is a day of a preference quietly doing
+ * nothing. That distinction was learned in production: the first deploy of
+ * this answered `[]` for Paris, which has three hundred stations.
+ *
+ * The planner still treats both as "cannot judge" and stops filtering. That is
+ * right there and wrong here: a rule must fail open, and a cache must not
+ * remember a failure as a fact.
+ */
+export async function fetchMetroStations(
+  lat: number,
+  lon: number,
+): Promise<MetroStation[] | null> {
+  return askOverpass(lat, lon);
 }
