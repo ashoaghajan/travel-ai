@@ -57,6 +57,7 @@ const IDENTICAL: [string, string][] = [
     'settings',
     'rates',
     'timezone',
+    'currentCityAirport',
   ].map(
     (name): [string, string] => [
       `src/services/${name}.service.ts`,
@@ -81,6 +82,7 @@ const IDENTICAL: [string, string][] = [
     (name): [string, string] => [`src/mock/${name}.ts`, `mobile/src/core/mock/${name}.ts`],
   ),
   ['src/hooks/useCurrentUser.ts', 'mobile/src/core/hooks/useCurrentUser.ts'],
+  ['src/hooks/useFlightOrigin.ts', 'mobile/src/core/hooks/useFlightOrigin.ts'],
   ...['booking', 'bytes', 'currency', 'cx', 'date', 'duration', 'flag', 'intent', 'map', 'trip'].map(
     (name): [string, string] => [`src/utils/${name}.ts`, `mobile/src/core/utils/${name}.ts`],
   ),

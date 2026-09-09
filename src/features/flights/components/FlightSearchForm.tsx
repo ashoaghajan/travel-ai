@@ -8,6 +8,7 @@ import { Tabs } from '../../../components/common/Tabs';
 import { ArrowRightIcon } from '../../../components/common/icons';
 import type { FlightSearchQuery, TripType } from '../../../types/travel.types';
 import { AirportField } from './AirportField';
+import { useFlightOrigin } from '../../../hooks/useFlightOrigin';
 import styles from './FlightSearchForm.module.css';
 
 /** DESIGN_SPEC Screen 4 trip type tabs. */
@@ -21,6 +22,8 @@ const MAX_TRAVELLERS = 6;
 
 export type FlightSearchFormProps = {
   initialQuery: FlightSearchQuery;
+  useCurrentLocation?: boolean;
+  onOriginDefaulted?: (code: string) => void;
   isSearching?: boolean;
   onSearch: (query: FlightSearchQuery) => void;
   /** The submit button's label. The booking screen updates a trip, not a search. */
@@ -36,6 +39,8 @@ export type FlightSearchFormProps = {
  */
 export function FlightSearchForm({
   initialQuery,
+  useCurrentLocation = false,
+  onOriginDefaulted,
   isSearching = false,
   onSearch,
   submitLabel = 'Search Flights',
@@ -43,7 +48,9 @@ export function FlightSearchForm({
   className,
 }: FlightSearchFormProps) {
   const [tripType, setTripType] = useState<TripType>(initialQuery.tripType);
-  const [from, setFrom] = useState(initialQuery.from);
+  const { from, changeFrom: setFrom, keepOrigin } = useFlightOrigin(
+    initialQuery.from, useCurrentLocation, onOriginDefaulted,
+  );
   const [to, setTo] = useState(initialQuery.to);
   const [departDate, setDepartDate] = useState(initialQuery.departDate);
   const [returnDate, setReturnDate] = useState(initialQuery.returnDate ?? initialQuery.departDate);
@@ -60,6 +67,7 @@ export function FlightSearchForm({
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    keepOrigin();
 
     if (from === to) {
       setError('Choose two different airports.');
@@ -94,7 +102,7 @@ export function FlightSearchForm({
 
       <form className={styles.form} onSubmit={handleSubmit}>
         <div className={styles.route}>
-          <AirportField label="From" value={from} onChange={setFrom} />
+          <AirportField label="From" value={from} onChange={setFrom} onFocus={keepOrigin} />
 
           <IconButton
             variant="surface"

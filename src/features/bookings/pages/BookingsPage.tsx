@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { PageHeader } from '../../../components/layout/PageHeader';
 import { EmptyState } from '../../../components/common/EmptyState';
@@ -106,6 +106,9 @@ export function BookingsPage() {
   }
 
   const context = useMemo(() => toBookingContext(query), [query]);
+  const defaultOrigin = useCallback((from: string) => {
+    setQuery((current) => ({ ...current, from }));
+  }, []);
   const summary = describeBookingContext(context);
 
   // A list: a round-trip fare is two flights, and each becomes its own booking.
@@ -201,6 +204,8 @@ export function BookingsPage() {
         <FlightSearchForm
           key={filledTripId ?? 'no-trip'}
           initialQuery={query}
+          useCurrentLocation
+          onOriginDefaulted={defaultOrigin}
           onSearch={updateSearch}
           submitLabel="Update search"
           submitBusyLabel="Updating…"

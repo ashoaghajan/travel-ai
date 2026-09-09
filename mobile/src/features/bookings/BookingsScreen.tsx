@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { FlatList, Modal, Pressable, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -128,6 +128,9 @@ export function BookingsScreen() {
   }
 
   const edited = useMemo(() => toBookingContext(query), [query]);
+  const defaultOrigin = useCallback((from: string) => {
+    setQuery((current) => ({ ...current, from }));
+  }, []);
 
   /*
    * The arrival airport a trip implies, when nothing has named one. Returns
@@ -313,6 +316,7 @@ export function BookingsScreen() {
       <BookingSearchForm
         key={filledTripId ?? 'no-trip'}
         initialQuery={query}
+        onOriginDefaulted={defaultOrigin}
         onSearch={updateSearch}
       />
 

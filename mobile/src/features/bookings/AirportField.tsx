@@ -27,11 +27,13 @@ export function AirportField({
   label,
   value,
   onChange,
+  onFocus,
 }: {
   label: string;
   /** The selected IATA code. */
   value: string;
   onChange: (code: string) => void;
+  onFocus?: () => void;
 }) {
   const theme = useTheme();
 
@@ -104,7 +106,10 @@ export function AirportField({
         onChangeText={setDraft}
         // Clearing on focus rather than selecting-all: the reader who taps this
         // field is replacing the airport, not appending to its name.
-        onFocus={() => setDraft('')}
+        onFocus={() => {
+          onFocus?.();
+          setDraft('');
+        }}
         placeholder="City or airport"
         placeholderTextColor={theme.color.textMuted}
         accessibilityLabel={label}

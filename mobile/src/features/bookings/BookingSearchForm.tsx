@@ -7,6 +7,7 @@ import { Text } from '../../components/Text';
 import { ArrowRightIcon } from '../../components/icons';
 import { useTheme } from '../../theme/useTheme';
 import { AirportField } from './AirportField';
+import { useFlightOrigin } from '../../core/hooks/useFlightOrigin';
 
 /** DESIGN_SPEC Screen 4 trip type tabs — the web's list, in its order. */
 const TRIP_TYPES = [
@@ -33,6 +34,7 @@ function isCalendarDate(value: string): boolean {
 
 export type BookingSearchFormProps = {
   initialQuery: FlightSearchQuery;
+  onOriginDefaulted?: (code: string) => void;
   onSearch: (query: FlightSearchQuery) => void;
   isSearching?: boolean;
   submitLabel?: string;
@@ -70,6 +72,7 @@ export type BookingSearchFormProps = {
  */
 export function BookingSearchForm({
   initialQuery,
+  onOriginDefaulted,
   onSearch,
   isSearching = false,
   submitLabel = 'Update search',
@@ -78,7 +81,9 @@ export function BookingSearchForm({
   const theme = useTheme();
 
   const [tripType, setTripType] = useState<TripType>(initialQuery.tripType);
-  const [from, setFrom] = useState(initialQuery.from);
+  const { from, changeFrom: setFrom, keepOrigin } = useFlightOrigin(
+    initialQuery.from, true, onOriginDefaulted,
+  );
   const [to, setTo] = useState(initialQuery.to);
   const [departDate, setDepartDate] = useState(initialQuery.departDate);
   const [returnDate, setReturnDate] = useState(initialQuery.returnDate ?? initialQuery.departDate);
@@ -112,6 +117,7 @@ export function BookingSearchForm({
   }
 
   function handleSubmit() {
+    keepOrigin();
     if (!from || !to) {
       setError('Choose where you are flying from and to.');
       return;
@@ -190,7 +196,7 @@ export function BookingSearchForm({
           swap between them. Each is a search field with a result list under it,
           and two of those in a 180pt column would be unusable.
         */}
-        <AirportField label="From" value={from} onChange={edited(setFrom)} />
+        <AirportField label="From" value={from} onChange={edited(setFrom)} onFocus={keepOrigin} />
 
         <Pressable
           onPress={swapAirports}

@@ -62,7 +62,7 @@ function Bubble({ message, onSave, saving, savedId }: {
           paddingVertical: theme.space.md,
         }}
       >
-        <Text variant="sm" tone={mine ? 'light' : 'main'} leading="base">
+        <Text variant="sm" tone={mine ? 'onPrimary' : 'main'} leading="base">
           {message.content}
         </Text>
       </View>
@@ -320,9 +320,9 @@ export function PlannerScreen() {
             }}
           >
             {isStop ? (
-              <StopIcon size={18} color={theme.color.textLight} />
+              <StopIcon size={18} color={theme.color.onPrimary} />
             ) : (
-              <ArrowUpIcon size={20} color={theme.color.textLight} />
+              <ArrowUpIcon size={20} color={theme.color.onPrimary} />
             )}
           </TouchableOpacity>
         </View>

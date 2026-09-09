@@ -12,6 +12,7 @@ export type AirportFieldProps = {
   /** The selected IATA code. */
   value: string;
   onChange: (code: string) => void;
+  onFocus?: () => void;
   className?: string;
 };
 
@@ -26,7 +27,7 @@ export type AirportFieldProps = {
  * behaviour that matters is a text input, a listbox, and arrow keys, and the
  * project has no combobox dependency to justify adding one for this.
  */
-export function AirportField({ label, value, onChange, className }: AirportFieldProps) {
+export function AirportField({ label, value, onChange, onFocus, className }: AirportFieldProps) {
   const id = useId();
   const [query, setQuery] = useState('');
   const [options, setOptions] = useState<Airport[]>([]);
@@ -151,7 +152,10 @@ export function AirportField({ label, value, onChange, className }: AirportField
         autoComplete="off"
         value={display}
         placeholder="City or airport"
-        onFocus={() => setIsOpen(true)}
+        onFocus={() => {
+          onFocus?.();
+          setIsOpen(true);
+        }}
         onChange={(event) => {
           setIsOpen(true);
           setQuery(event.target.value);

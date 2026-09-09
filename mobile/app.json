@@ -2,7 +2,7 @@
   "expo": {
     "name": "AI Travel",
     "slug": "ai-travel",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
@@ -54,7 +54,7 @@
       [
         "expo-location",
         {
-          "locationWhenInUsePermission": "AI Travel uses your location to open the explorer on the city you are already in, instead of asking you to pick a country and a city first. It is read while you have the app open, and the coordinates are never stored.",
+          "locationWhenInUsePermission": "AI Travel uses your location to show nearby places in Explore and prefill your departure city in Bookings. It is read while you have the app open, and the coordinates are never stored.",
           "isIosBackgroundLocationEnabled": false,
           "isAndroidBackgroundLocationEnabled": false,
           "isAndroidForegroundServiceEnabled": false
