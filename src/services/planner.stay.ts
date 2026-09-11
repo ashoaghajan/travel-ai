@@ -242,6 +242,37 @@ export async function advanceStay(pending: PendingStay, answer: string): Promise
 }
 
 /**
+ * A verb that plans something, beside a noun that is a trip.
+ *
+ * Both halves are required, and that is the whole design. A hotel name can
+ * easily contain one — Holiday Inn, Trip Inn, Vacation Club are all real — and
+ * mistaking one for a request to plan would throw away a question the reader
+ * was busy answering. Neither pattern alone is safe; together they have no
+ * plausible reading as the name of a building.
+ */
+const PLANS_SOMETHING = /\b(?:plan|create|make|build|organi[sz]e|book|arrange)\b/i;
+const A_TRIP = /\b(?:trip|itinerary|holiday|vacation|getaway|weekend|days?|nights?)\b/i;
+
+/**
+ * Whether this is somebody asking for a trip rather than answering the question.
+ *
+ * The stay flow takes the next thing typed as its answer, which is right for
+ * "Rooms Hotel" and wrong for "create a new trip in Tbilisi from 14 to 18 of
+ * September" — that went to the hotel lookup in full and came back "I could
+ * not find 'create a new trip in Tbilisi from 14 to 18 of September' on the
+ * map", which is a planner arguing with somebody who has simply moved on.
+ *
+ * Deliberately narrow. The cost of reading a trip request as a hotel is a
+ * dead end the reader has to back out of; the cost of reading a hotel as a
+ * trip request is a question abandoned and a radius quietly measured from the
+ * middle of a city. The second is the worse of the two, so this only fires on
+ * a sentence that cannot be a building.
+ */
+export function asksForATripInstead(text: string): boolean {
+  return PLANS_SOMETHING.test(text) && A_TRIP.test(text);
+}
+
+/**
  * A candidate picked from the list.
  *
  * Returns null rather than throwing on an id that is not in the list, which is

@@ -9,7 +9,12 @@ import type {
 import type { TripDraft } from '../../core/types/trip.types';
 import { PlannerError, plannerService } from '../../core/services/planner.service';
 import type { PlannerHandlers } from '../../core/services/planner.service';
-import { advanceStay, pickStay, rejectStayCandidates } from '../../core/services/planner.stay';
+import {
+  advanceStay,
+  asksForATripInstead,
+  pickStay,
+  rejectStayCandidates,
+} from '../../core/services/planner.stay';
 import type { StayStep } from '../../core/services/planner.stay';
 import { chatService } from '../../core/services/chat.service';
 import { settingsService } from '../../core/services/settings.service';
@@ -314,11 +319,22 @@ export function usePlanner() {
        * question and typed something else is answering it — but one who
        * answered it already has moved on, and the question is cleared as it is
        * consumed so it cannot catch a later sentence.
+       *
+       * **Unless they have plainly asked for a different trip.** Then the
+       * question is abandoned rather than answered: sending "create a new trip
+       * in Tbilisi from 14 to 18 of September" to the hotel lookup produced "I
+       * could not find 'create a new trip in Tbilisi from 14 to 18 of
+       * September' on the map", which is a planner arguing with somebody who
+       * has moved on. The new prompt asks its own stay question, so nothing is
+       * lost by dropping this one.
        */
-      const waiting = previous.at(-1)?.pendingStay;
+      const pending = previous.at(-1)?.pendingStay;
+      const waiting = pending && !asksForATripInstead(trimmed) ? pending : undefined;
 
       const base: PlannerMessage[] = [
-        ...(waiting ? previous.map(withoutPendingStay) : previous),
+        // Retired either way: a question that has been answered and one that
+        // has been walked away from are both finished with.
+        ...(pending ? previous.map(withoutPendingStay) : previous),
         { id: createId('message'), author: 'user', content: trimmed },
       ];
 

@@ -101,28 +101,75 @@ beforeAll(async () => {
 beforeEach(async () => {
   const { prisma } = await import('../prisma');
 
-  // Children first — the foreign keys are enforced.
-  await prisma.refreshToken.deleteMany();
-  await prisma.authIdentity.deleteMany();
-  // Before `user`, which would cascade to them anyway. Explicit because the
-  // pointer runs the other way too: `User.activeTripId` references a trip, and
-  // clearing trips first lets that go null rather than relying on the order
-  // two cascades happen to fire in.
-  await prisma.chatHistory.deleteMany();
-  await prisma.directMessage.deleteMany();
-  // After the messages that point at them, before the trips they point at.
-  await prisma.tripShare.deleteMany();
-  await prisma.friendship.deleteMany();
-  await prisma.conversationRead.deleteMany();
-  await prisma.recentSearch.deleteMany();
-  await prisma.savedActivity.deleteMany();
-  await prisma.booking.deleteMany();
-  await prisma.userSettings.deleteMany();
-  await prisma.trip.deleteMany();
-  await prisma.user.deleteMany();
+  /*
+   * One round trip rather than fourteen.
+   *
+   * The statements and their order are unchanged — the foreign keys are
+   * enforced, so the order is load-bearing — but they travel together now.
+   * Before every one of 596 tests, fourteen sequential awaits is eight
+   * thousand round trips a run spends waiting rather than working.
+   *
+   * `TRUNCATE ... CASCADE` was tried here and is deliberately not what this
+   * does: it needs no ordering and no list, but it is file-level work with a
+   * sync behind it, and on tables holding a handful of rows it measured more
+   * than twice as slow across the suite as the deletes it replaced.
+   */
+  await prisma.$transaction([
+    // Children first — the foreign keys are enforced.
+    prisma.refreshToken.deleteMany(),
+    prisma.authIdentity.deleteMany(),
+    // Before `user`, which would cascade to them anyway. Explicit because the
+    // pointer runs the other way too: `User.activeTripId` references a trip,
+    // and clearing trips first lets that go null rather than relying on the
+    // order two cascades happen to fire in.
+    prisma.chatHistory.deleteMany(),
+    prisma.directMessage.deleteMany(),
+    // After the messages that point at them, before the trips they point at.
+    prisma.tripShare.deleteMany(),
+    prisma.friendship.deleteMany(),
+    prisma.conversationRead.deleteMany(),
+    prisma.recentSearch.deleteMany(),
+    prisma.savedActivity.deleteMany(),
+    prisma.booking.deleteMany(),
+    prisma.userSettings.deleteMany(),
+    prisma.trip.deleteMany(),
+    prisma.user.deleteMany(),
+  ]);
+
+  /*
+   * The throttles, put back where every suite but one expects them.
+   *
+   * In `beforeEach` rather than in each file's `afterEach`, and that is the
+   * whole point: an `afterEach` does not run when a test times out, so a
+   * single slow test in `rate-limit.test.ts` — the one suite that switches
+   * throttling *on* for itself — used to leave it on for every file after it.
+   * What that looks like is nothing like its cause: three later suites fail
+   * asserting 422 and get 429, in modules nobody has touched.
+   *
+   * Cleaning up before rather than after means a leak costs the test that
+   * caused it and nothing else.
+   */
+  process.env.DISABLE_RATE_LIMIT = '1';
+
+  const [auth, messages, planner, speech, travel] = await Promise.all([
+    import('../modules/auth/rate-limit'),
+    import('../modules/messages/messages.routes'),
+    import('../modules/planner/planner.routes'),
+    import('../modules/speech/speech.routes'),
+    import('../modules/travel/travel.routes'),
+  ]);
+
+  auth.resetRateLimits();
+  messages.resetMessagesRateLimit();
+  planner.resetPlannerRateLimit();
+  speech.resetSpeechRateLimit();
+  travel.resetTravelRateLimit();
 });
 
 afterAll(async () => {
+  const { closeApi } = await import('./harness');
+  await closeApi();
+
   const { prisma } = await import('../prisma');
   await prisma.$disconnect();
 

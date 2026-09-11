@@ -1,7 +1,14 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { PendingStay, StayResume } from '../types/planner.types';
 import * as stays from './stay.service';
-import { advanceStay, beginStay, pickStay, readStayAnswer, rejectStayCandidates } from './planner.stay';
+import {
+  advanceStay,
+  asksForATripInstead,
+  beginStay,
+  pickStay,
+  readStayAnswer,
+  rejectStayCandidates,
+} from './planner.stay';
 
 /**
  * The conversation that finds out where somebody is staying.
@@ -193,6 +200,55 @@ describe('advanceStay', () => {
 
     // Nothing was looked up: a refusal is an answer, not a query.
     expect(search).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * Telling "answering the question" from "asking for something else".
+ *
+ * The flow takes the next thing typed as its answer, which is right for a
+ * hotel name and wrong for a fresh trip request — that one went to the lookup
+ * in full and came back "I could not find 'create a new trip in Tbilisi from
+ * 14 to 18 of September' on the map".
+ *
+ * The asymmetry is the point. Reading a trip request as a hotel is a dead end
+ * somebody has to back out of; reading a hotel as a trip request abandons a
+ * question and measures the radius from the middle of a city without saying
+ * so. The second is worse, so this only fires on a sentence that has no
+ * plausible reading as the name of a building.
+ */
+describe('asksForATripInstead', () => {
+  it('recognises somebody asking for a different trip', () => {
+    for (const said of [
+      'create a new trip in Tbilisi from 14 to 18 of September',
+      'plan 5 days in Tbilisi',
+      'book a trip to Rome',
+      'make me an itinerary for Porto',
+    ]) {
+      expect(asksForATripInstead(said)).toBe(true);
+    }
+  });
+
+  it('leaves a hotel name alone, planning words and all', () => {
+    // Every one of these is a real chain or property. A verb *or* a trip noun
+    // on its own is not enough to abandon a question somebody is answering —
+    // which is why both are required.
+    for (const said of [
+      'Rooms Hotel',
+      'Holiday Inn Express Tbilisi',
+      'Trip Inn Hotel',
+      'Vacation Club Batumi',
+      'The Plan Hotel',
+      'Hotel Weekend',
+      'Radisson Blu Iveria',
+    ]) {
+      expect(asksForATripInstead(said)).toBe(false);
+    }
+  });
+
+  it('leaves an address and a refusal alone', () => {
+    expect(asksForATripInstead('38a Revaz Tabukashvili Street, Tbilisi')).toBe(false);
+    expect(asksForATripInstead('not sure')).toBe(false);
   });
 });
 

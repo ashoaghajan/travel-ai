@@ -29,9 +29,14 @@ export default defineConfig({
      *
      * argon2 is expensive on purpose — that is the entire point of it — and
      * these suites run dozens of hashes each. At the default, a loaded machine
-     * intermittently times a test out, and a timed-out test skips its
-     * `afterEach`, which can leave the rate limiter switched on for the next
-     * file. The slowness is by design; the timeout was simply mis-sized.
+     * intermittently times a test out. The slowness is by design; the timeout
+     * was simply mis-sized.
+     *
+     * A timed-out test still skips its `afterEach`, and that used to leave the
+     * throttles switched on for every file after it — three later suites
+     * failing on 429 where they asserted 422, in modules nobody had touched.
+     * `setup.ts` now resets them in a `beforeEach`, which runs whether or not
+     * the previous test finished, so one slow test costs one failure.
      */
     testTimeout: 30_000,
     coverage: {

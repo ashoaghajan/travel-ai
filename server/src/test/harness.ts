@@ -1,10 +1,52 @@
 import request from 'supertest';
 import type { Response } from 'supertest';
+import type { Server } from 'node:http';
 import { createApp } from '../app';
 import { REFRESH_COOKIE } from '../modules/auth/cookies';
 
-/** The app, mounted in-process — no port, no listener, no teardown. */
-export const api = () => request(createApp());
+/**
+ * One app, listening once, for the whole file.
+ *
+ * This used to be `request(createApp())`, which reads as though it mounts the
+ * app in-process with no listener. It does not: handed an Express app rather
+ * than a server, supertest calls `listen(0)` itself — so **every request built
+ * a fresh app and bound a fresh ephemeral port**. Across the suite that is
+ * some thousands of listeners opened and closed inside ninety seconds, and on
+ * macOS a closed socket sits in `TIME_WAIT` for two minutes afterwards.
+ *
+ * What that produced was the flake nobody could pin down: a single test
+ * failing per run, in a different module each time, with `ECONNRESET` or a
+ * thirty-second hang on a request that does nothing. Not a logic error in any
+ * of the modules it landed in — the machine had simply run out of sockets to
+ * lend, and which request was unlucky was a matter of timing.
+ *
+ * Reusing one listener is the whole fix. A client connection per request
+ * remains, which is how supertest works, but the bind-and-teardown per request
+ * is gone. Building the app once is safe because nothing reads configuration
+ * at construction: `env()` is called inside the handlers, which is what lets a
+ * suite change the environment between two requests to the same app.
+ */
+let server: Server | null = null;
+
+export const api = () => {
+  server ??= createApp().listen(0);
+
+  return request(server);
+};
+
+/**
+ * Hands the port back at the end of the file.
+ *
+ * Called from the global `afterAll`, so no suite has to remember. A listener
+ * left open would keep the worker alive and hold the port past the run.
+ */
+export async function closeApi(): Promise<void> {
+  const closing = server;
+  if (!closing) return;
+
+  server = null;
+  await new Promise<void>((resolve) => closing.close(() => resolve()));
+}
 
 export const VALID_PASSWORD = 'correct-horse-battery';
 
