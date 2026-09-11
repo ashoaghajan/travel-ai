@@ -8,7 +8,7 @@ import {
   type LngLatBounds,
   type StyleSpecification,
 } from '@maplibre/maplibre-react-native';
-import type { Trip } from '../../core/types/trip.types';
+import type { LatLng, Trip } from '../../core/types/trip.types';
 import { groupItineraryStops } from '../../core/utils/trip';
 import { boundsOf, isDegenerate, isPlottable } from '../../core/utils/map';
 import { Card } from '../../components/Card';
@@ -62,7 +62,47 @@ const OSM_STYLE: StyleSpecification = {
 /** A little air around the route, so pins are not flush against the edge. */
 const BOUNDS_PADDING = 48;
 
-export function TripRouteMap({ trip }: { trip: Trip }) {
+/**
+ * Somewhere booked, rather than a stop on the route.
+ *
+ * Kept apart from the numbered stops for the reason the web keeps them apart:
+ * these are not steps in an order. They carry a colour rather than a number
+ * and never join the line, which would otherwise claim the reader travels from
+ * a museum to their hotel and back between every pair of days.
+ *
+ * Without these the map was the route and nothing else — and since
+ * `groupItineraryStops` collapses consecutive days in one city into a single
+ * stop, a five-day trip to Tbilisi drew exactly **one** pin. Every attraction
+ * on it is a booking (`createFromItinerary` files the schedule as bookings the
+ * moment a trip is saved), so all of them were on the web's map and none were
+ * here.
+ */
+export type RoutePlaceKind = 'hotel' | 'activity' | 'ticket' | 'airport';
+
+export type RoutePlace = {
+  id: string;
+  label: string;
+  coordinates: LatLng;
+  kind: RoutePlaceKind;
+};
+
+/**
+ * One colour per kind, so a glance separates where you sleep from what you see.
+ *
+ * Colour rather than the web's inline SVG glyphs: those are drawn into a
+ * Leaflet `divIcon` as markup, which has no equivalent here. A `ViewAnnotation`
+ * is a real view, so it gets the same treatment every other small indicator in
+ * this app gets — a filled dot in a token colour, sized well below the
+ * numbered stops so the route stays the thing you read first.
+ */
+const PLACE_COLOURS = (theme: ReturnType<typeof useTheme>): Record<RoutePlaceKind, string> => ({
+  hotel: theme.color.accent,
+  activity: theme.color.success,
+  ticket: theme.color.success,
+  airport: theme.color.danger,
+});
+
+export function TripRouteMap({ trip, places = [] }: { trip: Trip; places?: RoutePlace[] }) {
   const theme = useTheme();
 
   const stops = groupItineraryStops(trip.itinerary);
@@ -76,7 +116,8 @@ export function TripRouteMap({ trip }: { trip: Trip }) {
    * could be placed is the honest version, and it is the same sentence the web
    * shows under its map.
    */
-  if (placed.length === 0) {
+  // A trip whose only plottable things are its bookings still gets a real map.
+  if (placed.length === 0 && places.length === 0) {
     return (
       <Card padding="lg" elevation="soft">
         <Text variant="sm" weight="semibold" leading="tight">
@@ -90,7 +131,15 @@ export function TripRouteMap({ trip }: { trip: Trip }) {
   }
 
   const points = placed.map((stop) => stop.coordinates);
-  const bounds = boundsOf(points);
+
+  /*
+   * Framed against everything that will be drawn, not just the route.
+   *
+   * A hotel or an attraction outside the stops' own box would sit off-screen
+   * on first paint, which reads as a missing pin rather than as a camera that
+   * has not been told about it.
+   */
+  const bounds = boundsOf([...points, ...places.map((place) => place.coordinates)]);
 
   /*
    * One stop, or several so close together the box has no area, cannot be
@@ -166,6 +215,25 @@ export function TripRouteMap({ trip }: { trip: Trip }) {
               />
             </GeoJSONSource>
           ) : null}
+
+          {places.map((place) => (
+            <ViewAnnotation
+              key={place.id}
+              id={`place-${place.id}`}
+              lngLat={[place.coordinates.lng, place.coordinates.lat]}
+            >
+              <View
+                style={{
+                  width: 18,
+                  height: 18,
+                  borderRadius: 9,
+                  backgroundColor: PLACE_COLOURS(theme)[place.kind],
+                  borderWidth: 2,
+                  borderColor: theme.color.textLight,
+                }}
+              />
+            </ViewAnnotation>
+          ))}
 
           {placed.map((stop, index) => (
             <ViewAnnotation

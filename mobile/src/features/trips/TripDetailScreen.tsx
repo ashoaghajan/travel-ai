@@ -14,6 +14,8 @@ import { useTheme } from '../../theme/useTheme';
 import { EditableDay } from './EditableDay';
 import { TripEditFields } from './TripEditFields';
 import { TripRouteMap } from './TripRouteMap';
+import type { RoutePlace } from './TripRouteMap';
+import { useBookingCoordinates } from './useBookingCoordinates';
 import { useEditTrip } from './useEditTrip';
 import { describeCalendarTarget, useCalendarExport } from './useCalendarExport';
 import { useTripBookings } from '../../core/store/booking.store';
@@ -161,6 +163,39 @@ function TripView({ trip }: { trip: Trip }) {
   const bookings = useTripBookings(trip.id);
   const calendar = useCalendarExport();
 
+  /*
+   * Where the trip's bookings are, for the map.
+   *
+   * Every attraction on a planned trip is a booking — `createFromItinerary`
+   * files the schedule as bookings the moment the trip is saved — so without
+   * this the map drew only the route, and `groupItineraryStops` collapses
+   * consecutive days in one city into a single stop. A five-day trip to
+   * Tbilisi was one pin, where the web showed every museum on it.
+   */
+  const bookedPlaces = useBookingCoordinates(
+    bookings,
+    trip.destinationCountry ?? null,
+    trip.destinationCity ?? trip.destination ?? null,
+  );
+
+  const placeMarkers: RoutePlace[] = [
+    ...bookedPlaces.located.map((booking) => ({
+      id: booking.id,
+      label: booking.label,
+      coordinates: booking.coordinates,
+      // A ticket has no colour of its own; it borrows the activity's.
+      kind: booking.kind === 'hotel' ? ('hotel' as const) : ('activity' as const),
+    })),
+    // The airports the trip's flights run between, deduped by code — a return
+    // trip names the same pair twice.
+    ...bookedPlaces.airports.map((airport) => ({
+      id: `airport-${airport.code}`,
+      label: airport.label,
+      coordinates: airport.coordinates,
+      kind: 'airport' as const,
+    })),
+  ];
+
   function leaveEditing() {
     edit.cancel();
     setIsEditing(false);
@@ -247,7 +282,7 @@ function TripView({ trip }: { trip: Trip }) {
         the draft would redraw the route on every keystroke in a date field,
         and a half-typed date has no coordinates to draw.
       */}
-      <TripRouteMap trip={trip} />
+      <TripRouteMap trip={trip} places={placeMarkers} />
 
       {isEditing ? (
         <TripEditFields
