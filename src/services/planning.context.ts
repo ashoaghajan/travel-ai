@@ -1,10 +1,11 @@
 import type { Booking } from '../types/booking.types';
 import type { PlanningContext } from './itinerary.planner';
 import type { TripBrief } from '../types/planner.types';
+import type { LatLng } from '../types/trip.types';
 import { bookingService } from './booking.service';
-import { distanceKm } from './itinerary.planner';
 import { geocodeService } from './geocode.service';
 import { getMetroStations } from './metro.service';
+import { findStays } from './stay.service';
 
 /**
  * What the two location rules need looked up before a trip can be planned.
@@ -18,20 +19,6 @@ import { getMetroStations } from './metro.service';
  * network, and the planner behaves exactly as it did before either rule
  * existed.
  */
-
-/**
- * How far from the city a booked stay may be and still be *this* trip's hotel.
- *
- * A stay is matched to a destination by geocoding its name, and a name is a
- * weak key: "Grand Hotel" is a hotel in most countries. Without this check, a
- * Paris booking somebody has not yet attached to a trip could become the
- * centre of a Tokyo itinerary and quietly exclude all of Tokyo from it.
- *
- * Sixty kilometres rather than something tighter, because a legitimate stay
- * can be well outside the middle: an airport hotel, a resort along the coast,
- * a village somebody is using as a base.
- */
-const MAX_STAY_FROM_CENTRE_KM = 60;
 
 /**
  * The stay a trip to this destination would be based in.
@@ -107,25 +94,84 @@ async function loadBookings(): Promise<Booking[]> {
 }
 
 /**
+ * A hotel name turned into a point, or null.
+ *
+ * Through `findStays` rather than `geocodeService`, and the difference is the
+ * reason the booked-stay path never really worked: `geocodeService` is
+ * OpenTripMap's *geoname* lookup, which resolves cities. It knows Tbilisi and
+ * has never heard of a hotel in it, so every stay it was asked to place came
+ * back either as nothing or as a town with a similar name.
+ *
+ * The first match is taken, because there is nobody to ask here — this path
+ * runs for a booking the reader did not mention and is not looking at. When
+ * somebody *is* in front of the question they are shown the list and pick,
+ * which is what `planner.stay.ts` exists to do and why the answer arrives as
+ * `hotelLocation` rather than as a name to look up again.
+ *
+ * The city is passed down so the lookup is bounded to it: "Grand Hotel" is a
+ * hotel in forty countries, and without that bound one of them becomes the
+ * middle of somebody's trip. See `MAX_STAY_FROM_CENTRE_KM`, which is the same
+ * figure the route applies.
+ */
+async function locateStay(name: string, destination: string): Promise<LatLng | null> {
+  const trimmed = name.trim();
+  if (!trimmed) return null;
+
+  const [best] = await findStays(trimmed, destination).catch(() => []);
+
+  return best?.coordinates ?? null;
+}
+
+/**
  * The hotel, or the middle of the city standing in for one.
  *
- * The centre is looked up either way, because it is both the fallback and the
- * sanity check on the stay — see `MAX_STAY_FROM_CENTRE_KM`. Undefined only
- * when the destination itself cannot be geocoded, which is the same condition
- * that leaves a trip's stops off the map.
+ * Four answers in a deliberate order.
+ *
+ * **A hotel the reader confirmed wins outright**, and costs nothing: it
+ * arrives with its coordinates on it, because they picked it off a list of
+ * real buildings. Nothing is looked up again — a name resolved twice can come
+ * back as two different hotels, and the one they pointed at is the one the
+ * radius has to be drawn around.
+ *
+ * **A bare name is looked up**, for a brief that came from somewhere the
+ * confirmation flow did not run — an older conversation, or a test.
+ *
+ * **A booked stay is the fallback**, for a trip planned without an answer: a
+ * seeded conversation, or a radius switched on after the trip was asked for.
+ *
+ * **The centre stands in for any of them.** That is the promise the settings
+ * screen already makes out loud, and it is the more useful of the two wrong
+ * answers: a radius around the middle of a city is roughly where a hotel is,
+ * where dropping the radius spreads the trip over sixty kilometres.
+ *
+ * Undefined only when the destination itself cannot be geocoded, which is the
+ * same condition that leaves a trip's stops off the map.
  */
 async function resolveBase(brief: TripBrief): Promise<PlanningContext['base']> {
+  if (brief.hotelLocation) return { coordinates: brief.hotelLocation, source: 'named' };
+
   const centre = await geocodeService.locate(brief.destination).catch(() => null);
   if (!centre) return undefined;
+
+  const named = brief.hotelName?.trim();
+
+  if (named) {
+    const point = await locateStay(named, brief.destination);
+
+    // No falling through to the bookings. Somebody who names a hotel has
+    // answered the question, and a stay they booked and did not mention is
+    // not a better answer than the one they gave.
+    return point
+      ? { coordinates: point, source: 'named' }
+      : { coordinates: centre, source: 'centre' };
+  }
 
   const stay = chooseStay(await loadBookings(), brief.startDate);
   if (!stay) return { coordinates: centre, source: 'centre' };
 
-  const point = await geocodeService.locate(stay.title).catch(() => null);
+  const point = await locateStay(stay.title, brief.destination);
 
-  if (!point || distanceKm(point, centre) > MAX_STAY_FROM_CENTRE_KM) {
-    return { coordinates: centre, source: 'centre' };
-  }
-
-  return { coordinates: point, source: 'stay' };
+  return point
+    ? { coordinates: point, source: 'stay' }
+    : { coordinates: centre, source: 'centre' };
 }

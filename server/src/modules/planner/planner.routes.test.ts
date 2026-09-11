@@ -544,3 +544,149 @@ describe('POST /api/planner/chat — before the stream opens', () => {
     expect(errorCode(response)).toBe(ERROR_CODES.RATE_LIMITED);
   }, 30_000);
 });
+
+/**
+ * The reader's radius, and what it makes the model do.
+ *
+ * "Within 2 km of your hotel" is measured from a building, and nothing knows
+ * which building until somebody is asked — so when that preference is set, the
+ * model has to stop and ask before it plans. The instruction is read from the
+ * settings row rather than accepted from the client, because a constraint the
+ * browser could switch off by omitting a field is not a constraint.
+ *
+ * It rides on the newest user turn rather than in the system prompt, and that
+ * is a cost decision: the system prompt carries `cache_control`, the cache is
+ * a prefix match, and one varying character at the top means paying full price
+ * for the instructions on every message anybody ever sends.
+ */
+describe('the hotel the trip is measured from', () => {
+  /** The instruction sent to the model, or '' when there was no request. */
+  function contextSent(model: ReturnType<typeof modelSays>): string {
+    const body = model.mock.calls[0]?.[1]?.body;
+    if (typeof body !== 'string') return '';
+
+    const sent = JSON.parse(body) as { messages: { content: unknown }[] };
+    const last = sent.messages.at(-1)?.content;
+
+    return typeof last === 'string' ? last : '';
+  }
+
+  async function proTokenWith(maxDistanceFromHotelKm: number | null): Promise<string> {
+    const { user, accessToken } = await signUp();
+
+    await prisma.user.update({ where: { id: user.id }, data: { plan: 'pro' } });
+    await prisma.userSettings.upsert({
+      where: { userId: user.id },
+      create: { userId: user.id, maxDistanceFromHotelKm },
+      update: { maxDistanceFromHotelKm },
+    });
+
+    return accessToken;
+  }
+
+  it('tells the model to ask which hotel, and how far the radius runs', async () => {
+    const model = modelSays(turn([{ type: 'text', text: 'Which hotel?' }], 'end_turn'));
+    vi.stubGlobal('fetch', model);
+
+    await api()
+      .post(CHAT)
+      .set('Authorization', `Bearer ${await proTokenWith(2)}`)
+      .send(PROMPT)
+      .expect(200);
+
+    const context = contextSent(model);
+    expect(context).toContain('within 2 km');
+    expect(context).toContain('ask them for its name');
+    // Still the per-turn context, so the cached instructions stay byte-stable.
+    expect(context).toContain('Today is');
+  });
+
+  it('says nothing about hotels to a reader with no radius set', async () => {
+    const model = modelSays(turn([{ type: 'text', text: 'Kyoto it is.' }], 'end_turn'));
+    vi.stubGlobal('fetch', model);
+
+    await api()
+      .post(CHAT)
+      .set('Authorization', `Bearer ${await proTokenWith(null)}`)
+      .send(PROMPT)
+      .expect(200);
+
+    const context = contextSent(model);
+    expect(context).toContain('Today is');
+    // An instruction to stop and ask is useless to them, and wrong to give.
+    expect(context).not.toContain('hotel');
+  });
+
+  it('says nothing to an account that has never opened the settings screen', async () => {
+    const model = modelSays(turn([{ type: 'text', text: 'Kyoto it is.' }], 'end_turn'));
+    vi.stubGlobal('fetch', model);
+
+    // No settings row at all, which is the same as having no limit.
+    await api().post(CHAT).set('Authorization', `Bearer ${await token()}`).send(PROMPT).expect(200);
+
+    expect(contextSent(model)).not.toContain('hotel');
+  });
+
+  it('carries the hotel the model was told through to the brief', async () => {
+    vi.stubGlobal(
+      'fetch',
+      modelSays(
+        turn(
+          [
+            {
+              type: 'tool_use',
+              id: 'toolu_1',
+              name: 'plan_trip',
+              input: { ...BRIEF, hotelName: 'Rooms Hotel' },
+            },
+          ],
+          'tool_use',
+        ),
+        turn([{ type: 'text', text: 'Three days in Kyoto.' }], 'end_turn'),
+      ),
+    );
+
+    const response = await api()
+      .post(CHAT)
+      .set('Authorization', `Bearer ${await proTokenWith(2)}`)
+      .send(PROMPT)
+      .expect(200);
+
+    const brief = events(response.text).find((event) => event.type === 'brief');
+
+    // A name and nothing more: the client looks it up and has the reader
+    // confirm which building, because a model repeating "Grand Hotel" is as
+    // ambiguous as a person typing it.
+    expect(brief).toMatchObject({ brief: { hotelName: 'Rooms Hotel' } });
+  });
+
+  it('drops a hotel name that is not one', async () => {
+    vi.stubGlobal(
+      'fetch',
+      modelSays(
+        turn(
+          [
+            {
+              type: 'tool_use',
+              id: 'toolu_1',
+              name: 'plan_trip',
+              input: { ...BRIEF, hotelName: '   ' },
+            },
+          ],
+          'tool_use',
+        ),
+        turn([{ type: 'text', text: 'Three days in Kyoto.' }], 'end_turn'),
+      ),
+    );
+
+    const response = await api()
+      .post(CHAT)
+      .set('Authorization', `Bearer ${await proTokenWith(2)}`)
+      .send(PROMPT);
+
+    // Rejected as a brief rather than passed on as a blank name, which the
+    // client would dutifully look up and find nothing for.
+    const brief = events(response.text).find((event) => event.type === 'brief');
+    expect(brief).toBeUndefined();
+  });
+});

@@ -56,6 +56,7 @@ const IDENTICAL: [string, string][] = [
     'hotel',
     'settings',
     'metro',
+    'stay',
     'rates',
     'timezone',
     'currentCityAirport',
@@ -72,6 +73,9 @@ const IDENTICAL: [string, string][] = [
   // Not a `.service.ts`: it makes no requests. The pool is fetched by its
   // caller, which is what leaves this side pure and identical on both clients.
   ['src/services/itinerary.planner.ts', 'mobile/src/core/services/itinerary.planner.ts'],
+  // The stay conversation — which hotel, and where it is. Pure decisions about
+  // what to ask next, so both clients run the same one.
+  ['src/services/planner.stay.ts', 'mobile/src/core/services/planner.stay.ts'],
   ...[
     'createResource',
     'broadcast',

@@ -1,7 +1,16 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { PlannerMessage, PlannerStatus } from '../../core/types/planner.types';
+import type {
+  ConfirmedStay,
+  PendingStay,
+  PlannerMessage,
+  PlannerStatus,
+  TravelPreferences,
+} from '../../core/types/planner.types';
 import type { TripDraft } from '../../core/types/trip.types';
 import { PlannerError, plannerService } from '../../core/services/planner.service';
+import type { PlannerHandlers } from '../../core/services/planner.service';
+import { advanceStay, pickStay, rejectStayCandidates } from '../../core/services/planner.stay';
+import type { StayStep } from '../../core/services/planner.stay';
 import { chatService } from '../../core/services/chat.service';
 import { settingsService } from '../../core/services/settings.service';
 import { tripStore, useTrips } from '../../core/store/trip.store';
@@ -23,6 +32,58 @@ const HISTORY_ERROR = 'This conversation is not being saved — your browser sto
  * ceiling — this is the polite half of it.
  */
 const HISTORY_LIMIT = 20;
+
+/** Retires a question that has been answered, and the list it was rendered as. */
+function withoutPendingStay(message: PlannerMessage): PlannerMessage {
+  return message.pendingStay ? { ...message, pendingStay: undefined } : message;
+}
+
+/**
+ * The newest stay this conversation has settled, if any.
+ *
+ * Read back off the transcript rather than held in state, for the same reason
+ * the pending question is: a conversation resumed on another device should not
+ * re-ask something it has already been told.
+ */
+function settledStay(messages: PlannerMessage[]): ConfirmedStay | undefined {
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const confirmed = messages[index].confirmedStay;
+    if (confirmed) return confirmed;
+  }
+
+  return undefined;
+}
+
+/**
+ * One step of the stay conversation, put on screen.
+ *
+ * Either it asks again — a list to pick from, or the address — or it has
+ * enough and the interrupted turn carries on from where it stopped. The
+ * trailing space matters: a step that has something to say says it in front of
+ * whatever the engine then writes, and the two run together without it.
+ *
+ * Returns what was settled, which the caller records on the reply so the rest
+ * of the conversation does not ask again.
+ */
+async function applyStayStep(
+  step: StayStep,
+  destination: string | null,
+  handlers: PlannerHandlers,
+  signal: AbortSignal,
+  preferences: TravelPreferences,
+): Promise<ConfirmedStay | undefined> {
+  if (step.kind === 'ask') {
+    handlers.onText(step.reply);
+    handlers.onStayNeeded(step.pending);
+    return undefined;
+  }
+
+  if (step.reply) handlers.onText(`${step.reply} `);
+
+  await plannerService.resume(step.resume, step.stay, handlers, { signal, preferences });
+
+  return { destination, stay: step.stay };
+}
 
 /**
  * Owns the planner conversation: sending a prompt, holding the generated
@@ -115,21 +176,29 @@ export function usePlanner() {
   );
 
   /**
-   * Send a prompt and grow the reply as it arrives.
+   * One turn, from an opening transcript to a committed reply.
    *
-   * The answer is streamed, so there is one assistant message that is rewritten
-   * on every chunk rather than one appended when it is complete. `base` is
-   * captured before the first token: the reply is always rendered as
-   * `[...base, reply]`, which needs no reasoning about what the previous frame
-   * left behind.
+   * Shared by the two things that can start a turn — typing, and picking a
+   * hotel off a list — because everything around the answer is the same either
+   * way: supersede whatever is in flight, paint the reply as it grows, commit
+   * once at the end, and tell a stop from a failure. Only `run` differs, and
+   * what it does with the handlers is the whole difference between them.
+   *
+   * The answer is streamed, so there is one assistant message rewritten on
+   * every chunk rather than one appended when it is complete. `base` is fixed
+   * before the first token: the reply is always rendered as `[...base, reply]`,
+   * which needs no reasoning about what the previous frame left behind.
    */
-  const generate = useCallback(
-    async (prompt: string) => {
-      const trimmed = prompt.trim();
-      if (!trimmed) return;
-
+  const runTurn = useCallback(
+    async (
+      base: PlannerMessage[],
+      run: (
+        handlers: PlannerHandlers,
+        signal: AbortSignal,
+      ) => Promise<ConfirmedStay | undefined>,
+    ) => {
       /*
-       * A new prompt supersedes the one in flight.
+       * A new turn supersedes the one in flight.
        *
        * Which is what somebody means by typing while an answer is arriving:
        * they have changed their mind, and waiting for a reply they no longer
@@ -141,24 +210,21 @@ export function usePlanner() {
       abortRef.current = controller;
 
       setError(null);
-
-      const base: PlannerMessage[] = [
-        ...messagesRef.current,
-        { id: createId('message'), author: 'user', content: trimmed },
-      ];
       commitMessages(base);
       setStatus('generating');
 
       const replyId = createId('message');
       let content = '';
       let trip: TripDraft | undefined;
+      let pendingStay: PendingStay | undefined;
+      let confirmedStay: ConfirmedStay | undefined;
 
       const reply = (): PlannerMessage[] => [
         ...base,
-        { id: replyId, author: 'ai', content, trip },
+        { id: replyId, author: 'ai', content, trip, pendingStay, confirmedStay },
       ];
 
-      const handlers = {
+      const handlers: PlannerHandlers = {
         onText: (text: string) => {
           content += text;
           paintMessages(reply());
@@ -167,51 +233,23 @@ export function usePlanner() {
           trip = draft;
           paintMessages(reply());
         },
+        /*
+         * The planner needs to know where they are staying before it can
+         * build anything. The question is already in `content` — this is the
+         * part the reader cannot see: what it is waiting for, and how to
+         * carry on once they answer. It rides on the message so a reload or a
+         * second device picks the conversation up mid-question.
+         */
+        onStayNeeded: (waiting: PendingStay) => {
+          pendingStay = waiting;
+          paintMessages(reply());
+        },
       };
 
       try {
-        /*
-         * The engine comes from the account, not from whether the server
-         * answered.
-         *
-         * A free account never calls the chat endpoint — it would be refused
-         * with `PRO_REQUIRED`, and asking in order to be told no would put a
-         * round trip in front of every free reply. The tier is read at send
-         * time rather than captured, so upgrading takes effect on the next
-         * prompt with no reload.
-         *
-         * `chat` keeps its own fallback to this same rule engine for a Pro
-         * account on a server with no key — so the two tiers are two ways of
-         * reaching one implementation, not two implementations.
-         */
-        await (isPro
-          ? plannerService.chat(
-              // Only the recent turns: the whole history is re-sent and re-read
-              // on every message, so an unbounded conversation would cost more
-              // with each one. Matches the server's own cap.
-              base
-                .slice(-HISTORY_LIMIT)
-                .map(({ author, content: text }) => ({ author, content: text })),
-              handlers,
-              {
-                signal: controller.signal,
-                // The same preferences the free engine gets. The model may
-                // override one for this trip; the scheduler builds the days
-                // either way, so a Pro trip keeps the reader's own hours.
-                preferences: settingsService.getSettings().travel,
-              },
-            )
-          : plannerService.answerLocally(trimmed, handlers, {
-              signal: controller.signal,
-              /*
-               * Read at send time from the cache rather than held in state.
-               * `settingsService` is synchronous and always current — a
-               * preference changed in the settings screen a moment ago applies
-               * to this prompt, without this hook subscribing to a store it
-               * otherwise has no use for.
-               */
-              preferences: settingsService.getSettings().travel,
-            }));
+        // Recorded before the commit below, so the answer and the fact that it
+        // was answered are written to storage together.
+        confirmedStay = await run(handlers, controller.signal);
 
         // A turn that produced neither words nor a trip has nothing to show,
         // and an empty bubble is worse than saying so.
@@ -255,10 +293,138 @@ export function usePlanner() {
         setError(caught instanceof PlannerError ? caught.message : GENERATION_ERROR);
       }
     },
+    [commitMessages, paintMessages],
+  );
+
+  /** Send a prompt, or answer the question the planner is waiting on. */
+  const generate = useCallback(
+    async (prompt: string): Promise<void> => {
+      const trimmed = prompt.trim();
+      if (!trimmed) return;
+
+      const previous = messagesRef.current;
+
+      /*
+       * A stay question outstanding makes this prompt its answer, whatever it
+       * says. The engines are not consulted: a hotel name is not a sentence
+       * either of them could classify, and "Astoria" would read to the rule
+       * engine as a request for a trip to somewhere called Astoria.
+       *
+       * Only the newest message counts. A reader who scrolled past the
+       * question and typed something else is answering it — but one who
+       * answered it already has moved on, and the question is cleared as it is
+       * consumed so it cannot catch a later sentence.
+       */
+      const waiting = previous.at(-1)?.pendingStay;
+
+      const base: PlannerMessage[] = [
+        ...(waiting ? previous.map(withoutPendingStay) : previous),
+        { id: createId('message'), author: 'user', content: trimmed },
+      ];
+
+      /*
+       * Read at send time from the cache rather than held in state.
+       * `settingsService` is synchronous and always current — a preference
+       * changed in the settings screen a moment ago applies to this prompt,
+       * without this hook subscribing to a store it otherwise has no use for.
+       */
+      const preferences = settingsService.getSettings().travel;
+
+      const known = settledStay(previous);
+
+      return runTurn(base, async (handlers, signal) => {
+        if (waiting) {
+          return applyStayStep(
+            await advanceStay(waiting, trimmed),
+            waiting.destination,
+            handlers,
+            signal,
+            preferences,
+          );
+        }
+
+        /*
+         * The engine comes from the account, not from whether the server
+         * answered.
+         *
+         * A free account never calls the chat endpoint — it would be refused
+         * with `PRO_REQUIRED`, and asking in order to be told no would put a
+         * round trip in front of every free reply. The tier is read at send
+         * time rather than captured, so upgrading takes effect on the next
+         * prompt with no reload.
+         *
+         * `chat` keeps its own fallback to this same rule engine for a Pro
+         * account on a server with no key — so the two tiers are two ways of
+         * reaching one implementation, not two implementations.
+         */
+        await (isPro
+          ? plannerService.chat(
+              // Only the recent turns: the whole history is re-sent and re-read
+              // on every message, so an unbounded conversation would cost more
+              // with each one. Matches the server's own cap.
+              base
+                .slice(-HISTORY_LIMIT)
+                .map(({ author, content: text }) => ({ author, content: text })),
+              handlers,
+              // The same preferences the free engine gets. The model may
+              // override one for this trip; the scheduler builds the days
+              // either way, so a Pro trip keeps the reader's own hours.
+              { signal, preferences, knownStay: known },
+            )
+          : plannerService.answerLocally(trimmed, handlers, {
+              signal,
+              preferences,
+              knownStay: known,
+            }));
+
+        // Nothing settled here: this branch either planned or asked, and the
+        // asking branch records its answer on the turn that supplies it.
+        return undefined;
+      });
+    },
     // `isPro` belongs here: an upgrade must change which engine the next
     // prompt runs, and a callback that closed over the old tier would keep
     // answering from templates until something else happened to remake it.
-    [commitMessages, paintMessages, isPro],
+    [runTurn, isPro],
+  );
+
+  /**
+   * A hotel picked off the list, or none of them.
+   *
+   * `candidateId` is null for "none of these", which asks for an address
+   * rather than for the name again — the name has already been tried and the
+   * list is what it produced.
+   *
+   * Keyed by message rather than taken from the end of the conversation, so a
+   * tap on a list that has since been answered does nothing instead of
+   * answering the wrong question. Clearing the pending state is what retires
+   * the list on screen.
+   */
+  const chooseStay = useCallback(
+    async (messageId: string, candidateId: string | null) => {
+      const previous = messagesRef.current;
+      const index = previous.findIndex((message) => message.id === messageId);
+      const pending = index === -1 ? undefined : previous[index].pendingStay;
+
+      if (!pending) return;
+
+      const step =
+        candidateId === null ? rejectStayCandidates(pending) : pickStay(pending, candidateId);
+
+      // A candidate id the message does not carry — a stale render, or a
+      // transcript written by an older version. A tap that does not land.
+      if (!step) return;
+
+      const base = previous.map((message, at) =>
+        at === index ? withoutPendingStay(message) : message,
+      );
+      const preferences = settingsService.getSettings().travel;
+
+      await runTurn(base, (handlers, signal) =>
+        applyStayStep(step, pending.destination, handlers, signal, preferences),
+      );
+    },
+    [runTurn],
   );
 
   /**
@@ -344,6 +510,7 @@ export function usePlanner() {
     isGenerating: status === 'generating',
     savedTripIdFor,
     generate,
+    chooseStay,
     stop,
     saveTrip,
     customiseTrip,

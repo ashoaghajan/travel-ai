@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ERROR_CODES } from '@ai-travel/shared';
 import type { PlannerTripBrief } from '@ai-travel/shared';
+import type { PendingStay } from '../types/planner.types';
 import type { Activity } from '../types/travel.types';
 import { activityService } from './activity.service';
 import { setAccessToken } from './http';
@@ -73,12 +74,16 @@ function envelope(code: string, status: number): Response {
 function handlers() {
   const text: string[] = [];
   const trips: unknown[] = [];
+  const asked: PendingStay[] = [];
 
   return {
     text,
     trips,
+    /** The stay questions this turn asked, which is normally none. */
+    asked,
     onText: (chunk: string) => text.push(chunk),
     onTrip: (trip: unknown) => trips.push(trip),
+    onStayNeeded: (pending: PendingStay) => asked.push(pending),
     get reply() {
       return text.join('');
     },
@@ -251,6 +256,7 @@ describe('chat', () => {
         order.push('trip');
         sink.onTrip(trip);
       },
+      onStayNeeded: sink.onStayNeeded,
     });
 
     // Fetching the attraction pool must not hold back the sentence somebody is

@@ -857,7 +857,9 @@ split at the seam it should always have had:
 
 - **`plan_trip`** — the model reads the conversation into constraints: where,
   when, how long, for how many, and anything said about hours, pace or money.
-  That is a language problem.
+  That is a language problem. It also carries `hotelName` when the reader has a
+  radius set and has been asked — a name and nothing more, because placing a
+  building is not a language problem either. See §12.
 - **`itinerary.planner.ts`** — the client schedules those constraints into days
   from the attraction catalogue: scored against the reader's preferences,
   packed into a timeline that respects their hours, stopped at their budget.
@@ -1320,6 +1322,71 @@ are now one set of days and two ways of arriving at the constraints. The
 templates in `mock/destinations.ts` survive as the fallback for a destination
 the attraction catalogue does not know, which is the one case neither engine
 can schedule.
+
+---
+
+### 12. The hotel a radius is drawn around — **built**
+
+"Distance from your hotel" shipped as a preference and a filter, and the filter
+worked. What was missing was the hotel. `resolveBase` guessed — a stay booked
+and not yet attached to a trip, or failing that the middle of the city — so for
+the ordinary case, a trip planned before anything is booked, **"within 2 km of
+your hotel" meant "within 2 km of the town hall"** and nothing said so.
+
+**So the planner asks, and it asks before it plans.** The radius is the only
+preference here that changes the conversation rather than only the trip, which
+is why the settings note now says so.
+
+```txt
+Which hotel are you staying at in Tbilisi?        ← only when a radius is set
+  ↓ a name
+Nominatim /search, bounded to the city            ← geoname cannot do this
+  ↓ 0 matches                ↓ 1 or more
+What is its address?         Which one?  [list]   ← one match is still confirmed
+  ↓ 0 matches                ↓ picked
+plan around the centre       plan around the point
+```
+
+**Confirmation is the step that earns the rest.** Hotel names are not unique
+inside one city, let alone between them, and picking the wrong building is a
+mistake with no later moment at which it becomes visible — the trip simply
+comes back without a district in it. So a single match is offered rather than
+assumed, and the address is inside the button rather than beside it, because
+the address is the only thing telling two rows apart.
+
+**Nominatim, not OpenTripMap.** `/places/geoname` resolves *cities*: it knows
+Tbilisi and has never heard of a hotel in it, which is why the old booked-stay
+lookup mostly returned nothing or returned a town with a similar name. Forward
+search also answers the address question with the same endpoint, which is what
+made the fallback cheap. Same terms as Overpass — keyless, identified, day-long
+cache, and a failed lookup is `no-store` so it is never remembered as a fact.
+
+**The transcript is the state.** What the planner is waiting for rides on the
+message that asked (`PlannerMessage.pendingStay`), so a reload, a second tab or
+a phone picking the conversation up all resume mid-question, and somebody who
+wanders off leaves nothing to clean up.
+
+**Both tiers, one flow, asked in different voices.** The model is told the
+radius in the per-turn context — not the system prompt, which carries
+`cache_control` and would cost full price on every message if it varied — and
+asks in its own words, passing `hotelName` on `plan_trip`. The rule engine asks
+in a written sentence. What a name is worth is the same either way: it is a
+*name*, and it goes through the same lookup and the same confirmation, because
+"Grand Hotel" is as ambiguous when a model repeats it as when a person types it.
+
+**Recorded consequence: a radius that excludes everything no longer answers
+with a template.** `tripForBrief` falls back to `mock/destinations.ts` when the
+scheduler comes back empty, and a template honours no preference at all — so
+for every *other* empty result that is a generic week instead of an apology,
+and for this one it was a week of places that are nowhere near the hotel,
+presented as the answer. `locationRulesApply` tells the two apart, and
+`NoPlacesInRangeError` says what happened and names the setting to widen.
+
+**Unchanged on purpose: "not sure" is a first-class answer at every step.** Most
+trips are planned before anything is booked. A question with no honest "I don't
+know" is a wall, and the way out is the behaviour the app had before the
+question existed — the middle of the city, which is what the settings screen
+has always promised.
 
 ---
 

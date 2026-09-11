@@ -388,3 +388,154 @@ describe('GET /api/places/metro', () => {
     await api().get(METRO).expect(422);
   });
 });
+
+/**
+ * `GET /api/places/stay` — Nominatim, forwards.
+ *
+ * The lookup behind "which hotel are you staying at?", and the reason it is
+ * here rather than folded into `/places/geoname`: geoname resolves *cities*,
+ * so the planner's "within 2 km of your hotel" was being measured from the
+ * middle of the city for want of anything that could find a building.
+ *
+ * Three things are worth pinning down. It answers with a **list**, because the
+ * caller's next move is to have somebody point at the right one. It **bounds
+ * matches to the destination**, because "Grand Hotel" is a hotel in forty
+ * countries and one of them would otherwise become the centre of the trip. And
+ * a failure is an **empty list rather than an error** — the next question is
+ * "what is its address?" either way — but is never cached, because a day of
+ * remembering an outage is a day of telling everybody their hotel does not
+ * exist.
+ */
+describe('GET /api/places/stay', () => {
+  const STAY = '/api/places/stay';
+
+  const TBILISI = { name: 'Tbilisi', lat: 41.7151, lon: 44.7833 };
+
+  function match(overrides: Record<string, unknown> = {}) {
+    return {
+      place_id: 1,
+      name: 'Rooms Hotel',
+      display_name: 'Rooms Hotel, 14, Merab Kostava Street, Tbilisi, Georgia',
+      lat: '41.7330',
+      lon: '44.7900',
+      ...overrides,
+    };
+  }
+
+  /** Nominatim answers the search; OpenTripMap answers the centre. */
+  function upstreams(results: unknown[], searchStatus = 200) {
+    return vi.fn(async (url: URL | string) => {
+      if (String(url).includes('nominatim')) {
+        return new Response(JSON.stringify(results), { status: searchStatus });
+      }
+
+      return new Response(JSON.stringify(TBILISI), { status: 200 });
+    });
+  }
+
+  it('answers with every match, not a best guess', async () => {
+    vi.stubGlobal(
+      'fetch',
+      upstreams([match(), match({ place_id: 2, lat: '41.7200', lon: '44.7700' })]),
+    );
+
+    const response = await api().get(STAY).query({ q: 'Rooms Hotel', near: 'Tbilisi' }).expect(200);
+
+    expect(response.body.candidates).toHaveLength(2);
+  });
+
+  it('splits the name from the address so neither is shown twice', async () => {
+    vi.stubGlobal('fetch', upstreams([match()]));
+
+    const response = await api().get(STAY).query({ q: 'Rooms Hotel', near: 'Tbilisi' }).expect(200);
+
+    expect(response.body.candidates[0]).toMatchObject({
+      name: 'Rooms Hotel',
+      address: '14, Merab Kostava Street, Tbilisi, Georgia',
+      lat: 41.733,
+      lng: 44.79,
+    });
+  });
+
+  it('reads a house number together with its street, not on its own', async () => {
+    vi.stubGlobal(
+      'fetch',
+      upstreams([
+        match({
+          name: '14',
+          display_name: '14, Merab Kostava Street, Vera, Tbilisi, Georgia',
+        }),
+      ]),
+    );
+
+    const response = await api()
+      .get(STAY)
+      .query({ q: '14 Merab Kostava Street', near: 'Tbilisi' })
+      .expect(200);
+
+    // A list of buildings all called "14" is no easier to choose between than
+    // an unlabelled one, and the street is not repeated below it either.
+    expect(response.body.candidates[0]).toMatchObject({
+      name: '14 Merab Kostava Street',
+      address: 'Vera, Tbilisi, Georgia',
+    });
+  });
+
+  it('appends the destination to the query, which is what narrows it', async () => {
+    const provider = upstreams([match()]);
+    vi.stubGlobal('fetch', provider);
+
+    await api().get(STAY).query({ q: 'Rooms Hotel', near: 'Tbilisi' }).expect(200);
+
+    const asked = provider.mock.calls.map((call) => String(call[0])).find((href) => href.includes('nominatim'));
+    expect(asked).toContain('Rooms+Hotel%2C+Tbilisi');
+  });
+
+  it('drops a match in another country, however well it matched the name', async () => {
+    // Paris, which is not Tbilisi and must never be the middle of a trip to it.
+    vi.stubGlobal('fetch', upstreams([match({ lat: '48.8566', lon: '2.3522' })]));
+
+    const response = await api().get(STAY).query({ q: 'Grand Hotel', near: 'Tbilisi' }).expect(200);
+
+    expect(response.body.candidates).toEqual([]);
+  });
+
+  it('falls back to the bare query when the qualified one finds nothing', async () => {
+    let searches = 0;
+
+    const provider = vi.fn(async (url: URL | string) => {
+      if (!String(url).includes('nominatim')) {
+        return new Response(JSON.stringify(TBILISI), { status: 200 });
+      }
+
+      // A full street address already names its own city, so appending a
+      // second one finds nothing at all. The bare query is the second attempt.
+      searches += 1;
+      return new Response(JSON.stringify(searches === 1 ? [] : [match()]), { status: 200 });
+    });
+    vi.stubGlobal('fetch', provider);
+
+    const response = await api()
+      .get(STAY)
+      .query({ q: '14 Merab Kostava Street, Tbilisi, Georgia', near: 'Tbilisi' })
+      .expect(200);
+
+    expect(searches).toBe(2);
+    expect(response.body.candidates).toHaveLength(1);
+  });
+
+  it('answers an empty list rather than an error when the lookup fails', async () => {
+    vi.stubGlobal('fetch', upstreams([], 503));
+
+    const response = await api().get(STAY).query({ q: 'Rooms Hotel', near: 'Tbilisi' }).expect(200);
+
+    expect(response.body).toEqual({ candidates: [] });
+    // Never cached: a day of remembering an outage is a day of telling
+    // everybody their hotel does not exist.
+    expect(response.headers['cache-control']).toBe('no-store');
+  });
+
+  it('refuses a blank query rather than asking for everything', async () => {
+    await api().get(STAY).query({ q: '  ' }).expect(422);
+  });
+});

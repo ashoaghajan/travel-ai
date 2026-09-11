@@ -2,6 +2,7 @@ import type { PlannerChatMessage, PlannerTripBrief } from '@ai-travel/shared';
 import type { HttpError } from '../../errors';
 import { env } from '../../env';
 import * as anthropic from './anthropic';
+import type { TurnContext } from './anthropic';
 
 /**
  * The planner's model, behind an interface.
@@ -31,6 +32,8 @@ import * as anthropic from './anthropic';
  * see rather than a broken card in somebody's chat.
  */
 
+export type { TurnContext };
+
 export type PlannerHandlers = {
   /** One chunk of the reply, as it is generated. */
   onText: (text: string) => void;
@@ -45,11 +48,19 @@ export type PlannerProvider = {
   isConfigured(): boolean;
   /** The refusal to send when it does not. A fact about the deployment. */
   notConfigured(): HttpError;
-  /** One turn. Resolves with the reason the model stopped. */
+  /**
+   * One turn. Resolves with the reason the model stopped.
+   *
+   * `context` is what is true of this reader right now rather than of the app
+   * — today's date, and the radius they plan within. A provider is free to
+   * present it however its API wants, but it may not drop it: the radius is
+   * what makes the model stop and ask which hotel, and a provider that
+   * ignored it would plan trips around the middle of the wrong city.
+   */
   streamChat(
     history: PlannerChatMessage[],
     handlers: PlannerHandlers,
-    signal?: AbortSignal,
+    options?: { context?: TurnContext; signal?: AbortSignal },
   ): Promise<string | null>;
   /** This provider's own failures, as errors the chat can show a person. */
   toHttpError(caught: unknown): HttpError;

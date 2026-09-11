@@ -6,6 +6,7 @@ import {
   DEFAULT_PREFERENCES,
   distanceKm,
   formatTime,
+  locationRulesApply,
   planItinerary,
   scoreActivity,
   travelMinutes,
@@ -626,5 +627,146 @@ describe('planItinerary, near a metro station', () => {
     const days = planItinerary(brief(), pool(4), { metroStations: [FAR_STATION] });
 
     expect(dayTitles(days).length).toBeGreaterThan(0);
+  });
+});
+
+/**
+ * Which empty result is a refusal and which is just an empty catalogue.
+ *
+ * The caller falls back to a template trip when nothing survives, and a
+ * template honours no preference at all — so answering "only within 1 km of my
+ * hotel" with one would be answering the question with a week of places that
+ * are not. This is the predicate that tells the two apart, and "in force"
+ * means more than "switched on": a rule with nothing to measure against has
+ * excluded nothing, so an empty result cannot be blamed on it.
+ */
+describe('locationRulesApply', () => {
+  const BASE = { coordinates: CENTRE, source: 'named' as const };
+  const STATION = { lat: 38.7127, lng: -9.14 };
+
+  it('is false for the ordinary trip, where neither rule is set', () => {
+    expect(locationRulesApply(DEFAULT_PREFERENCES, {})).toBe(false);
+  });
+
+  it('is true when a radius was set and a point was found to measure from', () => {
+    expect(
+      locationRulesApply(preferences({ maxDistanceFromHotelKm: 1 }), { base: BASE }),
+    ).toBe(true);
+  });
+
+  it('is false when the radius was set but nothing could be placed', () => {
+    // `isNearBase` lets everything through in this state, so nothing was
+    // excluded and an empty result is about the catalogue.
+    expect(locationRulesApply(preferences({ maxDistanceFromHotelKm: 1 }), {})).toBe(false);
+  });
+
+  it('is true when the metro rule had stations to judge against', () => {
+    expect(
+      locationRulesApply(preferences({ nearMetroOnly: true }), { metroStations: [STATION] }),
+    ).toBe(true);
+  });
+
+  it('is false when the metro lookup came back empty', () => {
+    expect(
+      locationRulesApply(preferences({ nearMetroOnly: true }), { metroStations: [] }),
+    ).toBe(false);
+  });
+});
+
+/**
+ * Both location rules at once.
+ *
+ * They are two chained filters rather than one combined test, so they compose
+ * as an AND: a place has to be inside the radius **and** near a station to
+ * survive. Worth pinning down explicitly, because the two rules are written
+ * and tested apart and each one is individually happy to let a place through —
+ * a refactor that turned either filter into a score, or that merged them into
+ * one pass, would quietly turn this into an OR and nothing else would notice.
+ *
+ * The failure directions matter as much as the success. A place the radius
+ * accepts and the metro does not is exactly as excluded as the reverse, and
+ * neither rule gets to overrule the other on the strength of a good rating.
+ */
+describe('planItinerary, with both location rules on', () => {
+  /** Around 300 m from `CENTRE`: inside the ten-minute walk. */
+  const STATION = { lat: 38.7127, lng: -9.14 };
+  /** Around 4 km north, with a station of its own — outside a 2 km radius. */
+  const OUTSKIRTS = { lat: 38.746, lng: -9.14 };
+  /** ~1.5 km north: inside a 2 km radius, but no station within a walk. */
+  const NO_STATION = { lat: 38.7235, lng: -9.14 };
+  /** ~10 km north: outside everything. */
+  const NOWHERE = { lat: 38.8, lng: -9.14 };
+
+  const both = pool(4, { category: 'culture' });
+  const baseOnly = pool(4, { category: 'nature' }).map((place) => ({
+    ...place,
+    coordinates: NO_STATION,
+  }));
+  const metroOnly = pool(4, { category: 'food' }).map((place) => ({
+    ...place,
+    coordinates: OUTSKIRTS,
+  }));
+  const neither = pool(4, { category: 'adventure' }).map((place) => ({
+    ...place,
+    coordinates: NOWHERE,
+  }));
+
+  const RULES = preferences({ maxDistanceFromHotelKm: 2, nearMetroOnly: true });
+
+  const CONTEXT = {
+    base: { coordinates: CENTRE, source: 'named' as const },
+    metroStations: [STATION, OUTSKIRTS],
+  };
+
+  function plan(pool: Activity[]) {
+    return planItinerary(brief({ preferences: RULES }), pool, CONTEXT).flatMap((day) =>
+      day.activities.map((entry) => entry.title),
+    );
+  }
+
+  it('keeps only what satisfies both', () => {
+    const titles = plan([...both, ...baseOnly, ...metroOnly, ...neither]);
+
+    expect(titles.length).toBeGreaterThan(0);
+    expect(titles.every((title) => title.startsWith('Place culture'))).toBe(true);
+  });
+
+  it('drops a place inside the radius with no station near it', () => {
+    expect(plan(baseOnly)).toEqual([]);
+  });
+
+  it('drops a place beside a station but outside the radius', () => {
+    // The one most likely to slip through an OR: it passes the metro rule
+    // outright, and the station it is beside is a real one.
+    expect(plan(metroOnly)).toEqual([]);
+  });
+
+  it('drops a place that fails both', () => {
+    expect(plan(neither)).toEqual([]);
+  });
+
+  /*
+   * The rules fail independently, which is the stance the whole file takes: a
+   * lookup that did not answer is not a preference that excludes. With no
+   * stations known, the metro rule stops applying and the radius alone decides
+   * — so the outskirts stay out and the 1.5 km place comes back in.
+   */
+  it('applies the radius alone when the metro lookup came back empty', () => {
+    const titles = planItinerary(brief({ preferences: RULES }), [...baseOnly, ...metroOnly], {
+      ...CONTEXT,
+      metroStations: [],
+    }).flatMap((day) => day.activities.map((entry) => entry.title));
+
+    expect(titles.length).toBeGreaterThan(0);
+    expect(titles.every((title) => title.startsWith('Place nature'))).toBe(true);
+  });
+
+  it('applies the metro rule alone when no base could be found', () => {
+    const titles = planItinerary(brief({ preferences: RULES }), [...baseOnly, ...metroOnly], {
+      metroStations: [STATION, OUTSKIRTS],
+    }).flatMap((day) => day.activities.map((entry) => entry.title));
+
+    expect(titles.length).toBeGreaterThan(0);
+    expect(titles.every((title) => title.startsWith('Place food'))).toBe(true);
   });
 });

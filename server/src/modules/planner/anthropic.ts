@@ -79,6 +79,7 @@ Call \`plan_trip\` when someone asks you to plan, or names a place and a length,
 
 When you do call it:
 
+- \`hotelName\` is where they are staying, when they have told you. Some readers have asked that everything be planned within a set distance of their hotel; you are told so at the top of the conversation when that is the case, and then you must ask which hotel before you call \`plan_trip\`. Ask it plainly, in one line, and wait for the answer. Do not guess, do not offer a hotel of your own, and do not look one up — pass on what they said and nothing else. If they say nothing is booked yet, leave it out and tell them you will plan around the middle of the city.
 - \`destination\` is one searchable place name — "Kyoto", not "Kyoto, Japan", not "Kyoto and Osaka". A two-city trip is two trips; ask which they want planned first.
 - If they gave no dates, choose a sensible window a few weeks out and say which dates you assumed. No length given, five days is a good default. No party size, assume two.
 - \`preferences\` carries only what this conversation actually said. They have settings of their own — hours, pace, budget, what they like — and anything you leave out keeps their setting. So an empty object is usually right. "We're not early risers" is a \`dayStart\`; "somewhere between museums" is not a preference at all. Never infer a budget from how someone writes.
@@ -143,6 +144,11 @@ const TOOLS: ToolUnion[] = [
           description: 'Dated days the trip covers — nights plus one.',
         },
         travellers: { type: 'integer', minimum: 1, maximum: 12 },
+        hotelName: {
+          type: 'string',
+          description:
+            'The hotel they said they are staying at, exactly as they named it. Only ever what they actually told you — never a hotel you suggested, and never one you inferred. Leave it out when they have not said, or when they said nothing is booked. The app looks the name up and asks them to confirm which building it found, so an approximate name is useful and a guess is not.',
+        },
         preferences: {
           type: 'object',
           description:
@@ -233,6 +239,13 @@ const briefSchema = z.object({
   days: z.number().int().min(1).max(21),
   travellers: z.number().int().min(1).max(12),
   /*
+   * A name, and nothing is done with it here. The client looks it up and
+   * offers the matches back for confirmation, because "Grand Hotel" is as
+   * ambiguous when a model repeats it as when a person types it — and the
+   * radius the reader set is measured from whichever building is picked.
+   */
+  hotelName: z.string().trim().min(1).max(160).optional(),
+  /*
    * Dropped rather than fatal, unlike everything above it. A trip with the
    * account's own preferences is a good trip; refusing to plan at all because
    * one weight came back as 1.5 would cost the user the thing they asked for
@@ -283,24 +296,57 @@ export function resetAnthropicClient(): void {
 /* ----------------------------------------------------------- the conversation */
 
 /**
- * Today's date, handed to the model as context rather than baked into the
- * prompt. It has to know what "next month" means to pick dates, and putting it
- * here keeps the cached prefix byte-stable — see the note on `SYSTEM_PROMPT`.
+ * What the model needs to know about this turn, rather than about the app.
+ *
+ * All of it goes here rather than into `SYSTEM_PROMPT`, and that is a cost
+ * decision as much as a tidiness one: the system prompt carries
+ * `cache_control` and the cache is a prefix match, so one changing character
+ * at the top would mean paying full price for the instructions on every
+ * message anybody ever sends.
  */
-function dateContext(): string {
-  return `<context>Today is ${new Date().toISOString().slice(0, 10)}.</context>`;
+export type TurnContext = {
+  /**
+   * The reader's own radius, in kilometres, or null for no limit.
+   *
+   * Read from their settings row rather than sent by the client, because it
+   * decides whether the model must stop and ask a question — and a client that
+   * could switch that off by omitting a field would be a gate that is not one.
+   */
+  maxDistanceFromHotelKm?: number | null;
+};
+
+/**
+ * Today's date and this reader's standing constraints.
+ *
+ * The date has to be here because the model needs to know what "next month"
+ * means to pick dates. The radius is here because it changes what the model
+ * must do *before* it plans: ask which hotel, and wait. That instruction is
+ * useless to a reader with no radius set, and wrong to give them.
+ */
+function turnContext(context: TurnContext): string {
+  const lines = [`Today is ${new Date().toISOString().slice(0, 10)}.`];
+
+  if (context.maxDistanceFromHotelKm) {
+    lines.push(
+      `This traveller only wants activities within ${context.maxDistanceFromHotelKm} km of the hotel they are staying in. ` +
+        'Before you call plan_trip you must know which hotel that is: ask them for its name, in one line, and wait for the answer. ' +
+        'Pass what they say as hotelName. If they say nothing is booked yet, call plan_trip without hotelName and tell them the trip will be planned around the middle of the city.',
+    );
+  }
+
+  return `<context>${lines.join('\n')}</context>`;
 }
 
-function toMessages(history: PlannerChatMessage[]): MessageParam[] {
+function toMessages(history: PlannerChatMessage[], context: TurnContext): MessageParam[] {
   const messages: MessageParam[] = history.map((message) => ({
     role: message.author === 'user' ? ('user' as const) : ('assistant' as const),
     content: message.content,
   }));
 
-  // The date rides on the newest turn, which is always the user's.
+  // The context rides on the newest turn, which is always the user's.
   const last = messages.at(-1);
   if (last?.role === 'user' && typeof last.content === 'string') {
-    last.content = `${dateContext()}\n\n${last.content}`;
+    last.content = `${turnContext(context)}\n\n${last.content}`;
   }
 
   return messages;
@@ -349,9 +395,9 @@ async function runWeather(input: unknown): Promise<string> {
 export async function streamChat(
   history: PlannerChatMessage[],
   handlers: ChatHandlers,
-  signal?: AbortSignal,
+  { context = {}, signal }: { context?: TurnContext; signal?: AbortSignal } = {},
 ): Promise<string | null> {
-  const messages = toMessages(history);
+  const messages = toMessages(history, context);
   const clientRef = anthropic();
 
   for (let turn = 0; turn < MAX_TURNS; turn += 1) {
@@ -424,7 +470,7 @@ export async function streamChat(
         results.push(
           result(
             call.id,
-            'The trip is being scheduled and will appear as a card the user can save. You do not know which places it picked, so do not name any — say a sentence or two about the shape of the trip and what to watch for.',
+            'The trip is being scheduled and will appear as a card the user can save. You do not know which places it picked, so do not name any — say a sentence or two about the shape of the trip and what to watch for. If a hotel was named, the app may ask the user to confirm which building it is before the card appears; do not describe that or apologise for it.',
           ),
         );
         continue;

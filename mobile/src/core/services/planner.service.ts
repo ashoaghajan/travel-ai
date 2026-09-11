@@ -1,11 +1,22 @@
 import { ERROR_CODES } from '@ai-travel/shared';
 import type { PlannerChatMessage, PlannerStreamEvent, PlannerTripBrief } from '@ai-travel/shared';
-import type { GeneratedItinerary, TravelPreferences, TripBrief } from '../types/planner.types';
+import type {
+  ConfirmedStay,
+  GeneratedItinerary,
+  PendingStay,
+  ResolvedStay,
+  StayResume,
+  TravelPreferences,
+  TripBrief,
+} from '../types/planner.types';
 import type { ActivityCategory, TripDraft } from '../types/trip.types';
 import { classifyPrompt } from '../utils/intent';
 import { ApiError, stream } from './http';
 import { DEFAULT_PREFERENCES } from './itinerary.planner';
-import { mockAiService, tripForBrief } from './mockAi.service';
+import { NoPlacesInRangeError, destinationNameIn, mockAiService, tripForBrief } from './mockAi.service';
+import type { TripExtras } from './mockAi.service';
+import { advanceStay, beginStay } from './planner.stay';
+import type { StayStep } from './planner.stay';
 import { PlaceNotFoundError, weatherService } from './weather.service';
 
 /**
@@ -118,7 +129,11 @@ async function answerLocation(place: string | null, proHint = ''): Promise<Gener
  * out loud. The spread gets both right for free — a key the model omitted is
  * not spread at all, and a null one is.
  */
-function toTripBrief(brief: PlannerTripBrief, base: TravelPreferences): TripBrief {
+function toTripBrief(
+  brief: PlannerTripBrief,
+  base: TravelPreferences,
+  stay?: ResolvedStay | null,
+): TripBrief {
   const overrides = brief.preferences ?? {};
 
   const categoryWeights = { ...base.categoryWeights };
@@ -134,6 +149,15 @@ function toTripBrief(brief: PlannerTripBrief, base: TravelPreferences): TripBrie
     startDate: brief.startDate,
     days: brief.days,
     travellers: brief.travellers,
+    /*
+     * The confirmed stay beats the model's, and that is not a matter of trust
+     * — it is that one of them has been placed. The model can only ever hand
+     * over a name, and a name is what the confirmation flow turns into a
+     * building the reader pointed at. Its name is kept where there is no
+     * confirmation, so an older conversation still gets a lookup.
+     */
+    hotelName: stay === undefined ? brief.hotelName : (stay?.name ?? undefined),
+    hotelLocation: stay?.coordinates,
     preferences: {
       ...base,
       ...overrides,
@@ -143,11 +167,109 @@ function toTripBrief(brief: PlannerTripBrief, base: TravelPreferences): TripBrie
   };
 }
 
+/**
+ * Whether a stay already settled in this conversation covers this prompt.
+ *
+ * **Asking for a trip is asking again.** A sentence that names a city is a new
+ * trip, and a new trip gets the question — the hotel somebody gave an hour ago
+ * is not an answer about a trip they have only just described. A sentence that
+ * names no city is a refinement of the trip already on screen ("make it five
+ * days", "more food"), and re-asking there is the thing this exists to stop.
+ *
+ * The first version of this had the test the other way round, matching on the
+ * destination, and so did exactly the wrong thing in both directions: it went
+ * quiet on "create a new trip in Tbilisi" and asked again on "make it 5 days".
+ *
+ * `undefined` means "nothing settled, ask"; `null` means "settled, and there
+ * is no hotel". The difference is why this returns three things rather than two.
+ */
+function staySettledForPrompt(
+  known: ConfirmedStay | undefined,
+  prompt: string,
+): ResolvedStay | null | undefined {
+  if (!known) return undefined;
+
+  return destinationNameIn(prompt) === null ? known.stay : undefined;
+}
+
+/**
+ * The same question for the model's brief, which always names a destination.
+ *
+ * So the free engine's test — "did this sentence name a city?" — cannot be
+ * used here: every brief names one, and applying it would ask again on every
+ * turn. What stands in for it is the hotel the model passed back. It reads the
+ * whole conversation, so on a refinement it repeats the name already given,
+ * and a name that matches the building somebody has already pointed at is not
+ * worth confirming twice. Anything else — a different hotel, a different city,
+ * a brief that dropped the name — is a question again.
+ */
+function staySettledForBrief(
+  known: ConfirmedStay | undefined,
+  brief: PlannerTripBrief,
+): ResolvedStay | null | undefined {
+  if (!known) return undefined;
+
+  const had = known.destination?.trim().toLowerCase();
+  if (!had || had !== brief.destination.trim().toLowerCase()) return undefined;
+
+  const said = brief.hotelName?.trim().toLowerCase();
+
+  // They said there is no hotel, and the model is still not naming one.
+  if (!said) return known.stay === null ? null : undefined;
+
+  return said === known.stay?.name.trim().toLowerCase() ? known.stay : undefined;
+}
+
+/** The model's own contributions to a trip, which the scheduler cannot work out. */
+function extrasOf(brief: PlannerTripBrief): TripExtras {
+  return {
+    title: brief.title,
+    // Straight from the model, and the reason this path needs no geocoding:
+    // it named the city and the country itself.
+    destinationCity: brief.destinationCity,
+    destinationCountry: brief.destinationCountry,
+    flightsEstimate: brief.flightsEstimate,
+    hotelsEstimate: brief.hotelsEstimate,
+  };
+}
+
+/**
+ * Where the model's trip is based, settled before it is scheduled.
+ *
+ * The model is told to ask for the hotel and usually has, but what it comes
+ * back with is a *name* — and a name is not a place. It goes through the same
+ * lookup and the same confirmation a typed one does, because "Grand Hotel" is
+ * as ambiguous when a model repeats it as when a person types it, and the
+ * model has no way to tell which of the four in the city was meant either.
+ *
+ * When it did not ask, this asks. That is the fallback rather than the plan:
+ * the question reads better in the middle of the model's own sentence than
+ * tacked onto the end of it.
+ */
+function settleStay(brief: PlannerTripBrief, limitKm: number): Promise<StayStep> {
+  const resume: StayResume = { kind: 'brief', brief };
+  const named = brief.hotelName?.trim();
+
+  if (named) {
+    return advanceStay({ step: 'name', destination: brief.destination, resume }, named);
+  }
+
+  return Promise.resolve(beginStay(resume, brief.destination, limitKm));
+}
+
 export type PlannerHandlers = {
   /** One chunk of the reply. Append it — do not replace what came before. */
   onText: (text: string) => void;
   /** The model proposed a trip. At most once per message. */
   onTrip: (trip: TripDraft) => void;
+  /**
+   * The planner cannot build the trip until it knows where they are staying.
+   *
+   * Arrives *instead of* a trip, never alongside one, and the question itself
+   * has already gone out through `onText` — this carries only what the caller
+   * has to hang on to in order to resume. See `planner.stay.ts`.
+   */
+  onStayNeeded: (pending: PendingStay) => void;
 };
 
 /** A failure the chat should show, distinct from one worth falling back on. */
@@ -167,7 +289,20 @@ export class PlannerError extends Error {
  */
 async function answerOffline(
   prompt: string,
-  { proHint = '', preferences }: { proHint?: string; preferences?: TravelPreferences } = {},
+  {
+    proHint = '',
+    preferences,
+    stay,
+  }: {
+    proHint?: string;
+    preferences?: TravelPreferences;
+    /**
+     * `undefined` means nobody has been asked yet, and is the reason the stay
+     * question is not asked twice for one trip. `null` is an answer — they
+     * said there is no hotel — and plans from the centre.
+     */
+    stay?: ResolvedStay | null;
+  } = {},
 ): Promise<GeneratedItinerary> {
   const intent = classifyPrompt(prompt);
 
@@ -179,8 +314,30 @@ async function answerOffline(
     case 'unknown':
       return { reply: [CANNOT_ANSWER, proHint].filter(Boolean).join(' ') };
     case 'trip':
-    default:
-      return withDestinationFacts(await mockAiService.generateItinerary(prompt, preferences));
+    default: {
+      /*
+       * The one question that has to come before the days.
+       *
+       * A radius is measured from a point, and until somebody says which
+       * hotel, the only point this engine has is the middle of the city — so
+       * "within 2 km of your hotel" quietly became "within 2 km of the town
+       * hall" for every trip planned before a booking existed. Asking costs a
+       * turn; getting it wrong costs a city.
+       */
+      const limit = preferences?.maxDistanceFromHotelKm ?? null;
+
+      if (limit !== null && stay === undefined) {
+        const step = beginStay({ kind: 'prompt', prompt }, destinationNameIn(prompt), limit);
+
+        // `ask` is the only thing `beginStay` returns; the narrowing is for
+        // the type rather than for a case that can happen.
+        if (step.kind === 'ask') return { reply: step.reply, pendingStay: step.pending };
+      }
+
+      return withDestinationFacts(
+        await mockAiService.generateItinerary(prompt, preferences, stay),
+      );
+    }
   }
 }
 
@@ -260,7 +417,13 @@ export const plannerService = {
     {
       signal,
       preferences = DEFAULT_PREFERENCES,
-    }: { signal?: AbortSignal; preferences?: TravelPreferences } = {},
+      knownStay,
+    }: {
+      signal?: AbortSignal;
+      preferences?: TravelPreferences;
+      /** What this conversation has already settled, if anything. */
+      knownStay?: ConfirmedStay;
+    } = {},
   ): Promise<void> {
     const prompt = history.at(-1)?.content ?? '';
     let started = false;
@@ -275,6 +438,16 @@ export const plannerService = {
      */
     let scheduling: Promise<TripDraft> | null = null;
 
+    /**
+     * The stay being settled, when the radius is set and nobody has answered.
+     *
+     * Runs in place of `scheduling` rather than before it: there is no trip to
+     * build until the point it is measured from is known. Started as soon as
+     * the brief arrives, for the same reason scheduling is — the model is
+     * still narrating, and the lookup should not wait for it to finish.
+     */
+    let settling: Promise<StayStep> | null = null;
+
     try {
       for await (const event of stream<PlannerStreamEvent>('/planner/chat', {
         body: { messages: history },
@@ -287,15 +460,23 @@ export const plannerService = {
             break;
           case 'brief':
             started = true;
-            scheduling = tripForBrief(toTripBrief(event.brief, preferences), {
-              title: event.brief.title,
-              // Straight from the model, and the reason this path needs no
-              // geocoding: it named the city and the country itself.
-              destinationCity: event.brief.destinationCity,
-              destinationCountry: event.brief.destinationCountry,
-              flightsEstimate: event.brief.flightsEstimate,
-              hotelsEstimate: event.brief.hotelsEstimate,
-            });
+
+            {
+              // Asked once per destination rather than once per turn: a
+              // follow-up that shortens the trip is the same trip, in the
+              // same hotel, and confirming it again is an obstacle.
+              const settled = staySettledForBrief(knownStay, event.brief);
+
+              if (preferences.maxDistanceFromHotelKm !== null && settled === undefined) {
+                settling = settleStay(event.brief, preferences.maxDistanceFromHotelKm);
+                break;
+              }
+
+              scheduling = tripForBrief(
+                toTripBrief(event.brief, preferences, settled),
+                extrasOf(event.brief),
+              );
+            }
             break;
           case 'error':
             // Mid-stream failures arrive here rather than as a rejection: by
@@ -307,10 +488,47 @@ export const plannerService = {
         }
       }
 
+      /*
+       * The question, after the words, because the model has been talking
+       * about a trip it expects to appear. A blank line keeps it off the end
+       * of that sentence.
+       */
+      if (settling) {
+        const step = await settling;
+
+        if (step.kind === 'ask') {
+          handlers.onText(`\n\n${step.reply}`);
+          handlers.onStayNeeded(step.pending);
+        } else {
+          // The model passed on a "not sure" of its own, so there is nothing
+          // to confirm and the trip can be built from the centre.
+          if (step.reply) handlers.onText(`\n\n${step.reply}`);
+          if (step.resume.kind === 'brief') {
+            scheduling = tripForBrief(
+              toTripBrief(step.resume.brief, preferences, step.stay),
+              extrasOf(step.resume.brief),
+            );
+          }
+        }
+      }
+
       // After the words, because that is the order it happens in: the model
       // calls the tool, talks about the trip, and the card lands under it.
       if (scheduling) handlers.onTrip(await scheduling);
     } catch (caught) {
+      /*
+       * A radius with nothing inside it, said out loud rather than answered
+       * with a template.
+       *
+       * Appended to what the model already wrote, because by now it has
+       * narrated a trip that is not coming — leaving that sentence to stand
+       * alone would be the misleading half of this answer.
+       */
+      if (caught instanceof NoPlacesInRangeError) {
+        handlers.onText(`\n\n${caught.message}`);
+        return;
+      }
+
       if (started || caught instanceof PlannerError) throw caught;
       if (!isUnconfigured(caught)) throw caught;
 
@@ -323,9 +541,20 @@ export const plannerService = {
        */
       if (signal?.aborted) throw caught;
 
-      const { reply, trip } = await answerOffline(prompt);
+      /*
+       * With the account's preferences, which this had always dropped: a Pro
+       * reader on a server with no key was quietly planned for as though they
+       * had never opened the settings screen. The stay question comes with
+       * them, which is right — this is the free engine, and it is the engine
+       * that asks.
+       */
+      const { reply, trip, pendingStay } = await answerOffline(prompt, {
+        preferences,
+        stay: staySettledForPrompt(knownStay, prompt),
+      });
       handlers.onText(reply);
       if (trip) handlers.onTrip(trip);
+      if (pendingStay) handlers.onStayNeeded(pendingStay);
     }
   },
 
@@ -352,14 +581,85 @@ export const plannerService = {
     {
       signal,
       preferences,
-    }: { signal?: AbortSignal; preferences?: TravelPreferences } = {},
+      knownStay,
+    }: {
+      signal?: AbortSignal;
+      preferences?: TravelPreferences;
+      /** What this conversation has already settled, if anything. */
+      knownStay?: ConfirmedStay;
+    } = {},
   ): Promise<void> {
-    const { reply, trip } = await answerOffline(prompt, { proHint: PRO_HINT, preferences });
+    const { reply, trip, pendingStay } = await answerOffline(prompt, {
+      proHint: PRO_HINT,
+      preferences,
+      /*
+       * Asked once per trip, not once per conversation: naming a city is
+       * asking for a new trip, and a new trip gets the question again.
+       */
+      stay: staySettledForPrompt(knownStay, prompt),
+    });
 
     if (signal?.aborted) return;
 
     handlers.onText(reply);
     if (trip) handlers.onTrip(trip);
+    if (pendingStay) handlers.onStayNeeded(pendingStay);
+  },
+
+  /**
+   * Carrying on once the stay is settled.
+   *
+   * The turn that was interrupted, finished — and which turn that was is in
+   * the `resume` the question was asked with. A free trip is the sentence
+   * replayed, so everything it said about dates and party size still counts; a
+   * Pro one is the constraints the model already produced, scheduled at last,
+   * because running the model again would cost a second paid turn to be told
+   * the same thing.
+   *
+   * `stay` is never `undefined` here. The reader has been asked, and both a
+   * hotel and "there isn't one" are answers — passing `undefined` would ask
+   * them again, which is the one outcome this whole flow exists to avoid.
+   */
+  async resume(
+    resume: StayResume,
+    stay: ResolvedStay | null,
+    handlers: PlannerHandlers,
+    {
+      signal,
+      preferences = DEFAULT_PREFERENCES,
+    }: { signal?: AbortSignal; preferences?: TravelPreferences } = {},
+  ): Promise<void> {
+    // Named back, because the reader picked it off a list of near-identical
+    // rows and this is the confirmation that the right one landed.
+    if (stay) handlers.onText(`Planning around ${stay.name}. `);
+
+    try {
+      if (resume.kind === 'prompt') {
+        const { reply, trip } = await answerOffline(resume.prompt, { preferences, stay });
+
+        if (signal?.aborted) return;
+
+        handlers.onText(reply);
+        if (trip) handlers.onTrip(trip);
+        return;
+      }
+
+      const trip = await tripForBrief(
+        toTripBrief(resume.brief, preferences, stay),
+        extrasOf(resume.brief),
+      );
+
+      if (signal?.aborted) return;
+
+      handlers.onTrip(trip);
+    } catch (caught) {
+      if (caught instanceof NoPlacesInRangeError) {
+        handlers.onText(caught.message);
+        return;
+      }
+
+      throw caught;
+    }
   },
 
   /**
@@ -372,6 +672,12 @@ export const plannerService = {
     prompt: string,
     preferences?: TravelPreferences,
   ): Promise<GeneratedItinerary> {
-    return answerOffline(prompt, { preferences });
+    /*
+     * `stay: null` rather than unasked. This answers in one shot for a caller
+     * with no way to render a follow-up question, so asking one would hang the
+     * trip on an answer that can never arrive. The radius is measured from the
+     * middle of the city, which is what it did before the question existed.
+     */
+    return answerOffline(prompt, { preferences, stay: null });
   },
 };

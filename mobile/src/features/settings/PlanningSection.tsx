@@ -399,13 +399,13 @@ export function PlanningSection({
         </View>
 
         {/*
-          Which point the radius runs from, said out loud. The planner runs
-          before anything is booked, so this is usually the middle of the city
-          rather than a hotel — and those are different promises.
+          What setting this actually does, said out loud. It is the one
+          preference here that changes the conversation rather than only the
+          trip, and the escape hatch is named in the same breath because most
+          trips are planned before anything is booked.
         */}
         <Text variant="xs" tone="muted" leading="snug">
-          Measured from your hotel when you have one booked and not yet attached to a trip, and from
-          the middle of the destination when you do not. Straight-line distance.
+          Set this and the planner asks which hotel before it builds a trip, looks the name up and asks you to confirm which building it found. Say you are not sure and it measures from the middle of the destination instead. Straight-line distance.
         </Text>
       </View>
 

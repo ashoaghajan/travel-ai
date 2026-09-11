@@ -1,4 +1,9 @@
-import type { GeneratedItinerary, TravelPreferences, TripBrief } from '../types/planner.types';
+import type {
+  GeneratedItinerary,
+  ResolvedStay,
+  TravelPreferences,
+  TripBrief,
+} from '../types/planner.types';
 import type { ItineraryActivity, ItineraryDay, TripDraft } from '../types/trip.types';
 import {
   DESTINATION_TEMPLATES,
@@ -11,7 +16,8 @@ import { addDays, findDates, findMonthStart, fromIsoDate, toIsoDate } from '../u
 import { createId } from '../utils/id';
 import { coverImage } from '../utils/itineraryImages';
 import { activityService } from './activity.service';
-import { DEFAULT_PREFERENCES, planItinerary } from './itinerary.planner';
+import { DEFAULT_PREFERENCES, locationRulesApply, planItinerary } from './itinerary.planner';
+import type { PlanningContext } from './itinerary.planner';
 import { resolvePlanningContext } from './planning.context';
 
 /**
@@ -53,23 +59,168 @@ const DEFAULT_LEAD_DAYS = 30;
 const FLIGHT_PRICE_PER_TRAVELLER = 1124;
 const HOTEL_PRICE_PER_NIGHT = 180;
 
-const STOP_WORDS = new Set([
+/**
+ * Words that come before a place name without being part of it.
+ *
+ * Skipped while nothing has been collected yet, rather than treated as the end
+ * of the name — which is the whole difference between this and
+ * `NAME_ENDS_AT`. "A trip to the Hague" is a trip to the Hague, and stopping
+ * at "the" would leave nothing at all.
+ *
+ * The planning words are here for the phrasing with no preposition in it at
+ * all: "trip Tbilisi" and "plan Tbilisi for 5 days" are things people type,
+ * and both begin with a word that ends a name anywhere *except* in front of
+ * one. Checked before `NAME_ENDS_AT`, which is what lets the same word be
+ * skipped here and fatal in the middle.
+ *
+ * **"new" is deliberately absent.** It reads like a lead-in — "a new trip to
+ * Tbilisi" — but that phrasing has a preposition and never reaches here,
+ * whereas New York, New Orleans and New Delhi all start with it and would
+ * have arrived as York, Orleans and Delhi.
+ */
+const LEADS_A_NAME = new Set([
   'a',
   'an',
   'the',
+  'my',
+  'our',
+  'another',
+  'trip',
+  'trips',
+  'holiday',
+  'vacation',
+  'getaway',
+  'plan',
+  'planning',
+  'book',
+  'booking',
+  'create',
+  'make',
+  'arrange',
+  'organise',
+  'organize',
+]);
+
+/**
+ * Words that end a place name rather than continue it.
+ *
+ * These used to be *filtered out* of the captured phrase instead, and the
+ * difference is not cosmetic. Filtering asks "is this word part of a name?" of
+ * each word independently, so "to Tbilisi from 14 to 18 of September" captured
+ * "Tbilisi from", dropped nothing, and searched the attractions directory for
+ * a city called **"Tbilisi From"** — which does not exist, so the trip fell
+ * back to a generic template with stock photographs and "Your destination" on
+ * every card. Truncating asks the right question instead: once a word like
+ * "from" appears, the name is over, and whatever follows belongs to the dates.
+ *
+ * The travel verbs are here for the other half of the same bug: "I want to go
+ * to Tbilisi" matched at "to go" and produced "Go To". They end a name because
+ * they can never be inside one, which lets the scan move on to the next "to"
+ * and find the city.
+ */
+const NAME_ENDS_AT = new Set([
+  // Prepositions and connectives that follow a destination.
+  'from',
   'for',
   'in',
   'on',
+  'at',
+  'of',
+  'by',
+  'to',
   'with',
   'and',
-  'next',
-  'this',
+  'or',
+  'between',
   'during',
   'over',
+  'around',
+  'before',
+  'after',
+  'until',
+  'till',
+  'through',
+  'next',
+  'this',
+  'starting',
+  'departing',
+  'returning',
+  // Whose trip it is, never where it is.
   'my',
   'our',
   'we',
   'i',
+  'me',
+  'us',
+  /*
+   * Pronouns and the words a refinement opens with.
+   *
+   * These matter because of the bare-name fallback, which reads a short
+   * prompt with no preposition in it as a place name: without them "make it 5
+   * days" parsed as a trip to **It**, and a refinement that names a city is
+   * treated as a request for a new trip — so the planner would have re-opened
+   * a settled question and planned a trip to nowhere at the same time.
+   *
+   * Every one of these is checked against a map before it goes in. Split,
+   * Nice and Bath are cities; "cheaper" and "instead" are not.
+   */
+  'it',
+  'its',
+  'that',
+  'them',
+  'they',
+  'there',
+  'here',
+  'those',
+  'these',
+  'something',
+  'anything',
+  'nothing',
+  'everything',
+  'more',
+  'less',
+  'fewer',
+  'cheaper',
+  'later',
+  'earlier',
+  'longer',
+  'shorter',
+  'add',
+  'remove',
+  'drop',
+  'change',
+  'swap',
+  'instead',
+  'again',
+  'also',
+  'different',
+  'better',
+  // Verbs that sit between "to" and the place.
+  'go',
+  'going',
+  'visit',
+  'visiting',
+  'travel',
+  'travelling',
+  'traveling',
+  'see',
+  'seeing',
+  'fly',
+  'flying',
+  'head',
+  'heading',
+  'get',
+  'getting',
+  'stay',
+  'staying',
+  'explore',
+  'exploring',
+  'book',
+  'booking',
+  'plan',
+  'planning',
+  'spend',
+  'spending',
 ]);
 
 const MONTH_WORDS = new Set([
@@ -166,29 +317,226 @@ function titleCase(value: string): string {
 }
 
 /**
- * Pulls the place out of "…trip to Lisbon for…" or "…a weekend in Porto…"
- * when no template matches. Month names are filtered out so "in June" is not
- * mistaken for a destination.
+ * The most words a place name may run to.
+ *
+ * Three rather than two, now that `NAME_ENDS_AT` does the real work of
+ * knowing where a name stops: the cap is a backstop against a run-on sentence
+ * rather than the thing deciding where "New York for four people" ends. Two
+ * could not spell Rio de Janeiro or Ho Chi Minh City.
  */
-function parseDestinationName(prompt: string): string | null {
-  const patterns = [
-    /\bto\s+([A-Za-z][A-Za-z'-]*(?:\s+[A-Za-z][A-Za-z'-]*){0,2})/,
-    /\bin\s+([A-Za-z][A-Za-z'-]*(?:\s+[A-Za-z][A-Za-z'-]*){0,2})/,
-  ];
+const MAX_NAME_WORDS = 3;
 
-  for (const pattern of patterns) {
-    const match = prompt.match(pattern);
-    if (!match) continue;
+/**
+ * The words that announce a destination — and *only* those words.
+ *
+ * Deliberately not `to\s+(name)`: a capture that took the name too would also
+ * consume everything up to the end of it, and `matchAll` resumes after a whole
+ * match. "I want to go to Tbilisi" matched once, at "to go to Tbilisi",
+ * swallowed the second "to" along with it, and left nothing for the scan to
+ * try — which is how that sentence became a trip to "Go To". Matching the
+ * opener alone means each "to" in a sentence gets its own turn.
+ *
+ * `into` leads the alternation, and that ordering is load-bearing: regex
+ * alternation is left-to-right at each position, so `in|into` matches the "in"
+ * of "into", fails on the space that is not there, and abandons the position.
+ * "Create a new trip **into** Tbilisi" found no destination at all before
+ * this, and produced a template itinerary labelled "Your destination".
+ *
+ * `visit` is here because `intent.ts` already counts it as a request to plan
+ * something. A classifier that says "this is a trip request" beside a parser
+ * that cannot say where to is a contradiction, and it surfaces as a generic
+ * trip for a sentence that named a city plainly.
+ */
+const DESTINATION_OPENERS = /\b(?:into|in|to|towards|toward|visiting|visit)\s+/gi;
 
-    const words = match[1]
-      .split(/\s+/)
-      .filter((word) => !STOP_WORDS.has(word.toLowerCase()))
-      .filter((word) => !MONTH_WORDS.has(word.toLowerCase()));
+/**
+ * Words that are never part of a place name, however place-shaped they look.
+ *
+ * Two groups, and both exist because the intent classifier is deliberately
+ * eager: "hello", "thanks" and "ok" are all read as trip requests, so without
+ * this the bare-name fallback below would happily plan a trip to Hello and ask
+ * which hotel somebody is staying at in it.
+ *
+ * The vague destinations are the other group. "Somewhere warm" is a real thing
+ * to type and a real thing to answer, but it is not a name the attractions
+ * directory can be searched for — the templates handle it, and they should
+ * keep handling it.
+ *
+ * Kept deliberately short, and checked against real cities before adding to:
+ * Nice, Bath and Split are all places, so an adjective-sounding word is not
+ * on its own a reason to be here.
+ */
+const NOT_A_PLACE = new Set([
+  // Vague destinations.
+  'somewhere',
+  'anywhere',
+  'everywhere',
+  'nowhere',
+  'abroad',
+  'overseas',
+  'home',
+  'beach',
+  'beaches',
+  'mountains',
+  'seaside',
+  'coast',
+  'countryside',
+  'island',
+  'warm',
+  'cold',
+  'sunny',
+  'cheap',
+  'expensive',
+  /*
+   * How a question opens. `intent.ts` catches most of these before the parser
+   * is ever reached, but not all — it is eager, and "what a lovely day" is
+   * read as a trip request. None of them is ever inside a place name either,
+   * so this costs nothing and closes the gap from the other side.
+   */
+  'what',
+  'whats',
+  'when',
+  'where',
+  'why',
+  'how',
+  'who',
+  'which',
+  'tell',
+  'show',
+  'give',
+  'find',
+  'recommend',
+  'suggest',
+  'should',
+  'could',
+  'would',
+  'will',
+  'does',
+  'did',
+  'is',
+  'are',
+  'am',
+  'was',
+  'were',
+  // Conversation, not geography.
+  'hello',
+  'hi',
+  'hey',
+  'thanks',
+  'thank',
+  'please',
+  'yes',
+  'yeah',
+  'no',
+  'nope',
+  'ok',
+  'okay',
+  'sure',
+  'maybe',
+  'help',
+  'trip',
+  'holiday',
+  'vacation',
+  'getaway',
+]);
 
-    if (words.length > 0) return titleCase(words.slice(0, 2).join(' '));
+/** Only a word can be part of a place name — "18" ends one. */
+const NAME_WORD = /^[A-Za-z][A-Za-z'’-]*$/;
+
+/**
+ * Punctuation around a word, which is not part of it.
+ *
+ * "Tbilisi, 14-18 September" is a perfectly ordinary way to ask, and the comma
+ * alone was enough to make the name fail `NAME_WORD` and yield nothing at all.
+ * Only the outside is trimmed — Stratford-upon-Avon keeps its hyphens.
+ */
+function bareWord(word: string): string {
+  return word.replace(/^[^A-Za-z0-9]+/, '').replace(/[^A-Za-z0-9]+$/, '');
+}
+
+/** The place name at the start of this text, or null if there is not one. */
+function nameWithin(text: string): string | null {
+  const words: string[] = [];
+
+  for (const raw of text.split(/\s+/)) {
+    const word = bareWord(raw);
+    if (word === '') continue;
+
+    const lower = word.toLowerCase();
+
+    // Only ever a lead-in; inside a name the same word ends it.
+    if (words.length === 0 && LEADS_A_NAME.has(lower)) continue;
+    if (
+      !NAME_WORD.test(word) ||
+      NAME_ENDS_AT.has(lower) ||
+      MONTH_WORDS.has(lower) ||
+      NOT_A_PLACE.has(lower)
+    ) {
+      break;
+    }
+
+    words.push(word);
+    if (words.length === MAX_NAME_WORDS) break;
   }
 
-  return null;
+  return words.length > 0 ? titleCase(words.join(' ')) : null;
+}
+
+/**
+ * Pulls the place out of "…trip to Lisbon for…" or "…a weekend in Porto…"
+ * when no template matches.
+ *
+ * **Every opener is tried, not just the first.** A sentence says "to" more
+ * than once — "I want to go to Tbilisi", "from 14 to 18" — and the first
+ * occurrence is usually not the one carrying the destination. An opener that
+ * yields no name simply moves the scan along to the next.
+ */
+function parseDestinationName(prompt: string): string | null {
+  // A fresh regex per call: a shared global one carries `lastIndex` between
+  // calls, so every second prompt would start reading from the middle.
+  for (const match of prompt.matchAll(new RegExp(DESTINATION_OPENERS))) {
+    const name = nameWithin(prompt.slice(match.index + match[0].length));
+    if (name) return name;
+  }
+
+  return bareDestination(prompt);
+}
+
+/**
+ * How long a prompt may be and still be read as nothing but a place name.
+ *
+ * A sentence with no "to", "in" or "into" anywhere in it is usually not naming
+ * a destination, so the fallback stays near what somebody actually types when
+ * they are naming one: "Tbilisi", "Rio de Janeiro", "Tbilisi, 14-18 September",
+ * "plan Tbilisi for 5 days".
+ *
+ * Six rather than the four this started at, because the terminators do the
+ * real work now — a question opener, a vague destination or a connective ends
+ * the name wherever it appears, so the cap is a backstop against a long
+ * descriptive sentence rather than the thing keeping nonsense out.
+ */
+const MAX_BARE_PROMPT_WORDS = 6;
+
+/**
+ * The whole prompt read as a place name — "Tbilisi" and nothing else.
+ *
+ * The last resort, and it closes a real gap rather than guessing: `intent.ts`
+ * calls a bare city a trip request and always has, but nothing could then say
+ * *which* city, so "Tbilisi" produced the generic template — a trip to "Your
+ * destination", with stock photographs. It also left the stay question
+ * unanchored: with no destination, the hotel lookup is not bounded to a city,
+ * and "Grand Hotel" could be matched anywhere on earth.
+ *
+ * A wrong guess here is cheap and self-correcting: the name goes to the
+ * attractions directory, finds nothing, and the trip falls back to the
+ * template it would have got anyway. `NOT_A_PLACE` is what keeps the guess
+ * from being *visibly* wrong, in a question naming a city that is not one.
+ */
+function bareDestination(prompt: string): string | null {
+  const trimmed = prompt.trim();
+  if (trimmed === '' || trimmed.split(/\s+/).length > MAX_BARE_PROMPT_WORDS) return null;
+
+  return nameWithin(trimmed);
 }
 
 /** `name` is null when the prompt never says where the user wants to go. */
@@ -330,13 +678,71 @@ export function buildTripDraft({
 const POOL_SIZE = 80;
 
 /**
+ * The two location rules left nothing to plan.
+ *
+ * Its own error because it is the one empty result that must **not** become a
+ * template trip. Every other reason the scheduler comes back with nothing —
+ * no network, a destination the catalogue has never heard of, a prompt naming
+ * no place — is answered by the templates, and a generic week is a better
+ * answer than an apology.
+ *
+ * This one is the opposite. The templates honour no preference at all, so
+ * handing one to somebody who asked for "within 1 km of my hotel" answers the
+ * question with seven days of places that are not, and does it silently. The
+ * message is written for the chat, and names the setting to change, because
+ * the preference that caused this is on a screen the reader is not looking at.
+ */
+export class NoPlacesInRangeError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'NoPlacesInRangeError';
+  }
+}
+
+/** How the radius describes the point it was measured from. */
+function baseLabel(base: PlanningContext['base'], destination: string): string {
+  if (base?.source === 'named' || base?.source === 'stay') return 'your hotel';
+
+  return `the middle of ${destination}`;
+}
+
+/**
+ * Why nothing survived, in the reader's own terms.
+ *
+ * Both rules are named when both were in force, because there is no way to
+ * tell from here which of them did the excluding and guessing would send
+ * somebody to change the wrong setting.
+ */
+function outOfRangeMessage(brief: TripBrief, context: PlanningContext): string {
+  const limit = brief.preferences.maxDistanceFromHotelKm;
+  const reasons: string[] = [];
+
+  if (limit !== null && context.base) {
+    reasons.push(`within ${limit} km of ${baseLabel(context.base, brief.destination)}`);
+  }
+
+  if (brief.preferences.nearMetroOnly && (context.metroStations?.length ?? 0) > 0) {
+    reasons.push('within a short walk of a metro station');
+  }
+
+  return (
+    `I could not find enough to do in ${brief.destination} ${reasons.join(' and ')}. ` +
+    'Widen it in Settings → Planning, or tell me a different hotel, and I will try again.'
+  );
+}
+
+/**
  * A scheduled trip, or null when this destination cannot be scheduled.
  *
- * Null covers every reason at once on purpose: no key, no network, a place the
+ * Null covers most reasons at once on purpose: no key, no network, a place the
  * catalogue has never heard of, or a set of preferences that rules out
  * everything it does have. The caller does the same thing in all four cases —
  * falls back to a template — and distinguishing them here would only produce a
  * distinction it then had to discard.
+ *
+ * The exception is `NoPlacesInRangeError`, thrown rather than returned, and
+ * the reason it is not null is that the caller must **not** do the usual thing
+ * with it. See the class.
  */
 async function planFromRealPlaces(
   brief: TripBrief,
@@ -360,13 +766,24 @@ async function planFromRealPlaces(
    * them — where the trip is based, and where the metro stops. Both are no-ops
    * and cost nothing when their preference is off, which is the default.
    */
-  const itinerary = planItinerary(brief, pool, await resolvePlanningContext(brief));
-  if (itinerary.length === 0) return null;
+  const context = await resolvePlanningContext(brief);
+  const itinerary = planItinerary(brief, pool, context);
 
-  // A trip whose days are all empty is not a trip. It happens when the pool
-  // holds a handful of rows and every one of them is in a category the reader
-  // ruled out — the templates say more than a week of blank days would.
-  if (itinerary.every((day) => day.activities.length === 0)) return null;
+  // A trip whose days are all empty is not a trip either. It happens when the
+  // pool holds a handful of rows and every one of them is in a category the
+  // reader ruled out — the templates say more than a week of blank days would.
+  if (itinerary.length === 0 || itinerary.every((day) => day.activities.length === 0)) {
+    /*
+     * Unless a location rule was doing the excluding, and there was something
+     * to exclude. A catalogue that came back empty is not evidence about a
+     * radius, so it takes the template path like any other empty pool.
+     */
+    if (pool.length > 0 && locationRulesApply(brief.preferences, context)) {
+      throw new NoPlacesInRangeError(outOfRangeMessage(brief, context));
+    }
+
+    return null;
+  }
 
   const categories = itinerary.flatMap((day) => day.activities.map((entry) => entry.category));
   const nights = Math.max(0, brief.days - 1);
@@ -441,6 +858,18 @@ export async function tripForBrief(brief: TripBrief, extras: TripExtras = {}): P
   );
 }
 
+/**
+ * The place a prompt is about, or null.
+ *
+ * Exported for one caller: the stay question has to name the city it is asking
+ * about, and it is asked *before* anything is planned — so it cannot read the
+ * destination off a trip that does not exist yet. Same parse the planner is
+ * about to run, rather than a second one that could disagree with it.
+ */
+export function destinationNameIn(prompt: string): string | null {
+  return resolveDestination(prompt).name;
+}
+
 export const mockAiService = {
   /**
    * `preferences` is how the days become somebody's rather than anybody's.
@@ -452,6 +881,7 @@ export const mockAiService = {
   async generateItinerary(
     prompt: string,
     preferences: TravelPreferences = DEFAULT_PREFERENCES,
+    stay?: ResolvedStay | null,
   ): Promise<GeneratedItinerary> {
     const { template, name } = resolveDestination(prompt);
     const { startDate, days } = resolveSchedule(prompt);
@@ -462,18 +892,41 @@ export const mockAiService = {
      * and "somewhere warm" is not a name. That prompt still gets the generic
      * template, which is what it got before.
      */
-    const scheduled = name
-      ? await planFromRealPlaces(
-          {
-            destination: name,
-            startDate: toIsoDate(startDate),
-            days,
-            travellers,
-            preferences,
-          },
-          template,
-        )
-      : null;
+    let scheduled: TripDraft | null;
+
+    try {
+      scheduled = name
+        ? await planFromRealPlaces(
+            {
+              destination: name,
+              startDate: toIsoDate(startDate),
+              days,
+              travellers,
+              /*
+               * The stay the reader confirmed, when they were asked. Absent
+               * when the radius is off and nobody was asked, and null when
+               * they were and said there is not one — both of which leave the
+               * radius measured from the middle of the city.
+               */
+              hotelName: stay?.name,
+              hotelLocation: stay?.coordinates,
+              preferences,
+            },
+            template,
+          )
+        : null;
+    } catch (caught) {
+      /*
+       * The one empty result that gets a sentence rather than a template.
+       *
+       * Answered here rather than thrown on, because a rule the reader
+       * switched on themselves excluding everything is a fact about their
+       * settings, not a failure of the planner — an error banner would be the
+       * wrong shape for it. No trip goes with it: there is honestly not one.
+       */
+      if (caught instanceof NoPlacesInRangeError) return { reply: caught.message };
+      throw caught;
+    }
 
     /*
      * The delay is only for the template path now.

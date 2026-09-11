@@ -76,13 +76,18 @@ export const DEFAULT_PREFERENCES: TravelPreferences = {
  */
 export type PlanningContext = {
   /**
-   * Where the trip is based, and which of the two it turned out to be.
+   * Where the trip is based, and which of the three it turned out to be.
    *
-   * `stay` when a booked hotel was found and placed, `centre` when the
-   * destination's own coordinates stood in for one. The caller resolves it,
-   * because it involves the bookings and the geocoder and this file is pure.
+   * `named` when the reader was asked and gave a hotel, `stay` when a booked
+   * one was found and placed, `centre` when the destination's own coordinates
+   * stood in for either. The caller resolves it, because it involves the chat,
+   * the bookings and the geocoder, and this file is pure.
+   *
+   * The source is not decoration: `centre` is a weaker answer than the other
+   * two and the planner says so out loud rather than presenting a radius
+   * around the middle of a city as a radius around somebody's hotel.
    */
-  base?: { coordinates: LatLng; source: 'stay' | 'centre' };
+  base?: { coordinates: LatLng; source: 'named' | 'stay' | 'centre' };
   /**
    * Metro and subway stations near the destination.
    *
@@ -255,6 +260,30 @@ function isNearMetro(
   const point = activity.coordinates;
 
   return stations.some((station) => distanceKm(station, point) <= METRO_WALK_KM);
+}
+
+/**
+ * Whether either location rule was in force for this plan.
+ *
+ * Not "switched on" — *in force*. Both rules are written to stop applying when
+ * they cannot judge (no base found, no stations known), and a rule that is not
+ * applying has excluded nothing, so an empty result cannot be blamed on it.
+ *
+ * The caller needs the difference because the two empty results mean opposite
+ * things. A destination the catalogue knows nothing about should fall back to
+ * a template trip, which is what it has always done. A destination full of
+ * places, none of which survived a 1 km radius, must **not**: the template
+ * honours no preference at all, so quietly returning one would answer "only
+ * within 1 km of my hotel" with a week of places that are not.
+ */
+export function locationRulesApply(
+  preferences: TravelPreferences,
+  context: PlanningContext = {},
+): boolean {
+  const byDistance = preferences.maxDistanceFromHotelKm !== null && Boolean(context.base);
+  const byMetro = preferences.nearMetroOnly && (context.metroStations?.length ?? 0) > 0;
+
+  return byDistance || byMetro;
 }
 
 /**

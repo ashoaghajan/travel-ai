@@ -8,6 +8,7 @@ import { Logo } from '../../../components/common/Logo';
 import { BookmarkIcon, DownloadIcon, TrashIcon } from '../../../components/common/icons';
 import { ChatMessage } from '../components/ChatMessage';
 import { ItineraryPreview } from '../components/ItineraryPreview';
+import { StayPicker } from '../components/StayPicker';
 import { PlannerInput } from '../components/PlannerInput';
 import { PlannerTierNote } from '../components/PlannerTierNote';
 import { TypingIndicator } from '../components/TypingIndicator';
@@ -36,6 +37,7 @@ export function PlannerPage() {
     stop,
     savedTripIdFor,
     generate,
+    chooseStay,
     saveTrip,
     customiseTrip,
     clearConversation,
@@ -146,6 +148,19 @@ export function PlannerPage() {
 
         {messages.map((message) => (
           <ChatMessage key={message.id} author={message.author} content={message.content}>
+            {/*
+              The hotels the planner found, when it is waiting for one to be
+              picked. Never alongside a trip: the question is the reason there
+              is not one yet.
+            */}
+            {message.pendingStay?.candidates?.length ? (
+              <StayPicker
+                candidates={message.pendingStay.candidates}
+                isBusy={isGenerating}
+                onChoose={(candidateId) => void chooseStay(message.id, candidateId)}
+              />
+            ) : null}
+
             {message.trip ? (
               <ItineraryPreview
                 trip={message.trip}

@@ -1,0 +1,81 @@
+.picker {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  min-width: 0;
+  max-width: 640px;
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/*
+ * A row is the whole button, not a label beside one.
+ *
+ * Two hotels of the same name are told apart by their address, so the address
+ * has to be inside the target somebody is aiming at — a name-sized hit area
+ * with the distinguishing detail sitting outside it is exactly the shape that
+ * gets the wrong one picked.
+ */
+.option {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  padding: var(--space-md) var(--space-lg);
+  text-align: left;
+  background-color: var(--color-surface);
+  color: var(--color-text-main);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: border-color var(--transition-fast), background-color var(--transition-fast);
+}
+
+.option:hover {
+  border-color: var(--color-primary);
+  background-color: var(--color-primary-soft);
+}
+
+.option:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.name {
+  font-size: var(--font-sm);
+  font-weight: var(--font-weight-semibold);
+}
+
+.address {
+  font-size: var(--font-xs);
+  color: var(--color-text-muted);
+}
+
+/* The way out of a list that does not contain the answer. */
+.reject {
+  align-self: flex-start;
+  padding: 0;
+  font-size: var(--font-xs);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-muted);
+  background: none;
+  border: none;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.reject:hover {
+  color: var(--color-primary);
+}
+
+.reject:disabled {
+  cursor: default;
+  opacity: 0.6;
+}

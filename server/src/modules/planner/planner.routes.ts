@@ -124,7 +124,16 @@ plannerRouter.post('/planner/chat', chatRateLimit, requireAuth, async (request, 
    */
   const account = await prisma.user.findUnique({
     where: { id: userIdOf(request) },
-    select: { plan: true },
+    /*
+     * The radius comes with the tier, in one query rather than two.
+     *
+     * Read here rather than accepted from the client because it decides
+     * whether the model has to stop and ask which hotel before it plans — and
+     * a constraint the browser could switch off by leaving a field out is not
+     * a constraint. The row may not exist yet for an account that has never
+     * opened the settings screen, which is the same as having no limit.
+     */
+    select: { plan: true, settings: { select: { maxDistanceFromHotelKm: true } } },
   });
 
   if (account?.plan !== 'pro') {
@@ -161,7 +170,10 @@ plannerRouter.post('/planner/chat', chatRateLimit, requireAuth, async (request, 
         // against the same catalogue the free tier uses.
         onBrief: (brief) => send(response, { type: 'brief', brief }),
       },
-      aborter.signal,
+      {
+        context: { maxDistanceFromHotelKm: account.settings?.maxDistanceFromHotelKm ?? null },
+        signal: aborter.signal,
+      },
     );
 
     send(response, { type: 'done', stopReason });

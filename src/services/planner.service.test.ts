@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { GeneratedItinerary } from '../types/planner.types';
 import type { TripDraft } from '../types/trip.types';
+import { DEFAULT_PREFERENCES } from './itinerary.planner';
 import { plannerService } from './planner.service';
 import { PlaceNotFoundError, weatherService } from './weather.service';
 
@@ -263,7 +264,7 @@ describe('draft identity', () => {
 describe('answerLocally', () => {
   /** The handler pair the planner screen passes in, recorded. */
   function handlers() {
-    return { onText: vi.fn(), onTrip: vi.fn() };
+    return { onText: vi.fn(), onTrip: vi.fn(), onStayNeeded: vi.fn() };
   }
 
   async function answer(prompt: string, options?: { signal?: AbortSignal }) {
@@ -300,6 +301,117 @@ describe('answerLocally', () => {
     expect(spy.onText).not.toHaveBeenCalled();
     expect(spy.onTrip).not.toHaveBeenCalled();
   });
+
+  /*
+   * The question that has to come before the days.
+   *
+   * A radius is measured from a point, and until somebody says which hotel the
+   * only point this engine has is the middle of the city — so "within 2 km of
+   * your hotel" quietly became "within 2 km of the town hall" for every trip
+   * planned before a booking existed.
+   */
+  describe('when a radius is set', () => {
+    const withRadius = { ...DEFAULT_PREFERENCES, maxDistanceFromHotelKm: 2 };
+
+    it('asks which hotel instead of building the trip', async () => {
+      const spy = handlers();
+      const pending = plannerService.answerLocally('7 days in Bali', spy, {
+        preferences: withRadius,
+      });
+      await vi.advanceTimersByTimeAsync(2000);
+      await pending;
+
+      expect(spy.onText).toHaveBeenCalledWith(expect.stringContaining('Bali'));
+      expect(spy.onText).toHaveBeenCalledWith(expect.stringContaining('2 km'));
+      expect(spy.onStayNeeded).toHaveBeenCalledWith(
+        expect.objectContaining({ step: 'name', destination: 'Bali' }),
+      );
+      // No trip, and that is the point: the days cannot be chosen before the
+      // point they are measured from is known.
+      expect(spy.onTrip).not.toHaveBeenCalled();
+    });
+
+    it('carries the whole prompt into the resume, not just the destination', async () => {
+      const spy = handlers();
+      const pending = plannerService.answerLocally('7 days in Bali for 4', spy, {
+        preferences: withRadius,
+      });
+      await vi.advanceTimersByTimeAsync(2000);
+      await pending;
+
+      // Replayed in full once the stay is known, so the length and the party
+      // size somebody stated are not lost to the question.
+      expect(spy.onStayNeeded).toHaveBeenCalledWith(
+        expect.objectContaining({ resume: { kind: 'prompt', prompt: '7 days in Bali for 4' } }),
+      );
+    });
+
+    it('reuses a settled stay for a follow-up that names no city', async () => {
+      const spy = handlers();
+      const pending = plannerService.answerLocally('make it 5 days', spy, {
+        preferences: withRadius,
+        // Settled earlier in the conversation. `null` is an answer — "there
+        // isn't one" — and plans from the centre.
+        knownStay: { destination: 'Bali', stay: null },
+      });
+      await vi.advanceTimersByTimeAsync(2000);
+      await pending;
+
+      // The case the memory exists for, and the one the first version of it
+      // got wrong: a refinement must not re-open a settled question.
+      expect(spy.onStayNeeded).not.toHaveBeenCalled();
+      expect(spy.onTrip).toHaveBeenCalled();
+    });
+
+    it('asks again for a new trip, even to the same city', async () => {
+      const spy = handlers();
+      const pending = plannerService.answerLocally('7 days in Bali', spy, {
+        preferences: withRadius,
+        knownStay: {
+          destination: 'Bali',
+          stay: { name: 'Hotel Bali', coordinates: { lat: -8.6, lng: 115.2 } },
+        },
+      });
+      await vi.advanceTimersByTimeAsync(2000);
+      await pending;
+
+      // Naming a city is asking for a new trip, and a hotel given for an
+      // earlier one is not an answer about this one. Going quiet here is what
+      // made the planner look as though the question had stopped working.
+      expect(spy.onStayNeeded).toHaveBeenCalledWith(
+        expect.objectContaining({ step: 'name', destination: 'Bali' }),
+      );
+      expect(spy.onTrip).not.toHaveBeenCalled();
+    });
+
+    it('asks again for a trip somewhere else', async () => {
+      const spy = handlers();
+      const pending = plannerService.answerLocally('7 days in Lisbon', spy, {
+        preferences: withRadius,
+        // A hotel in Bali is not evidence about a trip to Lisbon, and reusing
+        // it would be the confirmation step's own failure from the other side.
+        knownStay: { destination: 'Bali', stay: { name: 'Hotel Bali', coordinates: { lat: -8.6, lng: 115.2 } } },
+      });
+      await vi.advanceTimersByTimeAsync(2000);
+      await pending;
+
+      expect(spy.onStayNeeded).toHaveBeenCalledWith(
+        expect.objectContaining({ step: 'name', destination: 'Lisbon' }),
+      );
+      expect(spy.onTrip).not.toHaveBeenCalled();
+    });
+
+    it('does not ask a question nobody can answer', async () => {
+      // `generateItinerary` answers in one shot, for a caller with no way to
+      // render a follow-up. A question there would hang the trip forever.
+      const pending = plannerService.generateItinerary('7 days in Bali', withRadius);
+      await vi.advanceTimersByTimeAsync(2000);
+      const result = await pending;
+
+      expect(result.pendingStay).toBeUndefined();
+      expect(result.trip).toBeDefined();
+    });
+  });
 });
 
 describe('the ceiling a free account hits', () => {
@@ -307,7 +419,11 @@ describe('the ceiling a free account hits', () => {
     const onText = vi.fn();
     const pending =
       via === 'local'
-        ? plannerService.answerLocally(prompt, { onText, onTrip: vi.fn() })
+        ? plannerService.answerLocally(prompt, {
+            onText,
+            onTrip: vi.fn(),
+            onStayNeeded: vi.fn(),
+          })
         : plannerService.generateItinerary(prompt).then((result) => onText(result.reply));
 
     await vi.advanceTimersByTimeAsync(2000);

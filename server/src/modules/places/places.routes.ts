@@ -8,6 +8,8 @@ import { findDestination, getPlaceDetails, searchPlaces } from './opentripmap';
 import type { Destination, OpenTripMapPlace, OpenTripMapPlaceDetails } from './opentripmap';
 import { fetchMetroStations } from './overpass';
 import type { MetroStation } from './overpass';
+import { searchStays } from './nominatim';
+import type { StayCandidate } from './nominatim';
 
 /**
  * `/api/places` — the attractions directory, proxied.
@@ -42,6 +44,12 @@ const details = createCache<OpenTripMapPlaceDetails>(TTL_MS);
  * trip is the difference between polite use and abuse of it.
  */
 const metros = createCache<MetroStation[]>(TTL_MS);
+/*
+ * Same reasoning as the metro cache, and the same provider terms: Nominatim is
+ * volunteer-run, keyless, and asks that it not be hammered. A reader confirming
+ * one hotel should cost one lookup for everybody who asks about it that day.
+ */
+const stays = createCache<StayCandidate[]>(TTL_MS);
 
 /** Matches the cache: a browser may hold these just as long. */
 const MAX_AGE_SECONDS = 24 * 60 * 60;
@@ -230,10 +238,123 @@ placesRouter.get('/places/metro', async (request: Request, response: Response) =
   response.json({ stations });
 });
 
+const stayQuery = z.object({
+  q: z.string().trim().min(1, 'Name the hotel or give its address.').max(200),
+  /*
+   * The city, so a hotel name can be told from the same hotel name elsewhere.
+   * Optional because an address search often carries its own city, and a
+   * reader who pastes a full address should not have it ignored.
+   */
+  near: z.string().trim().min(1).max(120).optional(),
+});
+
+/**
+ * How far from the city a match may be and still be a stay in it.
+ *
+ * The same figure the client uses for a booked stay, and here for the same
+ * reason: Nominatim answers "Grand Hotel" with a Grand Hotel, and without this
+ * the one in Brighton becomes the centre of a trip to Tbilisi. Sixty
+ * kilometres is wide enough for an airport hotel or a resort down the coast.
+ */
+const MAX_STAY_FROM_CENTRE_KM = 60;
+
+const EARTH_RADIUS_KM = 6371;
+
+function toRadians(degrees: number): number {
+  return (degrees * Math.PI) / 180;
+}
+
+/** Straight-line, matching what the planner's own filter measures. */
+function distanceKm(a: { lat: number; lng: number }, b: { lat: number; lng: number }): number {
+  const dLat = toRadians(b.lat - a.lat);
+  const dLng = toRadians(b.lng - a.lng);
+  const lat1 = toRadians(a.lat);
+  const lat2 = toRadians(b.lat);
+
+  const h =
+    Math.sin(dLat / 2) ** 2 + Math.sin(dLng / 2) ** 2 * Math.cos(lat1) * Math.cos(lat2);
+
+  return 2 * EARTH_RADIUS_KM * Math.asin(Math.min(1, Math.sqrt(h)));
+}
+
+/**
+ * Hotels and addresses matching a free-text query — `GET /api/places/stay`.
+ *
+ * The lookup behind "which hotel are you staying at?". It answers with a list
+ * rather than a best guess, because the caller's next move is to show it and
+ * let somebody point at the right building: a radius drawn around the wrong
+ * Grand Hotel excludes a whole city silently, and there is no later moment at
+ * which that mistake becomes visible.
+ *
+ * Two queries, in order. The name with the city appended is the one that
+ * should normally win and is what keeps a Paris hotel out of a Tokyo trip. The
+ * bare query is the fallback, because a full street address already names its
+ * own city and appending a second one finds nothing at all.
+ *
+ * **An empty list is a normal answer.** It means the name was not found, and
+ * the caller's response to that is to ask for the address rather than to
+ * report a failure. A lookup that could not be made answers the same way and
+ * is simply not cached — see the metro route for why that distinction is kept.
+ */
+placesRouter.get('/places/stay', async (request: Request, response: Response) => {
+  const query = stayQuery.parse(request.query);
+  const key = `${query.q.toLowerCase()}|${(query.near ?? '').toLowerCase()}`;
+
+  const cached = stays.get(key);
+  if (cached) {
+    cacheable(response);
+    return void response.json({ candidates: cached });
+  }
+
+  const attempts = query.near ? [`${query.q}, ${query.near}`, query.q] : [query.q];
+
+  let found: StayCandidate[] | null = null;
+
+  for (const attempt of attempts) {
+    // Sequential rather than parallel: two simultaneous requests to Nominatim
+    // is precisely what its usage policy asks callers not to do, and the
+    // second is only needed when the first came back empty.
+    found = await searchStays(attempt);
+
+    if (found === null) break;
+    if (found.length > 0) break;
+  }
+
+  if (found === null) {
+    response.set('Cache-Control', 'no-store');
+    return void response.json({ candidates: [] });
+  }
+
+  /*
+   * Filtered against the city the trip is to, when one was named. A result
+   * sixty kilometres outside it is either a different place with the same name
+   * or somewhere nobody could stay and sightsee from, and both are worse than
+   * showing one option fewer.
+   */
+  let candidates = found;
+
+  if (query.near) {
+    const centre = await findDestination(query.near).catch(() => null);
+
+    if (centre) {
+      const middle = { lat: centre.lat, lng: centre.lon };
+      candidates = found.filter(
+        (candidate) => distanceKm(middle, candidate) <= MAX_STAY_FROM_CENTRE_KM,
+      );
+    }
+  }
+
+  stays.set(key, candidates);
+
+  cacheable(response);
+  response.json({ candidates });
+});
+
 /** Test seam: drops every cached answer. */
 export function resetPlacesCache(): void {
   destinations.clear();
   searches.clear();
   details.clear();
   metros.clear();
+  stays.clear();
 }

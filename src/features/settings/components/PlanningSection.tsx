@@ -256,17 +256,15 @@ export function PlanningSection({ travel, onChange }: PlanningSectionProps) {
       </fieldset>
 
       {/*
-        Which point the radius is measured from, said out loud.
-        
-        The planner runs before anything is booked, so most of the time this is
-        the middle of the city rather than a hotel — and "3 km from your hotel"
-        and "3 km from the middle of Tbilisi" are different promises. A reader
-        who is not told which one they got cannot make sense of what came back.
+        What setting this actually does, said out loud.
+
+        It is the one preference here that changes the *conversation* rather
+        than only the trip, and somebody who is not told that will be puzzled
+        by a planner that suddenly starts asking them questions. The escape
+        hatch is named in the same breath, because most trips are planned
+        before anything is booked.
       */}
-      <p className={styles.note}>
-        Measured from your hotel when you have one booked and not yet attached to a trip, and from
-        the middle of the destination when you do not. Straight-line distance.
-      </p>
+      <p className={styles.note}>Set this and the planner asks which hotel before it builds a trip, looks the name up and asks you to confirm which building it found. Say you are not sure and it measures from the middle of the destination instead. Straight-line distance.</p>
 
       <Switch
         label="Only near a metro station"

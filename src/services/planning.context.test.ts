@@ -5,6 +5,7 @@ import { DEFAULT_PREFERENCES } from './itinerary.planner';
 import { bookingService } from './booking.service';
 import { geocodeService } from './geocode.service';
 import * as metro from './metro.service';
+import * as stays from './stay.service';
 import { chooseStay, resolvePlanningContext } from './planning.context';
 
 /**
@@ -20,8 +21,13 @@ import { chooseStay, resolvePlanningContext } from './planning.context';
 const TBILISI = { lat: 41.7151, lng: 44.7833, name: 'Tbilisi' };
 /** About 2 km from the centre — a hotel somebody could plausibly be in. */
 const HOTEL = { lat: 41.733, lng: 44.7833, name: 'Rooms Hotel' };
-/** Paris, which is not Tbilisi and must never be mistaken for its hotel. */
-const ELSEWHERE = { lat: 48.8566, lng: 2.3522, name: 'Grand Hotel' };
+/** What the stay lookup answers with, when it finds the hotel. */
+const MATCH = {
+  id: 'osm-1',
+  name: 'Rooms Hotel',
+  address: '14 Merab Kostava Street, Tbilisi',
+  coordinates: { lat: HOTEL.lat, lng: HOTEL.lng },
+};
 
 function booking(overrides: Partial<Booking> = {}): Booking {
   return {
@@ -118,18 +124,77 @@ describe('resolvePlanningContext', () => {
     expect(stations).not.toHaveBeenCalled();
   });
 
-  it('bases the trip on a booked stay when one is near the destination', async () => {
-    vi.spyOn(bookingService, 'getBookings').mockResolvedValue([booking()]);
-    vi.spyOn(geocodeService, 'locate').mockImplementation(async (name: string) =>
-      name === 'Tbilisi' ? TBILISI : HOTEL,
+  /*
+   * The ordinary case now: the reader was asked, picked a hotel off the list,
+   * and the point came back with it. Nothing is looked up — not the hotel and
+   * not the city — because there is nothing left to find out.
+   */
+  it('uses a confirmed hotel as it stands, without a lookup', async () => {
+    const locate = vi.spyOn(geocodeService, 'locate');
+    const search = vi.spyOn(stays, 'findStays');
+
+    const context = await resolvePlanningContext(
+      brief({
+        hotelName: 'Rooms Hotel',
+        hotelLocation: { lat: HOTEL.lat, lng: HOTEL.lng },
+        preferences: preferences({ maxDistanceFromHotelKm: 3 }),
+      }),
     );
+
+    expect(context.base).toEqual({
+      coordinates: { lat: HOTEL.lat, lng: HOTEL.lng },
+      source: 'named',
+    });
+    expect(locate).not.toHaveBeenCalled();
+    expect(search).not.toHaveBeenCalled();
+  });
+
+  it('looks a bare name up, and does not consult the bookings for one', async () => {
+    const bookings = vi.spyOn(bookingService, 'getBookings').mockResolvedValue([booking()]);
+    vi.spyOn(geocodeService, 'locate').mockResolvedValue(TBILISI);
+    const search = vi.spyOn(stays, 'findStays').mockResolvedValue([MATCH]);
+
+    const context = await resolvePlanningContext(
+      brief({
+        hotelName: 'Rooms Hotel',
+        preferences: preferences({ maxDistanceFromHotelKm: 3 }),
+      }),
+    );
+
+    expect(context.base).toEqual({
+      coordinates: { lat: HOTEL.lat, lng: HOTEL.lng },
+      source: 'named',
+    });
+    // Bounded to the city, which is what keeps a Paris hotel of the same name
+    // out of a Tbilisi trip.
+    expect(search).toHaveBeenCalledWith('Rooms Hotel', 'Tbilisi');
+    // They answered the question; a booking they did not mention is not a
+    // better answer than the one they gave.
+    expect(bookings).not.toHaveBeenCalled();
+  });
+
+  it('falls back to the centre when a named hotel cannot be found', async () => {
+    vi.spyOn(geocodeService, 'locate').mockResolvedValue(TBILISI);
+    vi.spyOn(stays, 'findStays').mockResolvedValue([]);
+
+    const context = await resolvePlanningContext(
+      brief({ hotelName: 'The Nameless Inn', preferences: preferences({ maxDistanceFromHotelKm: 3 }) }),
+    );
+
+    expect(context.base?.source).toBe('centre');
+  });
+
+  it('bases the trip on a booked stay when nobody was asked', async () => {
+    vi.spyOn(bookingService, 'getBookings').mockResolvedValue([booking()]);
+    vi.spyOn(geocodeService, 'locate').mockResolvedValue(TBILISI);
+    vi.spyOn(stays, 'findStays').mockResolvedValue([MATCH]);
 
     const context = await resolvePlanningContext(
       brief({ preferences: preferences({ maxDistanceFromHotelKm: 3 }) }),
     );
 
     expect(context.base).toEqual({
-      coordinates: { lat: HOTEL.lat, lng: HOTEL.lng, name: 'Rooms Hotel' },
+      coordinates: { lat: HOTEL.lat, lng: HOTEL.lng },
       source: 'stay',
     });
   });
@@ -137,6 +202,7 @@ describe('resolvePlanningContext', () => {
   it('falls back to the centre when nothing is booked', async () => {
     vi.spyOn(bookingService, 'getBookings').mockResolvedValue([]);
     vi.spyOn(geocodeService, 'locate').mockResolvedValue(TBILISI);
+    vi.spyOn(stays, 'findStays').mockResolvedValue([]);
 
     const context = await resolvePlanningContext(
       brief({ preferences: preferences({ maxDistanceFromHotelKm: 3 }) }),
@@ -148,28 +214,27 @@ describe('resolvePlanningContext', () => {
   /*
    * The check that stops a name from being a passport. "Grand Hotel" is a
    * hotel in most countries, and a Paris booking made the centre of a Tbilisi
-   * trip would exclude every place in it.
+   * trip would exclude every place in it. The bound itself is the route's now
+   * — what matters here is that the city is always handed to it.
    */
-  it('refuses a stay that geocodes to another country', async () => {
+  it('always bounds the stay lookup to the destination', async () => {
     vi.spyOn(bookingService, 'getBookings').mockResolvedValue([
       booking({ title: 'Grand Hotel' }),
     ]);
-    vi.spyOn(geocodeService, 'locate').mockImplementation(async (name: string) =>
-      name === 'Tbilisi' ? TBILISI : ELSEWHERE,
-    );
+    vi.spyOn(geocodeService, 'locate').mockResolvedValue(TBILISI);
+    const search = vi.spyOn(stays, 'findStays').mockResolvedValue([]);
 
-    const context = await resolvePlanningContext(
+    await resolvePlanningContext(
       brief({ preferences: preferences({ maxDistanceFromHotelKm: 3 }) }),
     );
 
-    expect(context.base?.source).toBe('centre');
+    expect(search).toHaveBeenCalledWith('Grand Hotel', 'Tbilisi');
   });
 
   it('falls back to the centre when the stay cannot be placed', async () => {
     vi.spyOn(bookingService, 'getBookings').mockResolvedValue([booking()]);
-    vi.spyOn(geocodeService, 'locate').mockImplementation(async (name: string) =>
-      name === 'Tbilisi' ? TBILISI : null,
-    );
+    vi.spyOn(geocodeService, 'locate').mockResolvedValue(TBILISI);
+    vi.spyOn(stays, 'findStays').mockResolvedValue([]);
 
     const context = await resolvePlanningContext(
       brief({ preferences: preferences({ maxDistanceFromHotelKm: 3 }) }),
@@ -180,10 +245,8 @@ describe('resolvePlanningContext', () => {
 
   it('falls back to the centre when placing the stay throws', async () => {
     vi.spyOn(bookingService, 'getBookings').mockResolvedValue([booking()]);
-    vi.spyOn(geocodeService, 'locate').mockImplementation(async (name: string) => {
-      if (name === 'Tbilisi') return TBILISI;
-      throw new Error('quota');
-    });
+    vi.spyOn(geocodeService, 'locate').mockResolvedValue(TBILISI);
+    vi.spyOn(stays, 'findStays').mockRejectedValue(new Error('quota'));
 
     const context = await resolvePlanningContext(
       brief({ preferences: preferences({ maxDistanceFromHotelKm: 3 }) }),
@@ -207,6 +270,7 @@ describe('resolvePlanningContext', () => {
   it('survives the bookings failing to load', async () => {
     vi.spyOn(bookingService, 'getBookings').mockRejectedValue(new Error('offline'));
     vi.spyOn(geocodeService, 'locate').mockResolvedValue(TBILISI);
+    vi.spyOn(stays, 'findStays').mockResolvedValue([]);
 
     const context = await resolvePlanningContext(
       brief({ preferences: preferences({ maxDistanceFromHotelKm: 3 }) }),
@@ -223,6 +287,30 @@ describe('resolvePlanningContext', () => {
     );
 
     expect(context.base).toBeUndefined();
+  });
+
+  it('looks up both when both rules are on', async () => {
+    vi.spyOn(geocodeService, 'locate').mockResolvedValue(TBILISI);
+    vi.spyOn(stays, 'findStays').mockResolvedValue([MATCH]);
+    const stations = vi
+      .spyOn(metro, 'getMetroStations')
+      .mockResolvedValue([{ lat: 41.72, lng: 44.79 }]);
+
+    const context = await resolvePlanningContext(
+      brief({
+        hotelName: 'Rooms Hotel',
+        preferences: preferences({ maxDistanceFromHotelKm: 3, nearMetroOnly: true }),
+      }),
+    );
+
+    // Both halves resolved, so the scheduler can apply both — they compose as
+    // an AND there. See `planItinerary, with both location rules on`.
+    expect(context.base).toEqual({
+      coordinates: { lat: HOTEL.lat, lng: HOTEL.lng },
+      source: 'named',
+    });
+    expect(context.metroStations).toEqual([{ lat: 41.72, lng: 44.79 }]);
+    expect(stations).toHaveBeenCalledWith('Tbilisi');
   });
 
   it('fetches stations only for the metro rule', async () => {

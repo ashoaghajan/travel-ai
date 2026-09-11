@@ -77,6 +77,19 @@ export type PlannerTripBrief = {
   /** Nights plus one — the number of dated days the trip covers. */
   days: number;
   travellers: number;
+  /**
+   * Where they are staying, as they named it.
+   *
+   * Asked for only when it changes the trip. "Distance from your hotel" is a
+   * radius around a point, and without a name that point is the middle of the
+   * city — which is a different promise from the one the settings screen
+   * makes. So the model is told to ask before it plans whenever that limit is
+   * set, and to leave this out when the answer is that nothing is booked.
+   *
+   * A name, not a booking. The client geocodes it, and a name that cannot be
+   * found falls back to the centre rather than failing the trip.
+   */
+  hotelName?: string;
   preferences?: PlannerPreferenceOverrides;
   /**
    * Whole-trip travel and lodging, in USD, as the model estimated them.

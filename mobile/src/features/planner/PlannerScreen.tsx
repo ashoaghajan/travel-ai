@@ -10,7 +10,7 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import type { PlannerMessage } from '../../core/types/planner.types';
+import type { PlannerMessage, StayCandidate } from '../../core/types/planner.types';
 import type { TripDraft } from '../../core/types/trip.types';
 import { imageSource } from '../../assets/bundled-images';
 import { formatDateRange } from '../../core/utils/date';
@@ -39,11 +39,14 @@ import { usePlanner } from './usePlanner';
  * bug the web spent a milestone on.
  */
 
-function Bubble({ message, onSave, saving, savedId }: {
+function Bubble({ message, onSave, saving, savedId, onChooseStay, busy }: {
   message: PlannerMessage;
   onSave: (trip: TripDraft) => void;
   saving: boolean;
   savedId: string | undefined;
+  /** Null for "none of these", which asks for the address instead. */
+  onChooseStay: (candidateId: string | null) => void;
+  busy: boolean;
 }) {
   const theme = useTheme();
   const mine = message.author === 'user';
@@ -67,9 +70,82 @@ function Bubble({ message, onSave, saving, savedId }: {
         </Text>
       </View>
 
+      {/*
+        The hotels the planner found, when it is waiting for one to be picked.
+        Never alongside a trip — the question is the reason there is not one.
+      */}
+      {message.pendingStay?.candidates?.length ? (
+        <StayPicker
+          candidates={message.pendingStay.candidates}
+          onChoose={onChooseStay}
+          busy={busy}
+        />
+      ) : null}
+
       {message.trip ? (
         <TripCard trip={message.trip} onSave={onSave} saving={saving} savedId={savedId} />
       ) : null}
+    </View>
+  );
+}
+
+/**
+ * The matches, for somebody to point at.
+ *
+ * Shown even when there is only one of them, which is the point rather than an
+ * oversight: the planner is about to draw a radius around this building and
+ * drop everything outside it, and a single confident-looking match is exactly
+ * where a wrong one goes unnoticed. The address sits inside the row it
+ * belongs to because it is the only thing telling two of the same name apart,
+ * and a detail outside the tap target is a detail nobody aims at.
+ */
+function StayPicker({ candidates, onChoose, busy }: {
+  candidates: StayCandidate[];
+  onChoose: (candidateId: string | null) => void;
+  busy: boolean;
+}) {
+  const theme = useTheme();
+
+  return (
+    <View style={{ marginTop: theme.space.md, gap: theme.space.sm, maxWidth: '85%' }}>
+      {candidates.map((candidate) => (
+        <TouchableOpacity
+          key={candidate.id}
+          accessibilityRole="button"
+          disabled={busy}
+          onPress={() => onChoose(candidate.id)}
+          style={{
+            gap: 2,
+            paddingHorizontal: theme.space.lg,
+            paddingVertical: theme.space.md,
+            backgroundColor: theme.color.surface,
+            borderColor: theme.color.border,
+            borderWidth: 1,
+            borderRadius: theme.radius.md,
+            opacity: busy ? 0.6 : 1,
+          }}
+        >
+          <Text variant="sm" weight="semibold" leading="tight">
+            {candidate.name}
+          </Text>
+          {candidate.address ? (
+            <Text variant="xs" tone="muted">
+              {candidate.address}
+            </Text>
+          ) : null}
+        </TouchableOpacity>
+      ))}
+
+      <TouchableOpacity
+        accessibilityRole="button"
+        disabled={busy}
+        onPress={() => onChoose(null)}
+        style={{ alignSelf: 'flex-start', opacity: busy ? 0.6 : 1 }}
+      >
+        <Text variant="xs" tone="muted" weight="medium">
+          None of these — I’ll give the address
+        </Text>
+      </TouchableOpacity>
     </View>
   );
 }
@@ -114,8 +190,17 @@ export function PlannerScreen() {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const { isPro } = useCurrentUser();
-  const { messages, isGenerating, error, savingMessageId, savedTripIdFor, generate, saveTrip, stop } =
-    usePlanner();
+  const {
+    messages,
+    isGenerating,
+    error,
+    savingMessageId,
+    savedTripIdFor,
+    generate,
+    chooseStay,
+    saveTrip,
+    stop,
+  } = usePlanner();
   const [draft, setDraft] = useState('');
   const [asking, setAsking] = useState(false);
   const listRef = useRef<FlatList<PlannerMessage>>(null);
@@ -209,6 +294,8 @@ export function PlannerScreen() {
             onSave={(trip) => void saveTrip(item.id, trip)}
             saving={savingMessageId === item.id}
             savedId={savedTripIdFor(item.trip)}
+            onChooseStay={(candidateId) => void chooseStay(item.id, candidateId)}
+            busy={isGenerating}
           />
         )}
       />
