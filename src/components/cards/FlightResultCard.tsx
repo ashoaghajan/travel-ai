@@ -31,6 +31,8 @@ export type FlightResultCardProps = {
   onBook?: () => void;
   /** Already attached to the trip the screen is filling for. */
   isOnTrip?: boolean;
+  /** Adults in the current search, for a party-price estimate. */
+  travellers?: number;
   className?: string;
 };
 
@@ -57,6 +59,7 @@ export function FlightResultCard({
   onAddToTrip,
   onBook,
   isOnTrip = false,
+  travellers = 1,
   className,
 }: FlightResultCardProps) {
   const {
@@ -126,6 +129,11 @@ export function FlightResultCard({
           <span className={styles.price}>{money.format(price)}</span>
           <span className={styles.perPerson}>per person</span>
         </p>
+        {travellers > 1 ? (
+          <p className={styles.partyEstimate}>
+            {money.format(price * travellers)} estimated for {travellers}
+          </p>
+        ) : null}
 
         {onAddToTrip ? (
           <Button
@@ -154,7 +162,7 @@ export function FlightResultCard({
              * that default are not sponsored, so it stays as it is.
              */
             rel="sponsored noopener"
-            aria-label={`Book ${airline} from ${from} to ${to} for ${money.format(price)} per person, on our partner's site`}
+            aria-label={`Book ${airline} from ${from} to ${to} for ${money.format(price)} per person${travellers > 1 ? `, ${money.format(price * travellers)} estimated for ${travellers} travellers` : ''}, on our partner's site`}
           >
             Book
           </Button>

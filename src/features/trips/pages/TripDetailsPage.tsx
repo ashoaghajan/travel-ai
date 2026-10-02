@@ -14,6 +14,7 @@ import { IconButton } from '../../../components/common/IconButton';
 import { ShareTripDialog } from '../components/ShareTripDialog';
 import {
   CalendarIcon,
+  CompassIcon,
   DownloadIcon,
   ShareIcon,
   SuitcaseIcon,
@@ -30,6 +31,9 @@ import {
 import { BackLink } from '../components/BackLink';
 import { EditTripModal } from '../components/EditTripModal';
 import { AttractionPickerDialog } from '../components/AttractionPickerDialog';
+import { TripScheduleAssistant } from '../components/TripScheduleAssistant';
+import { TripAtAGlance } from '../components/TripAtAGlance';
+import { TripReadinessChecklist } from '../components/TripReadinessChecklist';
 import { ItineraryTimeline } from '../components/ItineraryTimeline';
 import { TripBookings } from '../components/TripBookings';
 import { TripNotes } from '../components/TripNotes';
@@ -39,7 +43,9 @@ import { useTripExport } from '../useTripExport';
 import { useCalendarExport } from '../useCalendarExport';
 import { useStopCoordinates } from '../useStopCoordinates';
 import { useBookingCoordinates } from '../useBookingCoordinates';
-import { useTripBookings } from '../../../store/booking.store';
+import { useBookingOfflineSnapshotAt, useBookingsResource, useTripBookings } from '../../../store/booking.store';
+import { useTripOfflineSnapshotAt } from '../../../store/trip.store';
+import { useOnlineStatus } from '../../../hooks/useOnlineStatus';
 import { useMoney } from '../../../store/currency.store';
 import { bookingKindLabel } from '../../../utils/booking';
 import { cx } from '../../../utils/cx';
@@ -174,6 +180,11 @@ function TripDetailsView({ trip }: { trip: Trip }) {
   // Booked hotels and attractions, as their own pins. An attraction brings its
   // point from the explorer; a hotel is geocoded from its name.
   const tripBookings = useTripBookings(trip.id);
+  const { status: bookingsStatus } = useBookingsResource();
+  const offlineTripSnapshotAt = useTripOfflineSnapshotAt();
+  const offlineBookingSnapshotAt = useBookingOfflineSnapshotAt();
+  const isOnline = useOnlineStatus();
+  const offlineReadOnly = !isOnline || Boolean(offlineTripSnapshotAt || offlineBookingSnapshotAt);
   const money = useMoney();
   const { exportTrip, error: exportError } = useTripExport();
   const {
@@ -239,12 +250,22 @@ function TripDetailsView({ trip }: { trip: Trip }) {
               </Button>
             ) : (
               <>
-                <Button variant="secondary" size="md" onClick={() => setIsEditing(true)}>
+                <Button variant="secondary" size="md" disabled={offlineReadOnly} onClick={() => setIsEditing(true)}>
                   Edit Trip
                 </Button>
                 <Button to={`/trips/${trip.id}/summary`} variant="secondary" size="md">
                   Summary
                 </Button>
+                {offlineReadOnly ? null : (
+                  <Button
+                    to={`${ROUTES.activities}?tripId=${encodeURIComponent(trip.id)}`}
+                    variant="secondary"
+                    size="md"
+                    leadingIcon={<CompassIcon size={16} />}
+                  >
+                    Find places
+                  </Button>
+                )}
                 {/*
                   Icon-only, and next to Delete rather than beside the labelled
                   buttons: two labels plus two icons is the ceiling this row
@@ -258,6 +279,7 @@ function TripDetailsView({ trip }: { trip: Trip }) {
                 */}
                 <IconButton
                   label={`Share ${trip.title} with somebody`}
+                  disabled={offlineReadOnly}
                   onClick={() => setIsSharing(true)}
                 >
                   <ShareIcon size={20} />
@@ -277,14 +299,14 @@ function TripDetailsView({ trip }: { trip: Trip }) {
                 */}
                 <IconButton
                   label={`Add ${trip.title} to a calendar`}
-                  disabled={isExportingCalendar}
+                  disabled={offlineReadOnly || isExportingCalendar}
                   onClick={() => exportCalendar(trip, tripBookings)}
                 >
                   <CalendarIcon size={20} />
                 </IconButton>
                 <IconButton
                   label={`Delete ${trip.title}`}
-                  disabled={isDeleting}
+                  disabled={offlineReadOnly || isDeleting}
                   onClick={() => setIsConfirmingDelete(true)}
                 >
                   <TrashIcon size={20} />
@@ -296,6 +318,17 @@ function TripDetailsView({ trip }: { trip: Trip }) {
       />
 
       <div className={styles.content}>
+        {offlineReadOnly ? (
+          <p className={styles.offlineBanner} role="status">
+            You’re offline. Showing your last saved trip and booking details; edits and new bookings are unavailable until you reconnect.
+            {offlineTripSnapshotAt ? ` Trips last synced ${new Date(offlineTripSnapshotAt).toLocaleString()}.` : ''}
+          </p>
+        ) : null}
+        <TripAtAGlance trip={trip} bookings={tripBookings} offlineReadOnly={offlineReadOnly} />
+        {bookingsStatus === 'ready' || offlineBookingSnapshotAt ? (
+          <TripReadinessChecklist trip={trip} bookings={tripBookings} />
+        ) : null}
+
         {exportError ? (
           <p className={styles.error} role="alert">
             {exportError}
@@ -327,14 +360,14 @@ function TripDetailsView({ trip }: { trip: Trip }) {
               >
                 Cancel
               </Button>
-              <Button variant="danger" size="md" disabled={isDeleting} onClick={handleDelete}>
+              <Button variant="danger" size="md" disabled={offlineReadOnly || isDeleting} onClick={handleDelete}>
                 {isDeleting ? 'Deleting…' : 'Delete trip'}
               </Button>
             </div>
           </Card>
         ) : null}
 
-        {isEditing ? (
+        {isEditing && !offlineReadOnly ? (
           <div className={styles.editBanner}>
             <p className={styles.editBannerText}>
               Editing the itinerary — change a time, retitle a stop, or add one.
@@ -345,6 +378,17 @@ function TripDetailsView({ trip }: { trip: Trip }) {
               </span>
             ) : null}
           </div>
+        ) : null}
+
+        {isEditing && !offlineReadOnly ? (
+          <TripScheduleAssistant
+            title={trip.title}
+            destination={destinationLabel(edit.draft)}
+            startDate={edit.draft.startDate}
+            travellers={edit.draft.travellers}
+            days={edit.draft.itinerary}
+            onAddIdeas={edit.appendSuggestedActivities}
+          />
         ) : null}
 
         {/*
@@ -387,7 +431,7 @@ function TripDetailsView({ trip }: { trip: Trip }) {
                           onAddActivity: edit.appendActivity,
                           onPickActivity: setPickerDayId,
                           errors: showEditErrors ? edit.errors.activities : undefined,
-                          disabled: edit.isSaving,
+                          disabled: edit.isSaving || offlineReadOnly,
                         }
                       : undefined
                   }
@@ -481,7 +525,7 @@ function TripDetailsView({ trip }: { trip: Trip }) {
             </div>
           ) : null}
 
-          {activeTab === 'bookings' ? <TripBookings trip={trip} /> : null}
+          {activeTab === 'bookings' ? <TripBookings trip={trip} readOnly={offlineReadOnly} /> : null}
 
           {activeTab === 'notes' ? (
             <TripNotes
@@ -493,7 +537,7 @@ function TripDetailsView({ trip }: { trip: Trip }) {
                       onEdit: edit.editNote,
                       onDelete: edit.deleteNote,
                       errors: showEditErrors ? edit.errors.notes : undefined,
-                      disabled: edit.isSaving,
+                      disabled: edit.isSaving || offlineReadOnly,
                     }
                   : undefined
               }
@@ -502,7 +546,7 @@ function TripDetailsView({ trip }: { trip: Trip }) {
         </div>
       </div>
 
-      {isEditing ? (
+      {isEditing && !offlineReadOnly ? (
         <div className={styles.editBar}>
           <div className={styles.editBarInner}>
             <p className={styles.editBarStatus} role="status">
@@ -519,7 +563,7 @@ function TripDetailsView({ trip }: { trip: Trip }) {
                 variant="secondary"
                 size="md"
                 onClick={leaveEditMode}
-                disabled={edit.isSaving}
+                disabled={offlineReadOnly || edit.isSaving}
               >
                 Cancel Changes
               </Button>
@@ -527,7 +571,7 @@ function TripDetailsView({ trip }: { trip: Trip }) {
                 variant="primary"
                 size="md"
                 onClick={saveEdits}
-                disabled={edit.isSaving || !edit.isDirty}
+                disabled={offlineReadOnly || edit.isSaving || !edit.isDirty}
               >
                 {edit.isSaving ? 'Saving…' : 'Save Changes'}
               </Button>

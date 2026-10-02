@@ -4,6 +4,7 @@ import type { Activity } from '../../types/travel.types';
 import {
   DEFAULT_ACTIVITY_TIME,
   addActivity,
+  addSuggestedActivities,
   addPickedActivity,
   destinationLabel,
   hasErrors,
@@ -436,5 +437,34 @@ describe('addPickedActivity', () => {
 
     expect(isDirty(trip, draft)).toBe(true);
     expect(toPatch(trip, draft).itinerary).toEqual(draft.itinerary);
+  });
+});
+
+describe('addSuggestedActivities', () => {
+  it('keeps existing activities, assigns fresh ids and inserts ideas by time', () => {
+    const base = toEditDraft(makeTrip());
+    const idea = {
+      id: 'model-id',
+      time: '10:00',
+      title: 'Breakfast market',
+      description: 'Try local food.',
+      category: 'food' as const,
+      sourceActivityId: 'not-a-catalogue-id',
+    };
+    const draft = addSuggestedActivities(base, 'day-1', [idea]);
+    const activities = draft.itinerary[0].activities;
+
+    expect(activities.map((activity) => activity.title)).toEqual(['Breakfast market', 'Check in']);
+    expect(activities[0].id).not.toBe('model-id');
+    expect(activities[0].sourceActivityId).toBeUndefined();
+    expect(base.itinerary[0].activities).toHaveLength(1);
+  });
+
+  it('ignores unknown days and empty suggestions', () => {
+    const draft = toEditDraft(makeTrip());
+    expect(addSuggestedActivities(draft, 'missing', [{
+      id: 'idea', time: '10:00', title: 'Idea', description: '', category: 'food',
+    }])).toBe(draft);
+    expect(addSuggestedActivities(draft, 'day-1', [])).toBe(draft);
   });
 });

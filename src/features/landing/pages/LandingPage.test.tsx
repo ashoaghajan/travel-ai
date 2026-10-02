@@ -60,12 +60,16 @@ afterEach(() => {
 
 describe('LandingPage', () => {
   describe('signed out', () => {
-    it('offers both ways to get an account', async () => {
+    it('offers a no-account planner preview and separate account actions', async () => {
       await settle(null);
 
       renderPage();
 
       expect(screen.getByRole('link', { name: LANDING_HERO.primaryCta })).toHaveAttribute(
+        'href',
+        ROUTES.tryPlanner,
+      );
+      expect(screen.getByRole('link', { name: LANDING_HERO.accountCta })).toHaveAttribute(
         'href',
         ROUTES.register,
       );
@@ -75,7 +79,7 @@ describe('LandingPage', () => {
       );
     });
 
-    it('does not offer the planner, which is behind the auth boundary', async () => {
+    it('offers the preview without an account', async () => {
       await settle(null);
 
       renderPage();
@@ -83,6 +87,10 @@ describe('LandingPage', () => {
       expect(
         screen.queryByRole('link', { name: LANDING_HERO.authenticatedCta }),
       ).not.toBeInTheDocument();
+      expect(screen.getByRole('link', { name: LANDING_HERO.primaryCta })).toHaveAttribute(
+        'href',
+        ROUTES.tryPlanner,
+      );
     });
   });
 
@@ -106,6 +114,7 @@ describe('LandingPage', () => {
       renderPage();
 
       expect(screen.queryByRole('link', { name: LANDING_HERO.primaryCta })).not.toBeInTheDocument();
+      expect(screen.queryByRole('link', { name: LANDING_HERO.accountCta })).not.toBeInTheDocument();
       expect(
         screen.queryByRole('link', { name: LANDING_HERO.secondaryCta }),
       ).not.toBeInTheDocument();

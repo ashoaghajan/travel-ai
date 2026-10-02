@@ -79,7 +79,7 @@ export function CreateTripPage() {
     <div className={styles.page}>
       <PageHeader
         title="New trip"
-        subtitle="Set the basics — activities come next, on the trip itself."
+        subtitle="Build a blank day-by-day schedule yourself. Want a complete first draft instead? Choose Plan with AI."
         leading={<BackLink to={ROUTES.trips} label="Back to your trips" />}
         actions={
           <Button

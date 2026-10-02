@@ -6,6 +6,10 @@ import { migrateLegacyTripBookings } from '../services/booking.migration';
 import { createResource } from './createResource';
 import type { ResourceSnapshot } from './createResource';
 import { broadcast, onBroadcast } from './broadcast';
+import { offlineSnapshotService } from '../services/offlineSnapshot.service';
+import { ApiError } from '../services/http';
+import { STORAGE_KEYS, storageService } from '../services/localStorage.service';
+import { productAnalyticsService } from '../services/productAnalytics.service';
 
 /**
  * Shared read model for bookings.
@@ -26,10 +30,45 @@ migrateLegacyTripBookings();
 /** Module-level so the identity is stable — see `createResource`. */
 const EMPTY_BOOKINGS: Booking[] = [];
 
+let offlineSnapshotAt: string | null = null;
+const offlineListeners = new Set<() => void>();
+
+function setOfflineSnapshotAt(value: string | null): void {
+  if (offlineSnapshotAt === value) return;
+  offlineSnapshotAt = value;
+  offlineListeners.forEach((listener) => listener());
+}
+
+function cacheBookings(all: Booking[]): void {
+  try {
+    offlineSnapshotService.writeBookings(all);
+  } catch {
+    // A full or blocked cache cannot turn a successful online write into failure.
+  }
+}
+
+async function loadBookings(): Promise<Booking[]> {
+  try {
+    const all = await bookingService.getBookings();
+    cacheBookings(all);
+    setOfflineSnapshotAt(null);
+    return all;
+  } catch (error) {
+    if (!(error instanceof ApiError) || error.status !== 0) throw error;
+    const cached = offlineSnapshotService.readBookings();
+    if (!cached) throw error;
+    setOfflineSnapshotAt(cached.savedAt);
+    return cached.data;
+  }
+}
+
 const bookings = createResource<Booking[]>({
   empty: EMPTY_BOOKINGS,
-  load: () => bookingService.getBookings(),
+  load: loadBookings,
 });
+
+// Account switch: invalidate offline mode before the new owner's first load.
+storageService.subscribe(STORAGE_KEYS.ownerUserId, () => setOfflineSnapshotAt(null));
 
 onBroadcast('bookings', () => {
   void bookings.refresh();
@@ -41,6 +80,11 @@ function replaceById(all: Booking[], booking: Booking): Booking[] {
   return all.map((candidate) => (candidate.id === booking.id ? booking : candidate));
 }
 
+function storeBookings(all: Booking[]): void {
+  bookings.set(all);
+  cacheBookings(all);
+}
+
 export const bookingStore = {
   subscribe: bookings.subscribe,
   getSnapshot: bookings.getSnapshot,
@@ -48,7 +92,8 @@ export const bookingStore = {
   async create(draft: BookingDraft): Promise<Booking> {
     const booking = await bookingService.create(draft);
 
-    bookings.set([booking, ...select()]);
+    storeBookings([booking, ...select()]);
+    productAnalyticsService.recordBookingSaved(booking.id);
     broadcast('bookings');
 
     return booking;
@@ -61,7 +106,7 @@ export const bookingStore = {
 
     // Schedule order in front of the existing list, matching what the batch
     // endpoint wrote — day one's morning before its afternoon.
-    bookings.set([...created, ...select()]);
+    storeBookings([...created, ...select()]);
     broadcast('bookings');
 
     return created;
@@ -70,7 +115,7 @@ export const bookingStore = {
   async update(id: string, patch: BookingPatch): Promise<Booking> {
     const booking = await bookingService.update(id, patch);
 
-    bookings.set(replaceById(select(), booking));
+    storeBookings(replaceById(select(), booking));
     broadcast('bookings');
 
     return booking;
@@ -79,7 +124,7 @@ export const bookingStore = {
   async remove(id: string): Promise<void> {
     await bookingService.remove(id);
 
-    bookings.set(select().filter((booking) => booking.id !== id));
+    storeBookings(select().filter((booking) => booking.id !== id));
     broadcast('bookings');
   },
 
@@ -99,6 +144,16 @@ export const bookingStore = {
   /** Sign-out: the next reader must not see this account's bookings. */
   reset(): void {
     bookings.reset();
+    setOfflineSnapshotAt(null);
+  },
+
+  getOfflineSnapshotAt(): string | null {
+    return offlineSnapshotAt;
+  },
+
+  subscribeOffline(listener: () => void): () => void {
+    offlineListeners.add(listener);
+    return () => offlineListeners.delete(listener);
   },
 };
 
@@ -108,6 +163,15 @@ export const bookingStore = {
  */
 export function useBookingsResource(): ResourceSnapshot<Booking[]> {
   return useSyncExternalStore(bookings.subscribe, bookings.getSnapshot, bookings.getSnapshot);
+}
+
+/** Timestamp of the cached booking list currently shown, or null when online. */
+export function useBookingOfflineSnapshotAt(): string | null {
+  return useSyncExternalStore(
+    bookingStore.subscribeOffline,
+    bookingStore.getOfflineSnapshotAt,
+    bookingStore.getOfflineSnapshotAt,
+  );
 }
 
 /** Every booking, newest first. */

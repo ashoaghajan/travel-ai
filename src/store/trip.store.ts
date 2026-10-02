@@ -5,6 +5,10 @@ import { tripService } from '../services/trip.service';
 import { createResource } from './createResource';
 import type { ResourceSnapshot } from './createResource';
 import { broadcast, onBroadcast } from './broadcast';
+import { offlineSnapshotService } from '../services/offlineSnapshot.service';
+import { ApiError } from '../services/http';
+import { STORAGE_KEYS, storageService } from '../services/localStorage.service';
+import { productAnalyticsService } from '../services/productAnalytics.service';
 
 /**
  * Shared read model for saved trips.
@@ -21,15 +25,50 @@ import { broadcast, onBroadcast } from './broadcast';
 /** Module-level so the identity is stable — see `createResource`. */
 const EMPTY_TRIPS: Trip[] = [];
 
+let offlineSnapshotAt: string | null = null;
+const offlineListeners = new Set<() => void>();
+
+function setOfflineSnapshotAt(value: string | null): void {
+  if (offlineSnapshotAt === value) return;
+  offlineSnapshotAt = value;
+  offlineListeners.forEach((listener) => listener());
+}
+
+function cacheTrips(trips: Trip[]): void {
+  try {
+    offlineSnapshotService.writeTrips(trips);
+  } catch {
+    // Storage failure must not discard the server's successful response.
+  }
+}
+
+async function loadTrips(): Promise<Trip[]> {
+  try {
+    const trips = await tripService.getTrips();
+    cacheTrips(trips);
+    setOfflineSnapshotAt(null);
+    return trips;
+  } catch (error) {
+    if (!(error instanceof ApiError) || error.status !== 0) throw error;
+    const cached = offlineSnapshotService.readTrips();
+    if (!cached) throw error;
+    setOfflineSnapshotAt(cached.savedAt);
+    return cached.data;
+  }
+}
+
 const tripsResource = createResource<Trip[]>({
   empty: EMPTY_TRIPS,
-  load: () => tripService.getTrips(),
+  load: loadTrips,
 });
 
 const activeTripResource = createResource<string | null>({
   empty: null,
   load: () => tripService.getActiveTripId(),
 });
+
+// The archived snapshot is account-scoped; clear its UI mode when ownership changes.
+storageService.subscribe(STORAGE_KEYS.ownerUserId, () => setOfflineSnapshotAt(null));
 
 // Another tab saved, edited or deleted something. Refetch rather than trust a
 // payload — the two tabs can be at different versions of the same trip.
@@ -58,6 +97,11 @@ function replaceById(trips: Trip[], trip: Trip): Trip[] {
   return trips.map((candidate) => (candidate.id === trip.id ? trip : candidate));
 }
 
+function storeTrips(trips: Trip[]): void {
+  tripsResource.set(trips);
+  cacheTrips(trips);
+}
+
 export const tripStore = {
   subscribe: tripsResource.subscribe,
   getSnapshot: tripsResource.getSnapshot,
@@ -66,7 +110,8 @@ export const tripStore = {
   async saveTrip(draft: TripDraft): Promise<Trip> {
     const trip = await tripService.createTrip(draft);
 
-    tripsResource.set(upsertNewestFirst(selectTrips(), trip));
+    storeTrips(upsertNewestFirst(selectTrips(), trip));
+    productAnalyticsService.recordTripCreated(trip.id);
     broadcast('trips');
 
     return trip;
@@ -94,7 +139,7 @@ export const tripStore = {
       // Upserted rather than prepended because accepting is idempotent:
       // pressing twice returns the same trip, and a prepend would show it
       // twice.
-      tripsResource.set(upsertNewestFirst(selectTrips(), trip));
+      storeTrips(upsertNewestFirst(selectTrips(), trip));
     } else if (status !== 'idle') {
       // Loading or errored: whatever answer is in flight was asked for before
       // this trip existed, so it cannot be merged into — ask again.
@@ -107,9 +152,18 @@ export const tripStore = {
   },
 
   async updateTrip(id: string, patch: TripPatch): Promise<Trip> {
+    const previous = selectTrips().find((candidate) => candidate.id === id);
     const trip = await tripService.updateTrip(id, patch);
 
-    tripsResource.set(replaceById(selectTrips(), trip));
+    storeTrips(replaceById(selectTrips(), trip));
+    if (previous && patch.itinerary) {
+      const existing = new Set(previous.itinerary.flatMap((day) => day.activities.map((activity) => activity.id)));
+      for (const activity of trip.itinerary.flatMap((day) => day.activities)) {
+        if (!existing.has(activity.id)) {
+          productAnalyticsService.recordPlaceAdded(id, activity.sourceActivityId ?? activity.id);
+        }
+      }
+    }
     broadcast('trips');
 
     return trip;
@@ -124,7 +178,8 @@ export const tripStore = {
   ): Promise<Trip> {
     const trip = await tripService.addActivityToDay(tripId, dayId, activity, options);
 
-    tripsResource.set(replaceById(selectTrips(), trip));
+    storeTrips(replaceById(selectTrips(), trip));
+    productAnalyticsService.recordPlaceAdded(tripId, activity.id);
     broadcast('trips');
 
     return trip;
@@ -133,7 +188,7 @@ export const tripStore = {
   async deleteTrip(id: string): Promise<void> {
     await tripService.deleteTrip(id);
 
-    tripsResource.set(selectTrips().filter((trip) => trip.id !== id));
+    storeTrips(selectTrips().filter((trip) => trip.id !== id));
 
     // Never leave the active pointer aimed at a trip that no longer exists.
     if (selectActiveTripId() === id) activeTripResource.set(null);
@@ -175,6 +230,16 @@ export const tripStore = {
   reset(): void {
     tripsResource.reset();
     activeTripResource.reset();
+    setOfflineSnapshotAt(null);
+  },
+
+  getOfflineSnapshotAt(): string | null {
+    return offlineSnapshotAt;
+  },
+
+  subscribeOffline(listener: () => void): () => void {
+    offlineListeners.add(listener);
+    return () => offlineListeners.delete(listener);
   },
 };
 
@@ -195,6 +260,15 @@ export function useTripsResource(): ResourceSnapshot<Trip[]> {
     tripsResource.subscribe,
     tripsResource.getSnapshot,
     tripsResource.getSnapshot,
+  );
+}
+
+/** Timestamp of the cached list currently being shown, or null when online. */
+export function useTripOfflineSnapshotAt(): string | null {
+  return useSyncExternalStore(
+    tripStore.subscribeOffline,
+    tripStore.getOfflineSnapshotAt,
+    tripStore.getOfflineSnapshotAt,
   );
 }
 

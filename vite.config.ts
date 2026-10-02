@@ -1,12 +1,79 @@
 import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vitest/config';
+import type { Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
 
 const shared = (path: string) => fileURLToPath(new URL(path, import.meta.url));
 
+function offlineServiceWorker(): Plugin {
+  return {
+    name: 'ai-travel-offline-service-worker',
+    generateBundle(_options, bundle) {
+      const assets = Object.values(bundle)
+        .filter((item) => item.type === 'asset' || item.type === 'chunk')
+        .map((item) => `/${item.fileName}`)
+        .filter((path) => /\.(?:js|css|svg|png|jpe?g|webp|woff2?)$/i.test(path));
+      const precache = [...new Set(['/index.html', '/favicon.svg', '/icons.svg', ...assets])];
+
+      this.emitFile({
+        type: 'asset',
+        fileName: 'sw.js',
+        source: `
+const CACHE_NAME = 'ai-travel-shell-v1';
+const PRECACHE_URLS = ${JSON.stringify(precache)};
+
+self.addEventListener('install', (event) => {
+  event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(PRECACHE_URLS)));
+});
+
+self.addEventListener('activate', (event) => {
+  event.waitUntil(
+    caches.keys()
+      .then((keys) => Promise.all(keys.filter((key) => key.startsWith('ai-travel-shell-') && key !== CACHE_NAME).map((key) => caches.delete(key))))
+      .then(() => self.clients.claim()),
+  );
+});
+
+self.addEventListener('fetch', (event) => {
+  const request = event.request;
+  if (request.method !== 'GET') return;
+  const url = new URL(request.url);
+  if (url.origin !== self.location.origin || url.pathname.startsWith('/api/')) return;
+
+  if (request.mode === 'navigate') {
+    event.respondWith(
+      fetch(request).then((response) => {
+        if (response.ok) {
+          const copy = response.clone();
+          void caches.open(CACHE_NAME).then((cache) => cache.put('/index.html', copy));
+        }
+        return response;
+      }).catch(async () => (await caches.match('/index.html')) || Response.error()),
+    );
+    return;
+  }
+
+  if (url.pathname.startsWith('/assets/') || url.pathname === '/favicon.svg' || url.pathname === '/icons.svg') {
+    event.respondWith(
+      caches.match(request).then((cached) => cached || fetch(request).then((response) => {
+        if (response.ok) {
+          const copy = response.clone();
+          void caches.open(CACHE_NAME).then((cache) => cache.put(request, copy));
+        }
+        return response;
+      })),
+    );
+  }
+});
+`,
+      });
+    },
+  };
+}
+
 // https://vite.dev/config/
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), offlineServiceWorker()],
   resolve: {
     alias: {
       // Longest first — '@ai-travel/shared' would otherwise swallow the

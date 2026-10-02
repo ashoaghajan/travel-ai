@@ -125,7 +125,7 @@ export function TripsPage() {
           <EmptyState
             icon={<SuitcaseIcon size={26} />}
             title="No saved trips yet"
-            description="Start one yourself and fill in the days as you go, or describe what you want and let the planner draft it."
+            description="Build a blank trip and add activities yourself, or use Plan with AI to get a complete day-by-day first draft. You can edit either one afterward."
             action={
               <>
                 <Button to={ROUTES.tripNew} variant="primary" size="md">

@@ -97,6 +97,22 @@ describe('claimLocalData', () => {
     expect(storageService.get(STORAGE_KEYS.recentSearches, null)).toBeNull();
   });
 
+  it('archives offline snapshots with their account rather than exposing them to the next account', () => {
+    storageService.set(STORAGE_KEYS.offlineTrips, [{ id: 'cached-1', title: 'Bali' }]);
+    storageService.set(STORAGE_KEYS.offlineBookings, [{ id: 'booking-1', title: 'Flight' }]);
+    storageService.set(STORAGE_KEYS.offlineUser, { id: 'user-1', name: 'Ada' });
+    claimLocalData('user-1');
+
+    claimLocalData('user-2');
+
+    expect(storageService.get(STORAGE_KEYS.offlineTrips, null)).toBeNull();
+    expect(storageService.get(STORAGE_KEYS.offlineBookings, null)).toBeNull();
+    expect(storageService.get(STORAGE_KEYS.offlineUser, null)).toBeNull();
+    expect(storageService.get(archiveKey('user-1', STORAGE_KEYS.offlineTrips), [])).toEqual([
+      { id: 'cached-1', title: 'Bali' },
+    ]);
+  });
+
   // Reference data is the same answers for everyone and expensive to refetch.
   it('leaves the shared caches alone', () => {
     storageService.set(STORAGE_KEYS.countries, [{ code: 'FR' }]);

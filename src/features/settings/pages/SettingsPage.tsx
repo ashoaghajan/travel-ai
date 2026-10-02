@@ -7,6 +7,7 @@ import { formatBytes } from '../../../utils/bytes';
 import { APPEARANCES } from '../../../types/settings.types';
 import { PlanningSection } from '../components/PlanningSection';
 import { SettingsSection } from '../components/SettingsSection';
+import { ProductAnalyticsSection } from '../components/ProductAnalyticsSection';
 import { useSettings } from '../useSettings';
 import styles from './SettingsPage.module.css';
 
@@ -36,6 +37,12 @@ const STORAGE_LABELS: Record<string, string> = {
   'ai-travel-planner:exchangeRates': 'Exchange rates',
   'ai-travel-planner:migratedFor': 'Migration record',
   'ai-travel-planner:ownerUserId': 'Signed-in account',
+  'ai-travel-planner:reminderDeliveries': 'Reminder deliveries',
+  'ai-travel-planner:offlineTrips': 'Offline trip copies',
+  'ai-travel-planner:offlineBookings': 'Offline booking copies',
+  'ai-travel-planner:offlineUser': 'Offline account profile',
+  'ai-travel-planner:productAnalyticsConsent': 'Product measurement preference',
+  'ai-travel-planner:productAnalytics': 'Product measurements',
 };
 
 export function SettingsPage() {
@@ -137,21 +144,24 @@ export function SettingsPage() {
 
         <SettingsSection
           title="Notifications"
-          description="Nothing is sent in this version. Preferences are stored for later."
+          description="Upcoming activities and trip-readiness reminders appear in the app. Browser notifications are optional and only requested when you enable them."
         >
           <Switch
             label="Trip reminders"
-            description="A nudge before a saved trip starts."
+            description="Upcoming activities, hotel check-in dates, and trip details to finish."
             checked={settings.notifications.tripReminders}
             onChange={(checked) => setNotification('tripReminders', checked)}
           />
           <Switch
             label="Price alerts"
-            description="Tell me when flights or stays on a saved trip change price."
+            description="Unavailable until a reliable live fare and stay tracking provider is connected."
             checked={settings.notifications.priceAlerts}
             onChange={(checked) => setNotification('priceAlerts', checked)}
+            disabled
           />
         </SettingsSection>
+
+        <ProductAnalyticsSection />
 
         <SettingsSection
           title="Storage"

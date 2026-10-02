@@ -6,6 +6,8 @@
  */
 export const ROUTES = {
   landing: '/',
+  tryPlanner: '/try',
+  claimGuestTrip: '/trips/claim-guest',
   /**
    * `login`/`register` rather than sign-in/sign-up, matching the API's
    * `POST /api/auth/register`. The visible copy still says "Sign in".

@@ -1,0 +1,16 @@
+.card { display: flex; flex-direction: column; gap: var(--space-md); }
+.header { display: flex; justify-content: space-between; align-items: center; gap: var(--space-md); }
+.header h2 { margin: 0; font-size: var(--font-md); }
+.header p { margin: var(--space-xs) 0 0; color: var(--color-text-muted); font-size: var(--font-xs); }
+.percentage { color: var(--color-accent); font-size: var(--font-md); font-variant-numeric: tabular-nums; }
+.track { height: 8px; overflow: hidden; border-radius: var(--radius-pill); background: var(--color-surface-muted); }
+.track span { display: block; height: 100%; border-radius: inherit; background: var(--color-primary); transition: width 180ms ease; }
+.list { display: flex; flex-direction: column; gap: var(--space-sm); margin: 0; padding: 0; list-style: none; }
+.list li { display: grid; grid-template-columns: 1.5rem minmax(0, 1fr) auto; align-items: center; gap: var(--space-sm); padding: var(--space-sm) 0; border-top: 1px solid var(--color-border); }
+.mark { color: var(--color-text-muted); font-size: var(--font-md); text-align: center; }
+.complete .mark { color: var(--color-success); font-weight: var(--font-weight-bold); }
+.copy { min-width: 0; }
+.copy strong { font-size: var(--font-sm); }
+.copy p { margin: 2px 0 0; color: var(--color-text-muted); font-size: var(--font-xs); line-height: 1.4; }
+.list a { color: var(--color-accent); font-size: var(--font-xs); font-weight: var(--font-weight-semibold); text-decoration: none; }
+.list a:hover { text-decoration: underline; }

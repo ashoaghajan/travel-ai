@@ -19,6 +19,30 @@
   color: var(--color-text-muted);
 }
 
+.tripContext,
+.addedNotice {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm) var(--space-lg);
+  padding: var(--space-md) var(--space-lg);
+  border-radius: var(--radius-md);
+  background: var(--color-primary-soft);
+  color: var(--color-text-main);
+  font-size: var(--font-sm);
+}
+
+.tripContext a,
+.addedNotice a {
+  color: var(--color-accent);
+  font-weight: var(--font-weight-semibold);
+  text-decoration: none;
+}
+
+.tripContext a:hover,
+.addedNotice a:hover { text-decoration: underline; }
+
 /* One column on mobile, a grid from tablet up (DESIGN_SPEC Screen 6). */
 .grid {
   display: grid;

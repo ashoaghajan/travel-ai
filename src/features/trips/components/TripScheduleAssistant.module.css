@@ -1,0 +1,19 @@
+.card { display: flex; flex-direction: column; gap: var(--space-md); }
+.heading h2, .suggestions h3 { margin: 0; font-size: var(--font-md); font-weight: var(--font-weight-semibold); }
+.heading p, .disclosure { margin: var(--space-xs) 0 0; color: var(--color-text-muted); font-size: var(--font-xs); line-height: 1.5; }
+.form { display: flex; align-items: center; gap: var(--space-sm); }
+.form input { flex: 1; min-width: 0; min-height: 2.75rem; padding: var(--space-sm) var(--space-md); border: 1px solid var(--color-border); border-radius: var(--radius-md); background: var(--color-surface); color: var(--color-text-main); font: inherit; font-size: var(--font-sm); }
+.form input:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 1px; }
+.status, .error { margin: 0; font-size: var(--font-sm); }
+.status { color: var(--color-text-muted); }
+.error { color: var(--color-danger); }
+.suggestions { display: flex; flex-direction: column; gap: var(--space-md); padding-top: var(--space-md); border-top: 1px solid var(--color-border); }
+.day { display: flex; flex-direction: column; gap: var(--space-sm); padding: var(--space-md); border-radius: var(--radius-md); background: var(--color-surface-muted); }
+.dayHeading { display: flex; align-items: center; justify-content: space-between; gap: var(--space-sm); }
+.dayHeading h4 { margin: 0; font-size: var(--font-sm); }
+.day ul { display: flex; flex-direction: column; gap: var(--space-sm); margin: 0; padding: 0; list-style: none; }
+.day li { display: grid; grid-template-columns: 3.5rem 1fr; gap: var(--space-xs) var(--space-sm); font-size: var(--font-sm); }
+.day li > span { color: var(--color-text-muted); font-variant-numeric: tabular-nums; }
+.day li > strong { font-weight: var(--font-weight-semibold); }
+.day li > p { grid-column: 2; margin: 0; color: var(--color-text-muted); font-size: var(--font-xs); }
+@media (max-width: 620px) { .form { align-items: stretch; flex-direction: column; } .dayHeading { align-items: flex-start; flex-direction: column; } }

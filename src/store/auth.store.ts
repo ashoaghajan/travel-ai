@@ -1,8 +1,8 @@
 import { useSyncExternalStore } from 'react';
 import type { ApiUser, LoginRequest, RegisterRequest, UserPlan } from '@ai-travel/shared';
 import { authService } from '../services/auth.service';
-import { signedOut } from '../services/http';
-import { claimLocalData, releaseLocalData } from '../services/localData.service';
+import { ApiError, signedOut } from '../services/http';
+import { claimLocalData, currentOwner, releaseLocalData } from '../services/localData.service';
 import { chatService } from '../services/chat.service';
 import { searchService } from '../services/search.service';
 import { settingsService } from '../services/settings.service';
@@ -12,6 +12,7 @@ import { friendStore } from './friend.store';
 import { messagesStore } from './messages.store';
 import { savedActivityStore } from './savedActivity.store';
 import { tripStore } from './trip.store';
+import { offlineSessionService } from '../services/offlineSession.service';
 
 /**
  * Who is signed in.
@@ -41,6 +42,7 @@ export type AuthState = {
 const ANONYMOUS: AuthState = { status: 'anonymous', user: null };
 
 let state: AuthState = { status: 'unknown', user: null };
+let reconnecting: Promise<void> | null = null;
 
 const listeners = new Set<() => void>();
 
@@ -63,6 +65,7 @@ function signIn(user: ApiUser): void {
   // Before the state change, so the stores have this account's data by the
   // time anything re-renders against it.
   claimLocalData(user.id);
+  offlineSessionService.save(user);
 
   /*
    * The account's own preferences, which arrived with it.
@@ -155,7 +158,22 @@ export const authStore = {
    * cookie, which is an ordinary `anonymous`, not an error.
    */
   async bootstrap(): Promise<void> {
-    const user = await authService.restore();
+    let user: ApiUser | null = null;
+    try {
+      user = await authService.restore();
+    } catch (error) {
+      // Network failures may use the last-known account profile for cached,
+      // read-only trip access. Explicit auth rejection remains signed out.
+      if (error instanceof ApiError && error.status === 0) {
+        const cachedUser = offlineSessionService.read(currentOwner());
+        if (cachedUser) {
+          claimLocalData(cachedUser.id);
+          tripStore.primeActiveTrip(cachedUser.activeTripId);
+          setState({ status: 'authenticated', user: cachedUser });
+          return;
+        }
+      }
+    }
 
     if (!user) {
       setState(ANONYMOUS);
@@ -163,6 +181,31 @@ export const authStore = {
     }
 
     signIn(user);
+  },
+
+  /** Revalidate the saved session after connectivity returns from offline mode. */
+  async reconnect(): Promise<void> {
+    if (state.status !== 'authenticated' || reconnecting) return reconnecting ?? undefined;
+
+    reconnecting = (async () => {
+      try {
+        const user = await authService.restore();
+        if (!user) {
+          forgetAccount();
+          return;
+        }
+
+        signIn(user);
+        await Promise.all([tripStore.refresh(), bookingStore.refresh()]);
+      } catch {
+        // The online event can arrive before the network is usable; retain
+        // read-only mode and let a later online event try again.
+      }
+    })().finally(() => {
+      reconnecting = null;
+    });
+
+    return reconnecting;
   },
 
   async signIn(input: LoginRequest): Promise<ApiUser> {
@@ -235,6 +278,7 @@ export const authStore = {
   /** Testing seam — the module cache otherwise outlives a single test. */
   reset(): void {
     state = { status: 'unknown', user: null };
+    reconnecting = null;
     listeners.clear();
   },
 };

@@ -2,9 +2,11 @@ import type { RouteObject } from 'react-router-dom';
 import { AppShell } from '../components/layout/AppShell';
 import { RootLayout } from './RootLayout';
 import { LandingPage } from '../features/landing/pages/LandingPage';
+import { GuestPlannerPage } from '../features/planner/pages/GuestPlannerPage';
 import { PlannerPage } from '../features/planner/pages/PlannerPage';
 import { TripsPage } from '../features/trips/pages/TripsPage';
 import { CreateTripPage } from '../features/trips/pages/CreateTripPage';
+import { ClaimGuestTripPage } from '../features/trips/pages/ClaimGuestTripPage';
 import { TripDetailsPage } from '../features/trips/pages/TripDetailsPage';
 import { TripSummaryPage } from '../features/trips/pages/TripSummaryPage';
 import { FlightsPage } from '../features/flights/pages/FlightsPage';
@@ -45,6 +47,11 @@ export const routes: RouteObject[] = [
         element: <LandingPage />,
         handle: { title: 'Plan the perfect trip' },
       },
+      {
+        path: ROUTES.tryPlanner,
+        element: <GuestPlannerPage />,
+        handle: { title: 'Try the planner' },
+      },
       // Outside the shell, like the landing page: there is no sidebar to draw
       // for someone who has no account yet. And gated the other way — a reader
       // who already has a session is sent on rather than asked to sign in.
@@ -69,6 +76,11 @@ export const routes: RouteObject[] = [
           {
             element: <AppShell />,
             children: [
+              {
+                path: ROUTES.claimGuestTrip,
+                element: <ClaimGuestTripPage />,
+                handle: { title: 'Saving your trip' },
+              },
               {
                 path: ROUTES.planner,
                 element: <PlannerPage />,

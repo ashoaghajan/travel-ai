@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useSearchParams } from 'react-router-dom';
 import { PageHeader } from '../../../components/layout/PageHeader';
 import { Button } from '../../../components/common/Button';
 import { Card } from '../../../components/common/Card';
@@ -45,12 +45,15 @@ function placeCountryOf(activity: ActivityDetails): string | null {
 /** Screen 6a — one attraction, with the actions that make it useful. */
 export function ActivityDetailsPage() {
   const { activityId } = useParams<{ activityId: string }>();
+  const [searchParams] = useSearchParams();
+  const tripId = searchParams.get('tripId');
   const { activity, isLoading, error, notFound, retry } = useActivityDetails(activityId);
 
   const isSaved = useIsActivitySaved(activity?.id);
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [showMap, setShowMap] = useState(false);
   const [confirmation, setConfirmation] = useState<string | null>(null);
+  const [addedTripId, setAddedTripId] = useState<string | null>(null);
   const [imageFailed, setImageFailed] = useState(false);
 
   useEffect(() => {
@@ -85,7 +88,7 @@ export function ActivityDetailsPage() {
       <div className={styles.page}>
         <PageHeader title="Attraction" />
         <div className={styles.content}>
-          <BackLink to={ROUTES.activities} label="Back to Explore" />
+          <BackLink to={tripId ? `${ROUTES.activities}?tripId=${encodeURIComponent(tripId)}` : ROUTES.activities} label="Back to Explore" />
           <EmptyState
             icon={<CompassIcon size={26} />}
             title="We could not load this attraction"
@@ -106,7 +109,7 @@ export function ActivityDetailsPage() {
       <div className={styles.page}>
         <PageHeader title="Attraction" />
         <div className={styles.content}>
-          <BackLink to={ROUTES.activities} label="Back to Explore" />
+          <BackLink to={tripId ? `${ROUTES.activities}?tripId=${encodeURIComponent(tripId)}` : ROUTES.activities} label="Back to Explore" />
           <EmptyState
             icon={<CompassIcon size={26} />}
             title="We could not find this attraction"
@@ -137,7 +140,7 @@ export function ActivityDetailsPage() {
       <PageHeader title={activity.title} subtitle={categoryLabel(activity.category)} />
 
       <div className={styles.content}>
-        <BackLink to={ROUTES.activities} label="Back to Explore" />
+        <BackLink to={tripId ? `${ROUTES.activities}?tripId=${encodeURIComponent(tripId)}` : ROUTES.activities} label="Back to Explore" />
 
         <Card padding="none" elevation="card" className={styles.hero}>
           <div className={styles.media}>
@@ -208,9 +211,10 @@ export function ActivityDetailsPage() {
         </div>
 
         {confirmation ? (
-          <p className={styles.confirmation} role="status">
-            {confirmation}
-          </p>
+          <div className={styles.confirmation} role="status">
+            <span>{confirmation}</span>
+            {addedTripId ? <Button to={`/trips/${addedTripId}`}>View trip</Button> : null}
+          </div>
         ) : null}
 
         {!activity.coordinates ? (
@@ -299,8 +303,12 @@ export function ActivityDetailsPage() {
         <AddToTripDialog
           activity={activity}
           placeCountry={placeCountryOf(activity)}
+          preferredTripId={tripId}
           onClose={() => setIsAddOpen(false)}
-          onAdded={(tripTitle) => setConfirmation(`Added to ${tripTitle}.`)}
+          onAdded={(tripTitle, addedId) => {
+            setConfirmation(`Added to ${tripTitle}.`);
+            setAddedTripId(addedId);
+          }}
         />
       ) : null}
     </div>

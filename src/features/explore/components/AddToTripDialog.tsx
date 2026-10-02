@@ -34,7 +34,9 @@ export type AddToTripDialogProps = {
   placeCountry?: string | null;
   onClose: () => void;
   /** Called once the activity is on the itinerary. */
-  onAdded?: (tripTitle: string) => void;
+  onAdded?: (tripTitle: string, tripId: string) => void;
+  /** Prefer this trip when opened from its itinerary or a trip-scoped Explore view. */
+  preferredTripId?: string | null;
 };
 
 /**
@@ -55,6 +57,7 @@ export function AddToTripDialog({
   placeCountry = null,
   onClose,
   onAdded,
+  preferredTripId,
 }: AddToTripDialogProps) {
   const trips = useTrips();
   const dialogRef = useRef<HTMLDialogElement>(null);
@@ -66,7 +69,9 @@ export function AddToTripDialog({
   /** Every trip is in the wrong country — there is nothing to choose. */
   const noneAddable = trips.length > 0 && addable.length === 0;
 
-  const [tripId, setTripId] = useState(() => addable[0]?.id ?? '');
+  const [tripId, setTripId] = useState(() =>
+    addable.find((candidate) => candidate.id === preferredTripId)?.id ?? addable[0]?.id ?? '',
+  );
   const [dayId, setDayId] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -109,7 +114,7 @@ export function AddToTripDialog({
 
     try {
       await tripStore.addActivityToDay(trip.id, dayId, activity);
-      onAdded?.(trip.title);
+      onAdded?.(trip.title, trip.id);
       onClose();
     } catch (caught) {
       setError(describeError(caught));

@@ -9,6 +9,7 @@ import { FederatedSignIn } from '../components/FederatedSignIn';
 import { safeNextPath } from '../next-path';
 import { AuthLayout } from './AuthLayout';
 import styles from './AuthPage.module.css';
+import { guestDraftService } from '../../../services/guestDraft.service';
 
 /** Open a new account. */
 export function RegisterPage() {
@@ -20,6 +21,7 @@ export function RegisterPage() {
     useSignUpForm();
 
   const showErrors = hasAttemptedSubmit;
+  const hasGuestDraft = Boolean(guestDraftService.get());
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
@@ -32,7 +34,9 @@ export function RegisterPage() {
   return (
     <AuthLayout
       title="Create your account"
-      subtitle="Save your trips and pick them up on any device."
+      subtitle={hasGuestDraft
+        ? 'Create your free account and we’ll save the itinerary you just made.'
+        : 'Save your trips and pick them up on any device.'}
       footer={
         <>
           Already have an account?{' '}

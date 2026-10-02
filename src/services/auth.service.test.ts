@@ -157,11 +157,11 @@ describe('restore', () => {
     expect(getAccessToken()).toBeNull();
   });
 
-  it('answers null when the server is unreachable', async () => {
+  it('surfaces a network failure so the app can enter read-only offline mode', async () => {
     const fetchMock = mockFetch();
     fetchMock.mockRejectedValue(new TypeError('Failed to fetch'));
 
-    await expect(authService.restore()).resolves.toBeNull();
+    await expect(authService.restore()).rejects.toMatchObject({ status: 0 });
   });
 
   it('does not send a stale access token on the refresh', async () => {

@@ -177,6 +177,14 @@
   color: var(--color-text-muted);
 }
 
+.partyEstimate {
+  flex-basis: 100%;
+  margin: calc(var(--space-sm) * -1) 0 0;
+  color: var(--color-text-muted);
+  font-size: var(--font-xs);
+  text-align: right;
+}
+
 @media (min-width: 768px) {
   .priceRow {
     justify-content: flex-end;
@@ -216,4 +224,6 @@
     align-items: flex-end;
     gap: 0;
   }
+
+  .partyEstimate { text-align: right; }
 }

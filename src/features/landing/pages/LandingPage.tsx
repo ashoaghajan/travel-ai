@@ -76,21 +76,23 @@ export function LandingPage() {
               </Button>
             ) : (
               <>
-                {/*
-                  Both calls to action lead to an account now: the planner is
-                  behind the auth boundary, so "Get Started" means "register".
-                */}
+                {/* Visitors can preview an itinerary before choosing to sign up. */}
                 <Button
-                  to={ROUTES.register}
+                  to={ROUTES.tryPlanner}
                   variant="primary"
                   size="lg"
                   trailingIcon={<ArrowRightIcon size={18} />}
                 >
                   {LANDING_HERO.primaryCta}
                 </Button>
-                <Button to={ROUTES.login} variant="glass" size="lg">
-                  {LANDING_HERO.secondaryCta}
-                </Button>
+                <div className={styles.accountActions}>
+                  <Button to={ROUTES.register} variant="glass" size="lg">
+                    {LANDING_HERO.accountCta}
+                  </Button>
+                  <Button to={ROUTES.login} variant="glass" size="lg">
+                    {LANDING_HERO.secondaryCta}
+                  </Button>
+                </div>
               </>
             )}
           </div>

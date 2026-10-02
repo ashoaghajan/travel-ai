@@ -122,6 +122,16 @@
   width: 100%;
 }
 
+.accountActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-md);
+}
+
+.accountActions > * {
+  flex: 1 1 130px;
+}
+
 /* -------------------------------------------------------------------------
  * Feature cards
  * ---------------------------------------------------------------------- */
@@ -165,6 +175,10 @@
 
   .actions > * {
     width: auto;
+  }
+
+  .accountActions > * {
+    flex: 0 0 auto;
   }
 
   .featureGrid {

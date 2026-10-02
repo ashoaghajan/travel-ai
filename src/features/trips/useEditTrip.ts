@@ -7,6 +7,7 @@ import {
   addActivity,
   addNote,
   addPickedActivity,
+  addSuggestedActivities,
   hasErrors,
   isDirty,
   removeActivity,
@@ -49,6 +50,7 @@ export type EditTripState = {
   appendActivity: (dayId: string) => void;
   /** Adds an attraction from the explorer. Draft only — see `addPickedActivity`. */
   pickActivity: (dayId: string, activity: Activity, time: string) => void;
+  appendSuggestedActivities: (dayId: string, ideas: ItineraryActivity[]) => void;
 
   /** Appends a blank note for the reader to write into. */
   appendNote: () => void;
@@ -128,6 +130,10 @@ export function useEditTrip(trip: Trip): EditTripState {
     setDraft((current) => addPickedActivity(current, dayId, activity, time));
   }, []);
 
+  const appendSuggestedActivities = useCallback((dayId: string, ideas: ItineraryActivity[]) => {
+    setDraft((current) => addSuggestedActivities(current, dayId, ideas));
+  }, []);
+
   const appendNote = useCallback(() => {
     setDraft((current) => addNote(current));
   }, []);
@@ -182,6 +188,7 @@ export function useEditTrip(trip: Trip): EditTripState {
     deleteActivity,
     appendActivity,
     pickActivity,
+    appendSuggestedActivities,
     appendNote,
     editNote,
     deleteNote,

@@ -42,6 +42,8 @@ export type ExploreState = {
   activities: Activity[];
   /** The city the activities on screen belong to — not necessarily the selected one. */
   exploredCity: string | null;
+  /** Country of the results currently on screen (not the possibly edited selector). */
+  exploredCountryCode: string | null;
 
   /* states */
   isLoadingCountries: boolean;
@@ -86,9 +88,12 @@ export type ExploreState = {
  * state rather than subscribed to because, unlike the other two, nothing else
  * in the app can change it: a fix is taken here or not at all.
  */
-export function useExplore(): ExploreState {
+export function useExplore(options: { preferredTripId?: string | null } = {}): ExploreState {
   const trips = useTrips();
   const activeTripId = useActiveTripId();
+  const contextTripId = trips.some((trip) => trip.id === options.preferredTripId)
+    ? options.preferredTripId ?? activeTripId
+    : activeTripId;
 
   const chosen = useSyncExternalStore(
     exploreService.subscribe,
@@ -136,8 +141,14 @@ export function useExplore(): ExploreState {
   const autoExploredRef = useRef<string | null>(null);
 
   const selection = useMemo(
-    () => exploreService.resolveSelection(trips, activeTripId, countries, chosen, device),
-    [trips, activeTripId, countries, chosen, device],
+    () => exploreService.resolveSelection(
+      trips,
+      contextTripId,
+      countries,
+      options.preferredTripId ? { country: null, city: null } : chosen,
+      device,
+    ),
+    [trips, contextTripId, countries, chosen, device, options.preferredTripId],
   );
 
   /**
@@ -146,12 +157,12 @@ export function useExplore(): ExploreState {
    * `followTrip` has to be able to store it.
    */
   const fromTrip = useMemo(() => {
-    const resolved = exploreService.resolveSelection(trips, activeTripId, countries, {
+    const resolved = exploreService.resolveSelection(trips, contextTripId, countries, {
       country: null,
       city: null,
     });
     return resolved.source === 'trip' ? resolved : null;
-  }, [trips, activeTripId, countries]);
+  }, [trips, contextTripId, countries]);
 
   const tripCity = fromTrip?.city ?? null;
 
@@ -499,6 +510,7 @@ export function useExplore(): ExploreState {
 
     activities,
     exploredCity,
+    exploredCountryCode,
 
     isLoadingCountries,
     isLoadingCities,

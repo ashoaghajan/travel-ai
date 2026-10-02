@@ -5,7 +5,7 @@ import type {
   UserPlan,
   RegisterRequest,
 } from '@ai-travel/shared';
-import { http, setAccessToken } from './http';
+import { ApiError, http, setAccessToken } from './http';
 
 /**
  * Accounts, as the app sees them.
@@ -106,8 +106,9 @@ export const authService = {
       setAccessToken(accessToken);
 
       return await this.me();
-    } catch {
+    } catch (error) {
       setAccessToken(null);
+      if (error instanceof ApiError && error.status === 0) throw error;
       return null;
     }
   },

@@ -112,7 +112,7 @@ export function BookingsPage() {
   const summary = describeBookingContext(context);
 
   // A list: a round-trip fare is two flights, and each becomes its own booking.
-  const [added, setAdded] = useState<string | null>(null);
+  const [added, setAdded] = useState<{ label: string; tripId: string | null } | null>(null);
 
   function updateSearch(next: FlightSearchQuery) {
     // Saved as well as held, so `/flights` opens on the same search and a
@@ -186,7 +186,8 @@ export function BookingsPage() {
 
         {added ? (
           <p className={styles.added} role="status">
-            Added to {added}.
+            Added to {added.label}.
+            {added.tripId ? <> <Link to={`/trips/${encodeURIComponent(added.tripId)}?tab=bookings`}>Open trip bookings</Link></> : null}
           </p>
         ) : null}
 
@@ -217,7 +218,7 @@ export function BookingsPage() {
           activeTab={activeTab}
           onTabChange={selectTab}
           idPrefix={TAB_ID_PREFIX}
-          onAdded={setAdded}
+          onAdded={(label, tripId) => setAdded({ label, tripId })}
         >
           <section className={styles.partners} aria-labelledby="booking-partners-heading">
             <h2 id="booking-partners-heading" className={styles.partnersTitle}>

@@ -84,6 +84,19 @@ describe('FlightResultCard', () => {
     expect(screen.getByText(/Round trip/)).toBeInTheDocument();
   });
 
+  it('estimates the total fare for the searched party', () => {
+    render(<FlightResultCard flight={flight()} travellers={3} />);
+
+    expect(screen.getByText('$412')).toBeInTheDocument();
+    expect(screen.getByText('$1,236 estimated for 3')).toBeInTheDocument();
+  });
+
+  it('does not repeat a party total for one traveller', () => {
+    render(<FlightResultCard flight={flight()} travellers={1} />);
+
+    expect(screen.queryByText(/estimated for/)).not.toBeInTheDocument();
+  });
+
   it('reverses the route on the way back', () => {
     render(<FlightResultCard flight={flight({ returnLeg: RETURN_LEG })} />);
 

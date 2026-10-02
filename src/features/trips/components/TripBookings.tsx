@@ -37,6 +37,7 @@ const REMOVE_ERROR = 'We could not remove that. Your browser storage may be full
 
 export type TripBookingsProps = {
   trip: Trip;
+  readOnly?: boolean;
 };
 
 /**
@@ -51,7 +52,7 @@ export type TripBookingsProps = {
  * which is where the photograph and the partner link come from, or typed in
  * by hand for the plenty that gets booked outside this app.
  */
-export function TripBookings({ trip }: TripBookingsProps) {
+export function TripBookings({ trip, readOnly = false }: TripBookingsProps) {
   const tripId = trip.id;
   const money = useMoney();
   const bookings = useTripBookings(tripId);
@@ -206,15 +207,15 @@ export function TripBookings({ trip }: TripBookingsProps) {
         icon={<TicketIcon size={26} />}
         title="Nothing booked yet"
         description="Find a flight, a place to stay or something to do, and it will be listed here with its confirmation."
-        action={
+        action={readOnly ? undefined : (
           <>
             <Button to={`/bookings?tripId=${tripId}`} variant="secondary" size="md">
               Open the booking screen
             </Button>
           </>
-        }
+        )}
       />
-      {browser}
+      {readOnly ? <p className={styles.offlineNote}>Reconnect to search, add, or update bookings.</p> : browser}
       </>
     );
   }
@@ -252,9 +253,11 @@ export function TripBookings({ trip }: TripBookingsProps) {
             ' · no prices recorded yet'
           )}
         </p>
-        <Button to={`/bookings?tripId=${tripId}`} variant="secondary" size="md">
-          Find more
-        </Button>
+        {readOnly ? null : (
+          <Button to={`/bookings?tripId=${tripId}`} variant="secondary" size="md">
+            Find more
+          </Button>
+        )}
       </div>
 
       {groups.map((group) => (
@@ -266,6 +269,7 @@ export function TripBookings({ trip }: TripBookingsProps) {
               <li key={booking.id}>
                 <BookingRow
                   booking={booking}
+                  readOnly={readOnly}
                   busy={busyId === booking.id}
                   pricing={pricing}
                   earliest={trip.startDate || undefined}
@@ -287,7 +291,7 @@ export function TripBookings({ trip }: TripBookingsProps) {
         </section>
       ))}
 
-      {browser}
+      {readOnly ? <p className={styles.offlineNote}>Reconnect to search, add, or update bookings.</p> : browser}
     </div>
   );
 }
@@ -295,6 +299,7 @@ export function TripBookings({ trip }: TripBookingsProps) {
 function BookingRow({
   booking,
   busy,
+  readOnly,
   pricing,
   earliest,
   latest,
@@ -304,6 +309,7 @@ function BookingRow({
 }: {
   booking: Booking;
   busy: boolean;
+  readOnly: boolean;
   /** Nights and party, for turning a unit price into what the line costs. */
   pricing: TripPricing;
   /** The trip's own days — a booking on it cannot be dated outside them. */
@@ -376,16 +382,23 @@ function BookingRow({
         {/* Typed in place rather than behind an edit mode — there is no draft
             to save, so a modal would be a round trip for one field. */}
         <input
-          className={styles.title}
+          className={`${styles.title} ${readOnly ? styles.readOnly : ''}`}
           value={booking.title}
           placeholder={`Name this ${bookingKindLabel(booking.kind).toLowerCase()}`}
           onChange={(event) => onEdit({ title: event.target.value })}
-          disabled={busy}
+          disabled={busy || readOnly}
+          readOnly={readOnly}
           aria-label={`Title for ${name}`}
         />
 
         {booking.source?.subtitle ? (
           <p className={styles.subtitle}>{booking.source.subtitle}</p>
+        ) : null}
+
+        {booking.kind === 'flight' && booking.status === 'booked' ? (
+          <p className={styles.flightStatusNote}>
+            Live flight status alerts aren’t available yet. Check the airline or booking provider for updates.
+          </p>
         ) : null}
 
         <div className={styles.fields}>
@@ -398,7 +411,8 @@ function BookingRow({
               onChange={(event) => editStayDate({ date: event.target.value })}
               min={earliest}
               max={latest}
-              disabled={busy}
+              disabled={busy || readOnly}
+              readOnly={readOnly}
               aria-label={`${isStay ? 'Check-in' : 'Date'} for ${name}`}
             />
           </label>
@@ -415,7 +429,8 @@ function BookingRow({
                 onChange={(event) => editStayDate({ endDate: event.target.value })}
                 min={booking.date || earliest}
                 max={latest}
-                disabled={busy}
+                disabled={busy || readOnly}
+                readOnly={readOnly}
                 aria-label={`Check-out for ${name}`}
               />
             </label>
@@ -437,7 +452,8 @@ function BookingRow({
                 value={booking.reference}
                 placeholder="Confirmation number"
                 onChange={(event) => onEdit({ reference: event.target.value })}
-                disabled={busy}
+                disabled={busy || readOnly}
+                readOnly={readOnly}
                 aria-label={`Reference for ${name}`}
               />
             </label>
@@ -464,11 +480,11 @@ function BookingRow({
           </a>
         ) : null}
 
-        <button type="button" className={styles.statusToggle} onClick={onToggleBooked} disabled={busy}>
+        <button type="button" className={styles.statusToggle} onClick={onToggleBooked} disabled={busy || readOnly}>
           {booking.status === 'booked' ? 'Move to shortlist' : 'Mark as booked'}
         </button>
 
-        <IconButton label={`Remove ${name}`} disabled={busy} onClick={onRemove}>
+          <IconButton label={`Remove ${name}`} disabled={busy || readOnly} onClick={onRemove}>
           <TrashIcon size={18} />
         </IconButton>
       </div>

@@ -1,5 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { Outlet, useLocation, useMatches } from 'react-router-dom';
+import { useOnlineStatus } from '../hooks/useOnlineStatus';
+import { authStore } from '../store/auth.store';
+import { useCurrentUser } from '../hooks/useCurrentUser';
+import { productAnalyticsService } from '../services/productAnalytics.service';
 import styles from './RootLayout.module.css';
 
 const APP_NAME = 'AI Travel Planner';
@@ -32,6 +36,20 @@ export function RootLayout() {
   const { pathname } = useLocation();
   const [announcement, setAnnouncement] = useState('');
   const isFirstRender = useRef(true);
+  const isOnline = useOnlineStatus();
+  const { isAuthenticated } = useCurrentUser();
+  const wasOnline = useRef(isOnline);
+
+  useEffect(() => {
+    if (!wasOnline.current && isOnline) {
+      void authStore.reconnect();
+    }
+    wasOnline.current = isOnline;
+  }, [isOnline]);
+
+  useEffect(() => {
+    if (isAuthenticated) productAnalyticsService.recordReturnVisit();
+  }, [isAuthenticated]);
 
   useEffect(() => {
     document.title = title === APP_NAME ? APP_NAME : `${title} · ${APP_NAME}`;
@@ -51,6 +69,12 @@ export function RootLayout() {
       <a href="#main-content" className={styles.skipLink}>
         Skip to main content
       </a>
+
+      {!isOnline ? (
+        <aside className={styles.offlineNotice} role="status" aria-live="polite">
+          <strong>You’re offline.</strong> Saved trip details and bundled photos work from this device; changes, live prices, and map tiles need a connection.
+        </aside>
+      ) : null}
 
       <Outlet />
 

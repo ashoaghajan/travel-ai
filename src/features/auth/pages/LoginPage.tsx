@@ -8,6 +8,7 @@ import { FederatedSignIn } from '../components/FederatedSignIn';
 import { safeNextPath } from '../next-path';
 import { AuthLayout } from './AuthLayout';
 import styles from './AuthPage.module.css';
+import { guestDraftService } from '../../../services/guestDraft.service';
 
 /** Sign in to an existing account. */
 export function LoginPage() {
@@ -21,6 +22,7 @@ export function LoginPage() {
   // Errors stay quiet until the first attempt — nobody wants to be told their
   // email is wrong while they are still typing it.
   const showErrors = hasAttemptedSubmit;
+  const hasGuestDraft = Boolean(guestDraftService.get());
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
@@ -35,7 +37,9 @@ export function LoginPage() {
   return (
     <AuthLayout
       title="Welcome back"
-      subtitle="Sign in to reach your trips from anywhere."
+      subtitle={hasGuestDraft
+        ? 'Sign in and we’ll save the itinerary you just made to your trips.'
+        : 'Sign in to reach your trips from anywhere.'}
       footer={
         <>
           New here?{' '}

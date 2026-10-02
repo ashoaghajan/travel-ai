@@ -36,6 +36,12 @@ const OWNED_KEYS: StorageKey[] = [
   STORAGE_KEYS.recentSearches,
   STORAGE_KEYS.savedActivities,
   STORAGE_KEYS.bookings,
+  STORAGE_KEYS.offlineTrips,
+  STORAGE_KEYS.offlineBookings,
+  STORAGE_KEYS.offlineUser,
+  STORAGE_KEYS.reminderDeliveries,
+  STORAGE_KEYS.productAnalyticsConsent,
+  STORAGE_KEYS.productAnalytics,
   STORAGE_KEYS.selectedCountry,
   STORAGE_KEYS.selectedCity,
 ];

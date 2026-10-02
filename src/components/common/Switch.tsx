@@ -7,6 +7,7 @@ export type SwitchProps = {
   description?: string;
   checked: boolean;
   onChange: (checked: boolean) => void;
+  disabled?: boolean;
   className?: string;
 };
 
@@ -14,7 +15,7 @@ export type SwitchProps = {
  * Labelled on/off control. A native checkbox with `role="switch"` — keyboard
  * and screen-reader behaviour come for free.
  */
-export function Switch({ label, description, checked, onChange, className }: SwitchProps) {
+export function Switch({ label, description, checked, onChange, disabled = false, className }: SwitchProps) {
   const id = useId();
   const descriptionId = description ? `${id}-description` : undefined;
 
@@ -37,6 +38,7 @@ export function Switch({ label, description, checked, onChange, className }: Swi
         role="switch"
         className={styles.input}
         checked={checked}
+        disabled={disabled}
         aria-describedby={descriptionId}
         onChange={(event) => onChange(event.target.checked)}
       />

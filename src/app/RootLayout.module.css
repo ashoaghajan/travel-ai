@@ -18,3 +18,26 @@
 .skipLink:focus-visible {
   transform: translateY(0);
 }
+
+.offlineNotice {
+  position: sticky;
+  top: 0;
+  z-index: var(--z-sticky, 10);
+  display: flex;
+  justify-content: center;
+  gap: var(--space-xs);
+  padding: var(--space-sm) var(--layout-content-padding);
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text-main);
+  font-size: var(--font-xs);
+  line-height: 1.5;
+  text-align: center;
+  box-shadow: var(--shadow-card);
+}
+
+.offlineNotice strong { color: var(--color-accent); }
+
+@media (max-width: 640px) {
+  .offlineNotice { justify-content: flex-start; text-align: left; }
+}

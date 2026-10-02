@@ -4,6 +4,7 @@ import { Sidebar } from '../navigation/Sidebar';
 import { BottomNavigation } from '../navigation/BottomNavigation';
 import { MessagesPanel } from '../../features/messages/components/MessagesPanel';
 import { useMessagesConnection } from '../../features/messages/useMessagesConnection';
+import { TripReminderCenter } from '../../features/trips/components/TripReminderCenter';
 import styles from './AppShell.module.css';
 
 /**
@@ -30,6 +31,7 @@ export function AppShell() {
     <div className={styles.shell}>
       <Sidebar className={styles.sidebar} />
       <main id="main-content" ref={mainRef} tabIndex={-1} className={styles.main}>
+        <TripReminderCenter />
         <Outlet />
       </main>
       {/*

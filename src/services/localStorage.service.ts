@@ -81,6 +81,18 @@ export const STORAGE_KEYS = {
    * remember whose they are — see `localData.service.ts`.
    */
   ownerUserId: 'ai-travel-planner:ownerUserId',
+  /** Last server-confirmed trip list, retained for read-only offline access. */
+  offlineTrips: 'ai-travel-planner:offlineTrips',
+  /** Last server-confirmed booking list, retained for read-only offline access. */
+  offlineBookings: 'ai-travel-planner:offlineBookings',
+  /** Last account profile that can support an offline read-only session. */
+  offlineUser: 'ai-travel-planner:offlineUser',
+  /** Reminder ids already surfaced by browser notifications on this device. */
+  reminderDeliveries: 'ai-travel-planner:reminderDeliveries',
+  /** Opt-in for first-party, on-device product measurement. */
+  productAnalyticsConsent: 'ai-travel-planner:productAnalyticsConsent',
+  /** Coarse product milestones, retained locally for up to 90 days. */
+  productAnalytics: 'ai-travel-planner:productAnalytics',
 } as const;
 
 /**

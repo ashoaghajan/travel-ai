@@ -165,3 +165,9 @@
   color: var(--color-primary);
   font-size: var(--font-sm);
 }
+
+.added a {
+  margin-left: var(--space-xs);
+  color: var(--color-primary);
+  font-weight: var(--font-weight-semibold);
+}

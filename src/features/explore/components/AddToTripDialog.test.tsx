@@ -144,7 +144,7 @@ describe('a place in the trip’s own country', () => {
 
     await userEvent.click(screen.getByRole('button', { name: 'Add to trip' }));
 
-    expect(onAdded).toHaveBeenCalledWith('One week in Yerevan');
+    expect(onAdded).toHaveBeenCalledWith('One week in Yerevan', 'trip_am');
   });
 
   it('starts on a trip that can actually take it', async () => {
@@ -157,6 +157,26 @@ describe('a place in the trip’s own country', () => {
     await open('Japan');
 
     expect(screen.getByLabelText('Trip')).toHaveValue('trip_jp');
+  });
+
+  it('prefers the trip the reader came from when it can take the place', async () => {
+    await seedTrips([
+      makeTrip(),
+      makeTrip({ id: 'trip_jp', title: 'Tokyo in October', destinationCountry: 'Japan' }),
+    ]);
+
+    render(
+      <MemoryRouter>
+        <AddToTripDialog
+          activity={ACTIVITY}
+          placeCountry="Japan"
+          preferredTripId="trip_jp"
+          onClose={vi.fn()}
+        />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByLabelText('Trip')).toHaveValue('trip_jp');
   });
 });
 

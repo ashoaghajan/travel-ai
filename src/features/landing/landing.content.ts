@@ -6,8 +6,9 @@ import type { IconProps } from '../../components/common/icons';
 export const LANDING_HERO = {
   headline: 'Your AI Travel Planner',
   subtitleLines: ['Plan the perfect trip in minutes.', 'Customised. Smart. Effortless.'],
-  primaryCta: 'Get Started',
+  primaryCta: 'Try the planner',
   secondaryCta: 'Sign In',
+  accountCta: 'Create account',
   /**
    * Replaces both of the above once there is a session. Not in the spec, which
    * only describes the page as a visitor first meets it — but a signed-in

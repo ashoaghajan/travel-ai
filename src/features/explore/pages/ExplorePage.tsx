@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { PageHeader } from '../../../components/layout/PageHeader';
 import { Button } from '../../../components/common/Button';
 import { Card } from '../../../components/common/Card';
@@ -21,6 +21,8 @@ import type { SelectionSource } from '../../../services/explore.service';
 import { ROUTES } from '../../../app/routes';
 import { useExplore } from '../useExplore';
 import { useInfiniteScroll } from '../useInfiniteScroll';
+import { AddToTripDialog } from '../components/AddToTripDialog';
+import type { Activity } from '../../../types/travel.types';
 import styles from './ExplorePage.module.css';
 
 const SKELETON_COUNT = 3;
@@ -32,6 +34,8 @@ function activityPath(activityId: string): string {
 
 /** Screen 6 — Activities explorer (DESIGN_SPEC §8), driven by country and city. */
 export function ExplorePage() {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tripId = searchParams.get('tripId');
   const {
     countries,
     cities,
@@ -44,6 +48,7 @@ export function ExplorePage() {
     locationError,
     activities,
     exploredCity,
+    exploredCountryCode,
     isLoadingCountries,
     isLoadingCities,
     isLoadingActivities,
@@ -59,7 +64,7 @@ export function ExplorePage() {
     useMyLocation,
     loadMore,
     filterCities,
-  } = useExplore();
+  } = useExplore({ preferredTripId: tripId });
 
   // The city box is a draft until Explore is pressed, and the prompt below has
   // to read it too — otherwise it goes on asking for a city that is already
@@ -85,7 +90,8 @@ export function ExplorePage() {
   }
 
   // The chip lives in the URL so a filtered view can be linked and survives reload.
-  const [searchParams, setSearchParams] = useSearchParams();
+  const [activityToAdd, setActivityToAdd] = useState<Activity | null>(null);
+  const [addedTrip, setAddedTrip] = useState<{ id: string; title: string } | null>(null);
   const requested = searchParams.get('category');
   const activeCategory: ActivityFilterId = isActivityFilter(requested)
     ? requested
@@ -124,6 +130,17 @@ export function ExplorePage() {
       />
 
       <div className={styles.content}>
+        {tripId ? (
+          <div className={styles.tripContext}>
+            <span>{tripCity ? `Finding places for your trip to ${tripCity}.` : 'Find places to add to your trip.'}</span>
+            <Link to={`/trips/${encodeURIComponent(tripId)}`}>Back to itinerary</Link>
+          </div>
+        ) : null}
+        {addedTrip ? (
+          <p className={styles.addedNotice} role="status">
+            Added to {addedTrip.title}. <Link to={`/trips/${encodeURIComponent(addedTrip.id)}`}>View itinerary</Link>
+          </p>
+        ) : null}
         <DestinationSelector
           countries={countries}
           countryCode={selection.countryCode}
@@ -229,7 +246,10 @@ export function ExplorePage() {
                       as="li"
                       activity={activity}
                       categoryLabel={categoryLabel(activity.category)}
-                      to={activityPath(activity.id)}
+                      to={tripId
+                        ? `${activityPath(activity.id)}?tripId=${encodeURIComponent(tripId)}`
+                        : activityPath(activity.id)}
+                      onAddToTrip={() => setActivityToAdd(activity)}
                     />
                   ))}
                 </ul>
@@ -249,6 +269,16 @@ export function ExplorePage() {
           </>
         )}
       </div>
+
+      {activityToAdd ? (
+        <AddToTripDialog
+          activity={activityToAdd}
+          placeCountry={countries.find((country) => country.code === exploredCountryCode)?.name ?? null}
+          preferredTripId={tripId}
+          onClose={() => setActivityToAdd(null)}
+          onAdded={(title, id) => setAddedTrip({ id, title })}
+        />
+      ) : null}
     </div>
   );
 }

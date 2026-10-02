@@ -295,6 +295,15 @@ describe('TripBookings', () => {
     expect(screen.getByText('sample price')).toBeInTheDocument();
   });
 
+  it('does not imply live flight tracking and tells a booked traveller where to check', async () => {
+    await seed([
+      makeBooking({ kind: 'flight', title: 'Airline · JFK → LIS', status: 'booked' }),
+    ]);
+    renderTab();
+
+    expect(screen.getByText(/Live flight status alerts aren’t available yet/)).toBeInTheDocument();
+  });
+
   it('totals only what carries a price, and says what is missing', async () => {
     await seed([
       makeBooking({ id: 'a', price: 420 }),

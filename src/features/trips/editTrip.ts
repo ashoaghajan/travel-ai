@@ -331,6 +331,28 @@ export function addPickedActivity(
   }));
 }
 
+/** Adds generated ideas to a chosen day, preserving the existing schedule. */
+export function addSuggestedActivities(
+  draft: TripEditDraft,
+  dayId: string,
+  ideas: ItineraryActivity[],
+): TripEditDraft {
+  if (!draft.itinerary.some((day) => day.id === dayId) || ideas.length === 0) return draft;
+
+  const added = ideas.map((idea) => ({
+    ...idea,
+    id: createId('act'),
+    sourceActivityId: undefined,
+  }));
+
+  return mapDay(draft, dayId, (day) =>
+    added.reduce((current, idea) => ({
+      ...current,
+      activities: insertByTime(current.activities, idea),
+    }), day),
+  );
+}
+
 /* -------------------------------------------------------------------------
  * Notes — same contract as the itinerary edits above: a new draft every time,
  * never a mutation of the old one.

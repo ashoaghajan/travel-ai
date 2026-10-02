@@ -4,7 +4,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Trip, TripDraft } from '../types/trip.types';
 import { tripService } from '../services/trip.service';
-import { tripStore, useActiveTripId, useTrips } from './trip.store';
+import { ApiError } from '../services/http';
+import { ERROR_CODES } from '@ai-travel/shared';
+import { offlineSnapshotService } from '../services/offlineSnapshot.service';
+import { tripStore, useActiveTripId, useTrips, useTripOfflineSnapshotAt } from './trip.store';
 
 /**
  * The trips read model.
@@ -41,6 +44,7 @@ function held(): Trip[] {
 }
 
 beforeEach(async () => {
+  localStorage.clear();
   vi.spyOn(tripService, 'getTrips').mockResolvedValue([]);
   vi.spyOn(tripService, 'getActiveTripId').mockResolvedValue(null);
   tripStore.reset();
@@ -50,12 +54,52 @@ beforeEach(async () => {
 afterEach(() => {
   vi.restoreAllMocks();
   tripStore.reset();
+  localStorage.clear();
 });
 
 describe('the hooks are exported for components', () => {
   it('exposes a list hook and an active-trip hook', () => {
     expect(typeof useTrips).toBe('function');
     expect(typeof useActiveTripId).toBe('function');
+    expect(typeof useTripOfflineSnapshotAt).toBe('function');
+  });
+});
+
+describe('offline trip snapshots', () => {
+  it('uses cached server data when the API fails due to network unavailability', async () => {
+    const cached = makeTrip({ title: 'Cached Yerevan trip' });
+    offlineSnapshotService.writeTrips([cached]);
+    vi.mocked(tripService.getTrips).mockRejectedValue(
+      new ApiError(0, ERROR_CODES.NETWORK, 'Offline'),
+    );
+
+    await tripStore.refresh();
+
+    expect(held()).toEqual([cached]);
+    expect(tripStore.getOfflineSnapshotAt()).not.toBeNull();
+  });
+
+  it('does not use the cache for an API response error', async () => {
+    offlineSnapshotService.writeTrips([makeTrip({ title: 'Stale copy' })]);
+    vi.mocked(tripService.getTrips).mockRejectedValue(
+      new ApiError(503, ERROR_CODES.INTERNAL, 'Unavailable'),
+    );
+
+    await tripStore.refresh();
+
+    expect(held()).toEqual([]);
+    expect(tripStore.getSnapshot().status).toBe('error');
+    expect(tripStore.getOfflineSnapshotAt()).toBeNull();
+  });
+
+  it('refreshes the snapshot after a successful server response', async () => {
+    const fresh = makeTrip({ title: 'Fresh trip' });
+    vi.mocked(tripService.getTrips).mockResolvedValue([fresh]);
+
+    await tripStore.refresh();
+
+    expect(offlineSnapshotService.readTrips()?.data).toEqual([fresh]);
+    expect(tripStore.getOfflineSnapshotAt()).toBeNull();
   });
 });
 

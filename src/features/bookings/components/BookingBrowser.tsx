@@ -78,7 +78,7 @@ export type BookingBrowserProps = {
   idPrefix: string;
   /** Rendered under the list — the partner cards on the booking screen. */
   children?: React.ReactNode;
-  onAdded?: (label: string) => void;
+  onAdded?: (label: string, tripId: string | null) => void;
 };
 
 /**
@@ -441,6 +441,7 @@ export function BookingBrowser({
                         key={flight.id}
                         as="li"
                         flight={flight}
+                        travellers={context.travellers}
                         /*
                          * Hidden for a sample fare. Its price is invented and it
                          * carries no booking link, so recording it would file a
@@ -542,7 +543,7 @@ export function BookingBrowser({
            */
           onAdded={(label) => {
             if (pendingLeg) takeLeg(pendingLeg);
-            onAdded?.(label);
+            onAdded?.(label, pendingDrafts?.[0]?.tripId ?? tripId);
           }}
         />
       ) : null}
